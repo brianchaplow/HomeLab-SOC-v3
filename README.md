@@ -10,72 +10,26 @@
 
 ```mermaid
 flowchart LR
-    subgraph Internet
-        ATK[Attackers]
-        ISP[ISP]
-    end
-
-    subgraph VLAN10["Management (VLAN 10)"]
-        OPN[OPNsense Firewall]
-        MKL[MokerLink 10G L3]
-        PB[PITBOSS Workstation]
-    end
-
-    subgraph VLAN20["SOC (VLAN 20)"]
-        BK[brisket - SIEM + SOAR + DFIR]
-        SH[smokehouse - Suricata + Zeek]
-        SR[sear - Kali + ML Training]
-    end
-
-    subgraph VLAN30["Lab (VLAN 30)"]
-        TH[TheHive + Cortex]
-        ELK[ELK Stack]
-        CAL[Caldera]
-        AD[DC01 + WS01]
-    end
-
-    subgraph VLAN40["Targets (VLAN 40)"]
-        TGT[DVWA + Metasploitable + WordPress + crAPI]
-    end
-
-    subgraph BK_Stack["brisket Services"]
-        WM[Wazuh SIEM - 10 agents]
-        SHUF[Shuffle SOAR - 7 workflows]
-        MLS[ML Scorer - XGBoost]
-        OLL[Ollama LLM - qwen3:8b]
-        VR[Velociraptor DFIR]
-    end
-
-    subgraph Outputs
-        DISC[Discord Alerts]
-        CFB[Cloudflare Block]
-        THC[TheHive Cases]
-    end
-
-    subgraph GCP["GCP (Tailscale)"]
-        HP[Honeypot + Portfolio Sites]
-    end
-
-    ISP --> OPN --> MKL
+    ATK[Internet /<br/>Attackers] --> SENSORS
     ATK --> HP
-    PB -.->|manages| MKL
-    MKL --> BK & SH & SR
-    MKL --> TH & ELK & CAL & AD
-    MKL --> TGT
 
-    SH -->|alerts + Zeek| WM
-    WM -->|level 8+| SHUF
-    SHUF --> MLS & OLL
-    SHUF --> DISC & CFB & THC
-    SR -->|attacks| TGT
-    CAL -->|emulation| AD & TGT
-    HP -->|Tailscale| ELK
-    HP -->|Wazuh agent| WM
-    VR -->|7 clients| VLAN20 & VLAN30
+    SENSORS[Network Sensors<br/>Suricata + Zeek] -->|alerts + metadata| SOC
 
-    style VLAN40 fill:#4a1a1a,stroke:#ff4444,color:#ffffff
-    style BK_Stack fill:#1a3a4a,stroke:#44aaff,color:#ffffff
-    style GCP fill:#2a2a3a,stroke:#aa88ff,color:#ffffff
+    HP[GCP Honeypot<br/>WordPress Login] -->|Tailscale| SOC
+
+    LAB[Attack Lab<br/>Caldera + Targets] -->|emulation results| SOC
+
+    SOC[SOC Platform<br/>SIEM + SOAR + ML + LLM]
+
+    SOC --> DISC[Discord Alerts]
+    SOC --> CFB[Cloudflare Blocks]
+    SOC --> THC[TheHive Cases]
+
+    OP[SOC Operator] -.->|manages| SOC
+
+    style SOC fill:#1a3a4a,stroke:#44aaff,color:#ffffff
+    style HP fill:#2a2a3a,stroke:#aa88ff,color:#ffffff
+    style LAB fill:#4a1a1a,stroke:#ff4444,color:#ffffff
 ```
 
 ---

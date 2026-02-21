@@ -382,104 +382,89 @@ A Tailscale mesh connects the GCP VM to internal lab resources without exposing 
 
 ## Architecture Diagrams
 
-### Full Architecture Data Flow
+### Detection Pipeline
+
+How threats are detected -- from network traffic and endpoint events through to indexed, searchable alerts.
 
 ```mermaid
-flowchart TB
-    subgraph Internet
-        ATK[Internet Attackers]
-        ISP[Verizon ISP]
-        CF[Cloudflare CDN]
+flowchart LR
+    SPAN[SPAN Mirror<br/>All VLANs] --> SUR[Suricata IDS<br/>47K+ rules]
+    SPAN --> ZK[Zeek NSM<br/>JSON logs]
+
+    SUR -->|eve.json| WA1[Wazuh Agent<br/>smokehouse]
+    ZK --> FB[Fluent Bit] -->|7 zeek-* indices| WI[Wazuh Indexer<br/>OpenSearch]
+
+    EP[Endpoints<br/>10 Agents] -->|TCP 1514| WM[Wazuh Manager]
+    OPN[OPNsense] -->|UDP 514 syslog| WM
+    WA1 --> WM
+
+    WM --> WI --> WD[Wazuh Dashboard]
+
+    WI --> ELK[ELK Stack<br/>214 Detection Rules]
+    ELK --> KIB[Kibana]
+
+    style WM fill:#1a3a4a,stroke:#44aaff,color:#ffffff
+    style ELK fill:#1a3a4a,stroke:#44aaff,color:#ffffff
+```
+
+### Response Pipeline
+
+How the SOC responds to detections -- from alert trigger through enrichment to automated action.
+
+```mermaid
+flowchart LR
+    WM[Wazuh Alert<br/>Level 8+] -->|webhook| SHUF[Shuffle SOAR<br/>WF1]
+
+    SHUF --> API[AbuseIPDB<br/>Reputation]
+    SHUF --> MLS[ML Scorer<br/>XGBoost]
+    SHUF --> OLL[Ollama LLM<br/>Triage Summary]
+
+    API --> SCORE[Combined<br/>Score]
+    MLS --> SCORE
+
+    SCORE -->|high| CFB[Cloudflare<br/>Block]
+    SCORE -->|medium+| TH[TheHive<br/>Case]
+    OLL --> DISC[Discord<br/>Alert]
+    TH --> DISC
+
+    VR[Velociraptor<br/>7 Clients] -.->|on-demand forensics| TH
+
+    style SHUF fill:#1a3a4a,stroke:#44aaff,color:#ffffff
+    style SCORE fill:#2a3a2a,stroke:#44ff88,color:#ffffff
+```
+
+### Intelligence Pipeline
+
+How the SOC generates intelligence -- scheduled analysis, honeypot research, and drift monitoring.
+
+```mermaid
+flowchart LR
+    subgraph Scheduled["Scheduled Workflows"]
+        WF2[WF2 Watch Digest<br/>Every 12h]
+        WF5[WF5 Alert Clusters<br/>Daily]
+        WF6[WF6 Drift Detector<br/>Daily]
+        WF8[WF8 Log Anomalies<br/>Daily]
     end
 
-    subgraph VLAN10["VLAN 10 -- Management (10.10.10.0/24)"]
-        OPN[OPNsense Firewall<br/>Protectli VP2420]
-        MKL[MokerLink 10G Switch<br/>SPAN + ACL]
-        PB[PITBOSS<br/>Workstation]
+    subgraph Honeypot["Honeypot Research"]
+        GCP[GCP Honeypot] -->|Tailscale| ELK
+        GCP -->|Wazuh agent| WI[Wazuh Indexer]
+        WF7[WF7 Intel Report<br/>Weekly]
     end
 
-    subgraph VLAN20["VLAN 20 -- SOC Infrastructure (10.10.20.0/24)"]
-        BK[brisket<br/>Ultra 9 285 / 64GB / RTX A1000]
-        SH[smokehouse<br/>QNAP TVS-871 / Sensors]
-        SR[sear<br/>Kali / ML Training]
-    end
+    WI --> Scheduled
+    ELK[ELK Stack] --> WF7
 
-    subgraph VLAN30["VLAN 30 -- Lab / Proxmox (10.10.30.0/24)"]
-        PC[pitcrew<br/>Proxmox VE]
-        SM[smoker<br/>Proxmox VE]
-        TH[TheHive LXC 200<br/>Case Management]
-        ELK[ELK LXC 201<br/>ES 8.17 + Kibana]
-        DC[DC01 + WS01<br/>Active Directory]
-        PBS[PBS LXC 300<br/>Backup Server]
-    end
+    Scheduled --> OLL[Ollama LLM<br/>qwen3:8b]
+    WF7 --> OLL
 
-    subgraph VLAN40["VLAN 40 -- Targets / ISOLATED (10.10.40.0/24)"]
-        DVWA[DVWA + Juice Shop]
-        MS3[Metasploitable 3]
-        WP[WordPress + crAPI]
-        SVC[FTP / SMTP / SNMP]
-    end
+    OLL --> ELK
+    OLL --> DISC[Discord<br/>Reports]
 
-    subgraph GCP["GCP (Tailscale Overlay)"]
-        GVM[GCP VM<br/>Honeypot + Web Sites]
-    end
+    WF6 --> MLS[ML Scorer<br/>Drift Check]
 
-    subgraph BK_Services["brisket Services"]
-        WM[Wazuh Manager]
-        WI[Wazuh Indexer<br/>OpenSearch]
-        WD[Wazuh Dashboard]
-        SHUF[Shuffle SOAR<br/>8 Workflows]
-        VR[Velociraptor<br/>DFIR]
-        MLS[ML Scorer<br/>XGBoost API]
-        OLL[Ollama<br/>qwen3:8b LLM]
-        PROM[Prometheus]
-        GRAF[Grafana]
-    end
-
-    subgraph SH_Services["smokehouse Sensors"]
-        SUR[Suricata IDS<br/>47K+ rules]
-        ZK[Zeek NSM<br/>JSON logs]
-        FB[Fluent Bit]
-    end
-
-    ISP --> OPN
-    ATK --> CF --> GVM
-    OPN -->|802.1Q trunk| MKL
-    MKL -->|SPAN mirror| SH
-    MKL -->|VLAN 20| BK
-    MKL -->|VLAN 20 + ACL| SR
-    MKL -->|VLAN 30| PC
-    MKL -->|VLAN 30+40 trunk| SM
-
-    SH --> SUR & ZK
-    ZK --> FB -->|zeek-* indices| WI
-    SUR -->|eve.json via agent| WM
-    WM --> WI --> WD
-
-    WM -->|level 8+ webhook| SHUF
-    SHUF --> MLS
-    SHUF --> OLL
-    SHUF -->|cases| TH
-    SHUF -->|alerts| DISC[Discord]
-    SHUF -->|drift/anomaly| ELK
-
-    SR -->|attacks| VLAN40
-    SM -->|hosts targets| DVWA & MS3 & WP & SVC
-    PC -->|hosts VMs/LXCs| TH & ELK & DC
-
-    GVM -->|Tailscale| ELK
-    GVM -->|Wazuh agent| WM
-
-    PROM -->|scrape| BK & SR & SM & PC
-    PROM --> GRAF
-
-    PBS -->|NFS backup| SH
-
-    SR -->|train models| MLS
-
-    style VLAN40 fill:#4a1a1a,stroke:#ff4444,color:#ffffff
-    style BK fill:#1a3a4a,stroke:#44aaff,color:#ffffff
-    style GCP fill:#2a2a3a,stroke:#aa88ff,color:#ffffff
+    style Scheduled fill:#1a3a4a,stroke:#44aaff,color:#ffffff
+    style Honeypot fill:#2a2a3a,stroke:#aa88ff,color:#ffffff
 ```
 
 ### Service Deployment Map
