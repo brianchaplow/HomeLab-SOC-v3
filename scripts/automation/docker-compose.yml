@@ -1,0 +1,61 @@
+###############################################################################
+# SOC AUTOMATION - DOCKER COMPOSE
+# Purpose: Python-based SOC automation for IP enrichment, auto-blocking,
+#          and watch turnover reports (morning/evening digests)
+# Author:  Brian S. Chaplow
+# 
+# Services:
+#   - soc-automation: Main Python container with cron scheduling
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose logs -f soc-automation
+###############################################################################
+
+
+services:
+  soc-automation:
+    build: .
+    container_name: soc-automation
+    restart: unless-stopped
+    network_mode: host
+    
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./data:/app/data           # Persistent data (whitelists, cache)
+      - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./models:/app/models:ro	    
+    environment:
+      # OpenSearch Connection (via Tailscale)
+      - RESEARCH_MODE=${RESEARCH_MODE:-false}
+      - OPENSEARCH_HOST=${OPENSEARCH_HOST:-<qnap-tailscale-ip>}
+      - OPENSEARCH_PORT=${OPENSEARCH_PORT:-9200}
+      - OPENSEARCH_USER=${OPENSEARCH_USER:-admin}
+      - OPENSEARCH_PASS=${OPENSEARCH_PASS}
+      
+      # AbuseIPDB API (free tier: 1000 checks/day)
+      - ABUSEIPDB_KEY=${ABUSEIPDB_KEY}
+      
+      # Cloudflare API (for auto-blocking)
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
+      
+      # Discord Webhook (for alerts and digests)
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+      
+      # Timezone for watch schedules
+      - TZ=${TZ:-America/New_York}
+      
+      # Blocking threshold (only block >= this score)
+      - BLOCK_THRESHOLD=${BLOCK_THRESHOLD:-90}
+      - ML_MODEL_DIR=/app/models/ground_truth_v2_xgb_20260127_171501
+    
+    # Keep container running for cron
+    tty: true
+    stdin_open: true
+
+networks:
+  default:
+    name: soc-network

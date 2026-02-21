@@ -1,0 +1,38 @@
+services:
+  ml-scorer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ml-scorer
+    restart: unless-stopped
+    ports:
+      - "5002:5002"
+    volumes:
+      - ./models:/app/models:ro
+    environment:
+      - OPENSEARCH_HOST=wazuh.indexer
+      - OPENSEARCH_PORT=9200
+      - OPENSEARCH_USER=admin
+      - OPENSEARCH_PASS=${OPENSEARCH_PASS}
+      - MODEL_DIR=/app/models
+      - LOG_LEVEL=INFO
+    networks:
+      - wazuh-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+networks:
+  wazuh-net:
+    external: true
+    name: single-node_default

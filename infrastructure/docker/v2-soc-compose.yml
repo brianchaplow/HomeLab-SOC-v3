@@ -1,0 +1,140 @@
+# HomeLab SOC Stack - Docker Compose (v2)
+# Originally deployed on QNAP NAS (smokehouse)
+#
+# IMPORTANT: Before running, ensure you've created a .env file with:
+#   OPENSEARCH_INITIAL_ADMIN_PASSWORD=YourPasswordHere
+#
+# Usage:
+#   cd /opt/soc/compose    # adjust to your environment
+#   docker-compose up -d
+#
+# To recreate a single service:
+#   docker-compose up -d --force-recreate opensearch-dashboards
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # OPENSEARCH - SIEM Backend
+  # =============================================================================
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    container_name: opensearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx4g
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
+    volumes:
+      - /opt/soc/containers/opensearch:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    networks:
+      - soc-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sk https://localhost:9200 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # =============================================================================
+  # OPENSEARCH DASHBOARDS - Visualization
+  # =============================================================================
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:latest
+    container_name: opensearch-dashboards
+    restart: unless-stopped
+    environment:
+      # Use host IP for reliability (not container IP which can change)
+      # Adjust IP to your OpenSearch host
+      - OPENSEARCH_HOSTS=["https://${OPENSEARCH_HOST:-localhost}:9200"]
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - "5601:5601"
+    networks:
+      - soc-network
+    depends_on:
+      opensearch:
+        condition: service_healthy
+
+  # =============================================================================
+  # SURICATA - Network IDS (SPAN Port Capture)
+  # =============================================================================
+  # NOTE: Uses host networking to access physical interface eth4
+  suricata-live:
+    image: jasonish/suricata:latest
+    container_name: suricata-live
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+      - NET_RAW
+    volumes:
+      # Logs (persisted)
+      - /opt/soc/logs/suricata:/var/log/suricata
+      # Config (persisted)
+      - /opt/soc/containers/suricata/config:/etc/suricata
+      # Rules (persisted - THIS IS THE KEY FIX)
+      - /opt/soc/containers/suricata/rules:/var/lib/suricata/rules
+      # Rule updates config
+      - /opt/soc/containers/suricata/update:/var/lib/suricata/update
+    command: -i eth4
+    # Note: After first start, run: docker exec suricata-live suricata-update
+
+  # =============================================================================
+  # FLUENT BIT - Log Collection & Forwarding
+  # =============================================================================
+  fluentbit:
+    image: fluent/fluent-bit:latest
+    container_name: fluentbit
+    restart: unless-stopped
+    volumes:
+      - /opt/soc/ingestion/fluentbit:/fluentbit
+      - /opt/soc/ingestion/fluentbit/state:/fluentbit/state
+      - /opt/soc/logs:/logs:ro
+    ports:
+      - "5514:5514/tcp"
+      - "5514:5514/udp"
+    networks:
+      - soc-network
+    command: /fluent-bit/bin/fluent-bit -c /fluentbit/fluent-bit.conf
+
+  # =============================================================================
+  # ZEEK - Network Security Monitor
+  # =============================================================================
+  zeek:
+    image: zeek/zeek:latest
+    container_name: zeek
+    restart: unless-stopped
+    volumes:
+      - /opt/soc/logs/zeek:/var/log/zeek
+      - /opt/soc/containers/zeek:/usr/local/zeek/etc
+    networks:
+      - soc-network
+    # Zeek typically runs manually for PCAP analysis
+    # command: zeekctl deploy
+    tty: true
+    stdin_open: true
+
+  # =============================================================================
+  # CYBERCHEF - Data Analysis Tool
+  # =============================================================================
+  cyberchef:
+    image: mpepping/cyberchef:latest
+    container_name: cyberchef
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    networks:
+      - soc-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  soc-network:
+    driver: bridge

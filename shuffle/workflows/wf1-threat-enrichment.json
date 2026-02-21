@@ -1,0 +1,1407 @@
+{
+    "workflow_as_code": false,
+    "actions": [
+        {
+            "app_name": "Shuffle Tools",
+            "app_version": "1.2.0",
+            "description": "",
+            "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+            "errors": [],
+            "id": "e7b3bc1b-c475-41ce-aaee-d9bbc6f59319",
+            "is_valid": true,
+            "isStartNode": true,
+            "sharing": true,
+            "label": "parse_alert",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "execute_python",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "code",
+                    "example": "",
+                    "value": "import json, ipaddress\nraw = self.full_execution.get(\"execution_argument\", \"{}\")\ntry:\n    alert = json.loads(raw) if isinstance(raw, str) else raw\nexcept:\n    alert = {}\nif isinstance(alert, str):\n    try:\n        alert = json.loads(alert)\n    except:\n        alert = {}\ndata = alert.get(\"data\", {}) if isinstance(alert, dict) else {}\nsrc_ip = None\nfor field in [\"srcip\", \"src_ip\", \"srcaddr\"]:\n    if field in data:\n        src_ip = data[field]\n        break\nif not src_ip and \"alert\" in data:\n    src_ip = data.get(\"alert\", {}).get(\"source\", {}).get(\"ip\")\nif not src_ip:\n    src_ip = data.get(\"srcip\", data.get(\"win\", {}).get(\"eventdata\", {}).get(\"ipAddress\", \"\"))\nis_external = False\nif src_ip:\n    try:\n        is_external = not ipaddress.ip_address(src_ip).is_private\n    except:\n        is_external = False\nrule_level = alert.get(\"rule\", {}).get(\"level\", 0) if isinstance(alert, dict) else 0\nshould_enrich = is_external and int(rule_level) >= 8\nresult = {\n    \"src_ip\": src_ip or \"none\",\n    \"is_external\": str(is_external).lower(),\n    \"rule_level\": int(rule_level),\n    \"rule_description\": str(alert.get(\"rule\", {}).get(\"description\", \"Unknown\") if isinstance(alert, dict) else \"Unknown\"),\n    \"rule_id\": str(alert.get(\"rule\", {}).get(\"id\", \"0\") if isinstance(alert, dict) else \"0\"),\n    \"agent_name\": str(alert.get(\"agent\", {}).get(\"name\", \"unknown\") if isinstance(alert, dict) else \"unknown\"),\n    \"timestamp\": str(alert.get(\"timestamp\", \"\") if isinstance(alert, dict) else \"\"),\n    \"should_enrich\": str(should_enrich).lower()\n}\nprint(json.dumps(result))",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 400.001,
+                "y": 0.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "http",
+            "app_version": "1.4.0",
+            "description": "",
+            "app_id": "890ad2d2-a7f7-4681-babe-9fcc5af32690",
+            "errors": [],
+            "id": "8987c78c-d5c5-4aa4-8e9e-c5485c671275",
+            "is_valid": true,
+            "sharing": true,
+            "label": "abuseipdb_check",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "GET",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "url",
+                    "example": "",
+                    "value": "https://api.abuseipdb.com/api/v2/check?ipAddress=$parse_alert.message.src_ip&maxAgeInDays=30&verbose=true",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "headers",
+                    "example": "",
+                    "value": "Key: $abuseipdb_key\nAccept: application/json",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "verify",
+                    "example": "",
+                    "value": "true",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "timeout",
+                    "example": "",
+                    "value": "15",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 400.001,
+                "y": 200.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "Shuffle Tools",
+            "app_version": "1.2.0",
+            "description": "",
+            "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+            "errors": [],
+            "id": "58d2146f-352a-4ffe-a635-f3bcaf53e136",
+            "is_valid": true,
+            "sharing": true,
+            "label": "evaluate_score",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "execute_python",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "code",
+                    "example": "",
+                    "value": "import json, urllib.request, re\n\nresults = self.full_execution.get(\"results\", []) if isinstance(self.full_execution, dict) else []\nparsed = {}\nabuseipdb = {}\nfor r in results:\n    label = r.get(\"action\", {}).get(\"label\", \"\")\n    if label == \"parse_alert\":\n        try:\n            p = json.loads(r.get(\"result\", \"{}\"))\n            parsed = p.get(\"message\", p) if isinstance(p, dict) else {}\n        except:\n            parsed = {}\n    elif label == \"abuseipdb_check\":\n        try:\n            raw = r.get(\"result\", \"{}\")\n            a = json.loads(raw) if isinstance(raw, str) else raw\n            if isinstance(a, str):\n                a = json.loads(a)\n            abuseipdb = a\n        except:\n            abuseipdb = {}\n\ntry:\n    ad = abuseipdb.get(\"body\", {}).get(\"data\", abuseipdb.get(\"data\", abuseipdb))\n    score = int(ad.get(\"abuseConfidenceScore\", 0))\n    reports = int(ad.get(\"totalReports\", 0))\n    country = ad.get(\"countryCode\", \"XX\")\n    isp = ad.get(\"isp\", \"Unknown\")\n    domain = ad.get(\"domain\", \"Unknown\")\n    wl = ad.get(\"isWhitelisted\", False)\nexcept:\n    score = 0; reports = 0; country = \"XX\"; isp = \"Unknown\"; domain = \"Unknown\"; wl = False\n\n# Call ml_scorer via direct urllib (no subprocess)\nml_score = 0.0\nml_label = \"unknown\"\nml_features = {}\ntry:\n    alert_data = self.full_execution.get(\"execution_argument\", \"{}\")\n    if isinstance(alert_data, str):\n        alert_data = json.loads(alert_data)\n    req = urllib.request.Request(\"http://10.10.20.30:5002/score\",\n        data=json.dumps(alert_data).encode(),\n        headers={\"Content-Type\": \"application/json\"}, method=\"POST\")\n    resp = urllib.request.urlopen(req, timeout=10)\n    ml_result = json.loads(resp.read().decode())\n    ml_score = float(ml_result.get(\"ml_score\", 0.0))\n    ml_label = ml_result.get(\"ml_label\", \"unknown\")\n    ml_features = ml_result.get(\"features\", {})\nexcept Exception as e:\n    ml_score = 0.0\n    ml_label = \"error: \" + str(e)[:50]\n    ml_features = {}\n\nabuse_norm = score / 100.0\ncombined_score = max(abuse_norm, ml_score)\nshould_block = score >= 90 and reports >= 5 and not wl\nshould_alert = combined_score >= 0.7 or int(parsed.get(\"rule_level\", 0)) >= 10\n\n# Call Ollama for triage via direct urllib (no subprocess)\ntriage = \"\"\ntry:\n    alert_context = \"Rule: {} (level {}). Source IP: {} ({}, {}). AbuseIPDB score: {}/100 ({} reports). ML score: {:.4f} ({}).\".format(\n        parsed.get(\"rule_description\", \"Unknown\"), parsed.get(\"rule_level\", 0),\n        parsed.get(\"src_ip\", \"unknown\"), country, isp, score, reports, ml_score, ml_label)\n    prompt = \"You are a SOC analyst. In 1-2 sentences, explain why this alert matters and what action to take. Be specific and concise. No markdown. No thinking tags. Alert: \" + alert_context\n    payload = json.dumps({\"model\": \"qwen3:8b\", \"prompt\": \"/no_think \" + prompt, \"stream\": False, \"options\": {\"temperature\": 0.3, \"num_predict\": 1000}})\n    req = urllib.request.Request(\"http://10.10.20.30:11434/api/generate\",\n        data=payload.encode(), headers={\"Content-Type\": \"application/json\"}, method=\"POST\")\n    resp = urllib.request.urlopen(req, timeout=30)\n    llm_result = json.loads(resp.read().decode())\n    text = llm_result.get(\"response\", \"\").strip()\n    text = re.sub(r\"<think>.*?</think>\", \"\", text, flags=re.DOTALL).strip()\n    text = text.replace(\"\\n\", \" \").replace(\"\\r\", \"\")\n    triage = text[:200] if text else \"No response from LLM\"\nexcept Exception as e:\n    triage = \"LLM unavailable: \" + str(e)[:40]\n\n# ML Explainer \u2014 when score is high, explain top features via Ollama\nml_explanation = \"\"\nif ml_score >= 0.7 and ml_features:\n    try:\n        sorted_feats = sorted(ml_features.items(), key=lambda x: abs(float(x[1])), reverse=True)[:7]\n        feat_desc = \", \".join(f\"{k}={v}\" for k, v in sorted_feats)\n        prompt = f\"/no_think You are a SOC analyst explaining ML threat scores. This alert scored {ml_score:.4f} ({ml_label}). The top contributing features are: {feat_desc}. In 2-3 sentences, explain in plain language what these features indicate about why this alert is suspicious. Be specific about what behavior the features represent. No markdown.\"\n        payload = json.dumps({\"model\": \"qwen3:8b\", \"prompt\": prompt, \"stream\": False,\n            \"options\": {\"num_predict\": 1000, \"temperature\": 0.3}}).encode()\n        req = urllib.request.Request(\"http://10.10.20.30:11434/api/generate\",\n            data=payload, headers={\"Content-Type\": \"application/json\"})\n        resp = urllib.request.urlopen(req, timeout=30)\n        text = json.loads(resp.read().decode()).get(\"response\", \"\")\n        text = re.sub(r\"<think>.*?</think>\", \"\", text, flags=re.DOTALL).strip()\n        text = text.replace(\"\\n\", \" \").replace(\"\\r\", \"\")\n        ml_explanation = text[:300] if text else \"LLM returned empty response\"\n    except Exception as e:\n        ml_explanation = f\"LLM unavailable: {str(e)[:40]}\"\n\nresult = {\n    \"src_ip\": parsed.get(\"src_ip\", \"none\"),\n    \"abuse_score\": score,\n    \"total_reports\": reports,\n    \"country\": country,\n    \"isp\": isp,\n    \"domain\": domain,\n    \"ml_score\": ml_score,\n    \"ml_label\": ml_label,\n    \"combined_score\": round(combined_score, 4),\n    \"should_block\": str(should_block).lower(),\n    \"should_alert\": str(should_alert).lower(),\n    \"rule_level\": parsed.get(\"rule_level\", 0),\n    \"rule_description\": parsed.get(\"rule_description\", \"Unknown\"),\n    \"rule_id\": parsed.get(\"rule_id\", \"0\"),\n    \"agent_name\": parsed.get(\"agent_name\", \"unknown\"),\n    \"timestamp\": parsed.get(\"timestamp\", \"\"),\n    \"severity\": 3 if should_block else (2 if should_alert else 1),\n    \"triage\": triage,\n    \"ml_explanation\": ml_explanation\n}\nprint(json.dumps(result))",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 400.001,
+                "y": 400.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "http",
+            "app_version": "1.4.0",
+            "description": "",
+            "app_id": "890ad2d2-a7f7-4681-babe-9fcc5af32690",
+            "errors": [],
+            "id": "4e7c6dca-c9a5-45d4-9006-5bcc8bcbb5d8",
+            "is_valid": true,
+            "sharing": true,
+            "label": "cloudflare_block",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "POST",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "url",
+                    "example": "",
+                    "value": "https://api.cloudflare.com/client/v4/accounts/$cf_account_id/firewall/access_rules/rules",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "headers",
+                    "example": "",
+                    "value": "Authorization: Bearer $cf_api_token\nContent-Type: application/json",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "body",
+                    "example": "",
+                    "value": "{\"mode\":\"block\",\"configuration\":{\"target\":\"ip\",\"value\":\"$evaluate_score.message.src_ip\"},\"notes\":\"Auto-blocked by Shuffle: score=$evaluate_score.message.abuse_score reports=$evaluate_score.message.total_reports\"}",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "verify",
+                    "example": "",
+                    "value": "true",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 200.001,
+                "y": 600.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "http",
+            "app_version": "1.4.0",
+            "description": "",
+            "app_id": "890ad2d2-a7f7-4681-babe-9fcc5af32690",
+            "errors": [],
+            "id": "c620ac2f-d968-4ae6-83ea-e0dea96c066b",
+            "is_valid": true,
+            "sharing": true,
+            "label": "thehive_case",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "POST",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "url",
+                    "example": "",
+                    "value": "http://10.10.30.22:9000/api/case",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "headers",
+                    "example": "",
+                    "value": "Authorization: Bearer YOUR_THEHIVE_API_KEY\nContent-Type: application/json",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "body",
+                    "example": "",
+                    "value": "{\"title\":\"[Auto] $evaluate_score.message.rule_description from $evaluate_score.message.src_ip\",\"description\":\"Source: $evaluate_score.message.src_ip\\nAbuseIPDB: $evaluate_score.message.abuse_score/100 ($evaluate_score.message.total_reports reports)\\nCountry: $evaluate_score.message.country | ISP: $evaluate_score.message.isp\\nRule: $evaluate_score.message.rule_id - $evaluate_score.message.rule_description\\nAgent: $evaluate_score.message.agent_name\\nBlocked: $evaluate_score.message.should_block\\nML Score: $evaluate_score.message.ml_score ($evaluate_score.message.ml_label)\\nML Explanation: $evaluate_score.message.ml_explanation\",\"severity\":$evaluate_score.message.severity,\"tlp\":2,\"flag\":false,\"tags\":[\"auto-enriched\",\"shuffle-soar\"]}",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "verify",
+                    "example": "",
+                    "value": "false",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 400.001,
+                "y": 600.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "http",
+            "app_version": "1.4.0",
+            "description": "",
+            "app_id": "890ad2d2-a7f7-4681-babe-9fcc5af32690",
+            "errors": [],
+            "id": "1dbf6d57-cc41-483a-b710-bd6d8c9c3cd8",
+            "is_valid": true,
+            "sharing": true,
+            "label": "discord_alert",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "POST",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "url",
+                    "example": "",
+                    "value": "$discord_webhook",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "headers",
+                    "example": "",
+                    "value": "Content-Type: application/json",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "body",
+                    "example": "",
+                    "value": "{\"content\":\"**SOC Alert:** $evaluate_score.message.rule_description\\n**ML Score:** $evaluate_score.message.ml_score ($evaluate_score.message.ml_label)\\n**IP:** $evaluate_score.message.src_ip | **Score:** $evaluate_score.message.abuse_score/100 | **Reports:** $evaluate_score.message.total_reports\\n**Country:** $evaluate_score.message.country | **ISP:** $evaluate_score.message.isp\\n**Agent:** $evaluate_score.message.agent_name | **Blocked:** $evaluate_score.message.should_block\\n**AI Triage:** $evaluate_score.message.triage\\n**ML Explanation:** $evaluate_score.message.ml_explanation\"}",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "verify",
+                    "example": "",
+                    "value": "true",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 600.001,
+                "y": 600.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        }
+    ],
+    "branches": [
+        {
+            "destination_id": "8987c78c-d5c5-4aa4-8e9e-c5485c671275",
+            "id": "f579bd9c-17d1-4684-bc94-53ccb6c4b491",
+            "source_id": "e7b3bc1b-c475-41ce-aaee-d9bbc6f59319",
+            "label": "",
+            "has_errors": false,
+            "conditions": [
+                {
+                    "source": {
+                        "description": "",
+                        "id": "",
+                        "name": "",
+                        "example": "",
+                        "value": "$parse_alert.message.should_enrich",
+                        "multiline": false,
+                        "multiselect": false,
+                        "options": null,
+                        "action_field": "",
+                        "variant": "",
+                        "required": false,
+                        "configuration": false,
+                        "tags": null,
+                        "schema": {
+                            "type": ""
+                        },
+                        "skip_multicheck": false,
+                        "value_replace": null,
+                        "unique_toggled": false,
+                        "error": "",
+                        "hidden": false
+                    },
+                    "condition": {
+                        "description": "",
+                        "id": "",
+                        "name": "",
+                        "example": "",
+                        "value": "equals",
+                        "multiline": false,
+                        "multiselect": false,
+                        "options": null,
+                        "action_field": "",
+                        "variant": "",
+                        "required": false,
+                        "configuration": false,
+                        "tags": null,
+                        "schema": {
+                            "type": ""
+                        },
+                        "skip_multicheck": false,
+                        "value_replace": null,
+                        "unique_toggled": false,
+                        "error": "",
+                        "hidden": false
+                    },
+                    "destination": {
+                        "description": "",
+                        "id": "",
+                        "name": "",
+                        "example": "",
+                        "value": "true",
+                        "multiline": false,
+                        "multiselect": false,
+                        "options": null,
+                        "action_field": "",
+                        "variant": "",
+                        "required": false,
+                        "configuration": false,
+                        "tags": null,
+                        "schema": {
+                            "type": ""
+                        },
+                        "skip_multicheck": false,
+                        "value_replace": null,
+                        "unique_toggled": false,
+                        "error": "",
+                        "hidden": false
+                    }
+                }
+            ],
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        },
+        {
+            "destination_id": "58d2146f-352a-4ffe-a635-f3bcaf53e136",
+            "id": "9afd3642-505c-4881-83d6-baf6cd31f2cb",
+            "source_id": "8987c78c-d5c5-4aa4-8e9e-c5485c671275",
+            "label": "",
+            "has_errors": false,
+            "conditions": null,
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        },
+        {
+            "destination_id": "4e7c6dca-c9a5-45d4-9006-5bcc8bcbb5d8",
+            "id": "e909b0e5-0187-4043-a895-7d3fde3f146c",
+            "source_id": "58d2146f-352a-4ffe-a635-f3bcaf53e136",
+            "label": "",
+            "has_errors": false,
+            "conditions": [
+                {
+                    "source": {
+                        "description": "",
+                        "id": "",
+                        "name": "",
+                        "example": "",
+                        "value": "$evaluate_score.message.should_block",
+                        "multiline": false,
+                        "multiselect": false,
+                        "options": null,
+                        "action_field": "",
+                        "variant": "",
+                        "required": false,
+                        "configuration": false,
+                        "tags": null,
+                        "schema": {
+                            "type": ""
+                        },
+                        "skip_multicheck": false,
+                        "value_replace": null,
+                        "unique_toggled": false,
+                        "error": "",
+                        "hidden": false
+                    },
+                    "condition": {
+                        "description": "",
+                        "id": "",
+                        "name": "",
+                        "example": "",
+                        "value": "equals",
+                        "multiline": false,
+                        "multiselect": false,
+                        "options": null,
+                        "action_field": "",
+                        "variant": "",
+                        "required": false,
+                        "configuration": false,
+                        "tags": null,
+                        "schema": {
+                            "type": ""
+                        },
+                        "skip_multicheck": false,
+                        "value_replace": null,
+                        "unique_toggled": false,
+                        "error": "",
+                        "hidden": false
+                    },
+                    "destination": {
+                        "description": "",
+                        "id": "",
+                        "name": "",
+                        "example": "",
+                        "value": "HONEYPOT_DISABLED",
+                        "multiline": false,
+                        "multiselect": false,
+                        "options": null,
+                        "action_field": "",
+                        "variant": "",
+                        "required": false,
+                        "configuration": false,
+                        "tags": null,
+                        "schema": {
+                            "type": ""
+                        },
+                        "skip_multicheck": false,
+                        "value_replace": null,
+                        "unique_toggled": false,
+                        "error": "",
+                        "hidden": false
+                    }
+                }
+            ],
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        },
+        {
+            "destination_id": "c620ac2f-d968-4ae6-83ea-e0dea96c066b",
+            "id": "dea7bf40-d438-4c0c-a0ed-c5f81b2dfdd9",
+            "source_id": "58d2146f-352a-4ffe-a635-f3bcaf53e136",
+            "label": "",
+            "has_errors": false,
+            "conditions": [
+                {
+                    "source": {
+                        "description": "",
+                        "id": "",
+                        "name": "",
+                        "example": "",
+                        "value": "$evaluate_score.message.should_alert",
+                        "multiline": false,
+                        "multiselect": false,
+                        "options": null,
+                        "action_field": "",
+                        "variant": "",
+                        "required": false,
+                        "configuration": false,
+                        "tags": null,
+                        "schema": {
+                            "type": ""
+                        },
+                        "skip_multicheck": false,
+                        "value_replace": null,
+                        "unique_toggled": false,
+                        "error": "",
+                        "hidden": false
+                    },
+                    "condition": {
+                        "description": "",
+                        "id": "",
+                        "name": "",
+                        "example": "",
+                        "value": "equals",
+                        "multiline": false,
+                        "multiselect": false,
+                        "options": null,
+                        "action_field": "",
+                        "variant": "",
+                        "required": false,
+                        "configuration": false,
+                        "tags": null,
+                        "schema": {
+                            "type": ""
+                        },
+                        "skip_multicheck": false,
+                        "value_replace": null,
+                        "unique_toggled": false,
+                        "error": "",
+                        "hidden": false
+                    },
+                    "destination": {
+                        "description": "",
+                        "id": "",
+                        "name": "",
+                        "example": "",
+                        "value": "true",
+                        "multiline": false,
+                        "multiselect": false,
+                        "options": null,
+                        "action_field": "",
+                        "variant": "",
+                        "required": false,
+                        "configuration": false,
+                        "tags": null,
+                        "schema": {
+                            "type": ""
+                        },
+                        "skip_multicheck": false,
+                        "value_replace": null,
+                        "unique_toggled": false,
+                        "error": "",
+                        "hidden": false
+                    }
+                }
+            ],
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        },
+        {
+            "destination_id": "1dbf6d57-cc41-483a-b710-bd6d8c9c3cd8",
+            "id": "f90d5fb0-50cf-4a42-a458-c85d6e4bf847",
+            "source_id": "58d2146f-352a-4ffe-a635-f3bcaf53e136",
+            "label": "",
+            "has_errors": false,
+            "conditions": [
+                {
+                    "source": {
+                        "description": "",
+                        "id": "",
+                        "name": "",
+                        "example": "",
+                        "value": "$evaluate_score.message.should_alert",
+                        "multiline": false,
+                        "multiselect": false,
+                        "options": null,
+                        "action_field": "",
+                        "variant": "",
+                        "required": false,
+                        "configuration": false,
+                        "tags": null,
+                        "schema": {
+                            "type": ""
+                        },
+                        "skip_multicheck": false,
+                        "value_replace": null,
+                        "unique_toggled": false,
+                        "error": "",
+                        "hidden": false
+                    },
+                    "condition": {
+                        "description": "",
+                        "id": "",
+                        "name": "",
+                        "example": "",
+                        "value": "equals",
+                        "multiline": false,
+                        "multiselect": false,
+                        "options": null,
+                        "action_field": "",
+                        "variant": "",
+                        "required": false,
+                        "configuration": false,
+                        "tags": null,
+                        "schema": {
+                            "type": ""
+                        },
+                        "skip_multicheck": false,
+                        "value_replace": null,
+                        "unique_toggled": false,
+                        "error": "",
+                        "hidden": false
+                    },
+                    "destination": {
+                        "description": "",
+                        "id": "",
+                        "name": "",
+                        "example": "",
+                        "value": "true",
+                        "multiline": false,
+                        "multiselect": false,
+                        "options": null,
+                        "action_field": "",
+                        "variant": "",
+                        "required": false,
+                        "configuration": false,
+                        "tags": null,
+                        "schema": {
+                            "type": ""
+                        },
+                        "skip_multicheck": false,
+                        "value_replace": null,
+                        "unique_toggled": false,
+                        "error": "",
+                        "hidden": false
+                    }
+                }
+            ],
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        }
+    ],
+    "visual_branches": null,
+    "triggers": [
+        {
+            "app_name": "",
+            "description": "",
+            "long_description": "",
+            "status": "stopped",
+            "app_version": "",
+            "errors": null,
+            "id": "6add2014-cb1b-447c-9fd0-24047fa88ce5",
+            "is_valid": true,
+            "isStartNode": false,
+            "label": "Wazuh Alert Webhook",
+            "small_image": "",
+            "large_image": "",
+            "environment": "Shuffle",
+            "trigger_type": "WEBHOOK",
+            "name": "Wazuh Alert Webhook",
+            "tags": null,
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "url",
+                    "example": "",
+                    "value": "http://localhost:5001/api/v1/hooks/webhook_6add2014-cb1b-447c-9fd0-24047fa88ce5",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "auth",
+                    "example": "",
+                    "value": "",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "custom_response_body",
+                    "example": "",
+                    "value": "",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "startnode",
+                    "example": "",
+                    "value": "e7b3bc1b-c475-41ce-aaee-d9bbc6f59319",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "position": {
+                "x": 400,
+                "y": -200
+            },
+            "priority": 0,
+            "source_workflow": "",
+            "execution_delay": 0,
+            "app_association": {
+                "name": "",
+                "app_version": "",
+                "id": "",
+                "link": "",
+                "is_valid": false,
+                "generated": false,
+                "downloaded": false,
+                "sharing": false,
+                "verified": false,
+                "invalid": false,
+                "activated": false,
+                "tested": false,
+                "hash": "",
+                "private_id": "",
+                "environment": "",
+                "small_image": "",
+                "large_image": "",
+                "contact_info": {
+                    "name": "",
+                    "url": ""
+                },
+                "folder_mount": {
+                    "folder_mount": false,
+                    "source_folder": "",
+                    "destination_folder": ""
+                },
+                "authentication": {
+                    "type": "",
+                    "required": false,
+                    "parameters": null,
+                    "redirect_uri": "",
+                    "token_uri": "",
+                    "refresh_uri": "",
+                    "scope": null,
+                    "client_id": "",
+                    "client_secret": "",
+                    "grant_type": ""
+                },
+                "actions": null,
+                "tags": null,
+                "categories": null,
+                "created": 0,
+                "edited": 0,
+                "last_runtime": 0,
+                "versions": null,
+                "loop_versions": null,
+                "owner": "",
+                "sharing_config": "",
+                "public": false,
+                "published_id": "",
+                "child_ids": null,
+                "reference_org": "",
+                "reference_url": "",
+                "action_file_path": "",
+                "template": false,
+                "documentation": "",
+                "description": "",
+                "documentation_download_url": "",
+                "primary_usecases": null,
+                "skipped_build": false,
+                "reference_info": {
+                    "onprem_backup": false,
+                    "is_partner": false,
+                    "partner_contacts": "",
+                    "documentation_url": "",
+                    "github_url": "",
+                    "triggers": null
+                },
+                "blogpost": "",
+                "video": "",
+                "company_url": "",
+                "contributors": null,
+                "revision_id": "",
+                "collection": ""
+            },
+            "parent_controlled": false,
+            "replacement_for_trigger": ""
+        }
+    ],
+    "comments": [],
+    "configuration": {
+        "exit_on_error": false,
+        "start_from_top": false,
+        "skip_notifications": false
+    },
+    "created": 1770828278,
+    "edited": 1771277527,
+    "last_runtime": 0,
+    "due_date": 0,
+    "errors": [
+        "Trigger Wazuh Alert Webhook needs to be started"
+    ],
+    "tags": [
+        "soc",
+        "enrichment",
+        "autoblock",
+        "production"
+    ],
+    "id": "c28f40b2-ffe8-4572-a6b4-68bd1731b1b0",
+    "is_valid": true,
+    "name": "Workflow 1: Threat Enrichment & Auto-Block",
+    "description": "Wazuh alert (level >= 8, external IP) \u00c3\u0192\u00c6\u2019\u00c3\u201a\u00c2\u00a2\u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac\u00c3\u201a\u00c2\u00a0\u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac\u00c3\u00a2\u00e2\u20ac\u017e\u00c2\u00a2 AbuseIPDB lookup \u00c3\u0192\u00c6\u2019\u00c3\u201a\u00c2\u00a2\u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac\u00c3\u201a\u00c2\u00a0\u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac\u00c3\u00a2\u00e2\u20ac\u017e\u00c2\u00a2 threshold check \u00c3\u0192\u00c6\u2019\u00c3\u201a\u00c2\u00a2\u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac\u00c3\u201a\u00c2\u00a0\u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac\u00c3\u00a2\u00e2\u20ac\u017e\u00c2\u00a2 Cloudflare block \u00c3\u0192\u00c6\u2019\u00c3\u201a\u00c2\u00a2\u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac\u00c3\u201a\u00c2\u00a0\u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac\u00c3\u00a2\u00e2\u20ac\u017e\u00c2\u00a2 TheHive case \u00c3\u0192\u00c6\u2019\u00c3\u201a\u00c2\u00a2\u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac\u00c3\u201a\u00c2\u00a0\u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac\u00c3\u00a2\u00e2\u20ac\u017e\u00c2\u00a2 Discord notify",
+    "start": "e7b3bc1b-c475-41ce-aaee-d9bbc6f59319",
+    "owner": "d4fac237-9bd7-4977-9b82-1c223a54b81f",
+    "sharing": "private",
+    "execution_org": {
+        "name": "default",
+        "id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+        "users": [],
+        "role": "admin",
+        "child_orgs": null,
+        "region_url": "",
+        "is_partner": false,
+        "image": "",
+        "creator_org": "",
+        "branding": {
+            "enable_chat": false,
+            "home_url": "",
+            "theme": "",
+            "documentation_link": "",
+            "global_user": false,
+            "support_email": "",
+            "logout_url": "",
+            "brand_color": "",
+            "brand_name": ""
+        }
+    },
+    "org_id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+    "workflow_variables": [
+        {
+            "description": "AbuseIPDB API key",
+            "id": "37ade744-9e62-4334-97c4-f7860387b8e3",
+            "name": "abuseipdb_key",
+            "value": "YOUR_ABUSEIPDB_API_KEY"
+        },
+        {
+            "description": "Cloudflare API token",
+            "id": "dbe83eee-2a28-423b-989b-fc1191905f03",
+            "name": "cf_api_token",
+            "value": "YOUR_CLOUDFLARE_API_TOKEN"
+        },
+        {
+            "description": "Cloudflare account ID",
+            "id": "76450500-952c-4686-8679-2ab431b0de3a",
+            "name": "cf_account_id",
+            "value": "YOUR_CLOUDFLARE_ACCOUNT_ID"
+        },
+        {
+            "description": "Discord webhook URL",
+            "id": "850ba955-3dcf-46b1-8c7b-87344f84022b",
+            "name": "discord_webhook",
+            "value": "YOUR_DISCORD_WEBHOOK_URL"
+        }
+    ],
+    "execution_environment": "",
+    "previously_saved": true,
+    "categories": {
+        "siem": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "communication": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "assets": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "cases": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "network": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "intel": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "edr": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "iam": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "ai": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "email": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "other": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        }
+    },
+    "example_argument": "",
+    "public": false,
+    "default_return_value": "",
+    "contact_info": {
+        "name": "",
+        "url": ""
+    },
+    "published_id": "",
+    "revision_id": "",
+    "usecase_ids": null,
+    "input_questions": null,
+    "form_control": {
+        "input_markdown": "",
+        "output_yields": null,
+        "cleanup_actions": null,
+        "form_width": 0
+    },
+    "blogpost": "",
+    "video": "",
+    "status": "test",
+    "workflow_type": "",
+    "generated": false,
+    "hidden": false,
+    "background_processing": false,
+    "updated_by": "admin",
+    "validated": false,
+    "validation": {
+        "valid": true,
+        "changed_at": 1771280525000,
+        "last_valid": 1771280525000,
+        "validation_ran": true,
+        "notifications_created": 0,
+        "environment": "Shuffle",
+        "workflow_id": "",
+        "execution_id": "ce81bdf5-6d08-4a65-ad1d-8e31b8b9c823",
+        "node_id": "",
+        "total_problems": 0,
+        "errors": [],
+        "subflow_apps": []
+    },
+    "parentorg_workflow": "",
+    "childorg_workflow_ids": null,
+    "suborg_distribution": [],
+    "backup_config": {
+        "onprem_backup": false,
+        "upload_repo": "",
+        "upload_branch": "",
+        "upload_username": "",
+        "upload_token": "",
+        "tokens_encrypted": false
+    },
+    "auth_groups": null
+}

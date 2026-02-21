@@ -1,0 +1,49 @@
+# Environment and secrets
+.env
+*.env.local
+*.pem
+*.key
+*.p12
+*.pfx
+*secret*
+*credential*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Node
+node_modules/
+
+# Model artifacts (large binaries)
+*.pkl
+*.joblib
+model.json
+*.h5
+*.pt
+
+# Velociraptor binaries (too large for git)
+velociraptor
+!incident-response/velociraptor/
+velociraptor-linux
+velociraptor-windows.exe
+
+# Logs
+*.log
+
+# Claude Code
+.claude/

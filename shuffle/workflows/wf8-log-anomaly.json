@@ -1,0 +1,803 @@
+{
+  "workflow_as_code": false,
+  "actions": [
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "f67fc368-df33-4ac9-b765-f0f9bf039776",
+      "is_valid": true,
+      "isStartNode": true,
+      "sharing": true,
+      "label": "query_rare_patterns",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, base64, datetime\n\nctx = ssl.create_default_context()\nctx.check_hostname = False\nctx.verify_mode = ssl.CERT_NONE\n\nos_auth = base64.b64encode(\"$opensearch_user:$opensearch_pass\".encode()).decode()\nos_headers = {\"Content-Type\": \"application/json\", \"Authorization\": \"Basic \" + os_auth}\n\ndef os_query(body):\n    req = urllib.request.Request(\"$opensearch_url/wazuh-alerts-4.x-*/_search\",\n        data=json.dumps(body).encode(), headers=os_headers, method=\"POST\")\n    resp = urllib.request.urlopen(req, context=ctx, timeout=15)\n    return json.loads(resp.read().decode())\n\ncandidates = []\n\n# 1. Rare rules: bottom 20 rules by count (fired 1-5 times in 24h)\ntry:\n    q = {\n        \"size\": 0,\n        \"query\": {\"range\": {\"timestamp\": {\"gte\": \"now-24h\"}}},\n        \"aggs\": {\n            \"rules\": {\n                \"terms\": {\"field\": \"rule.id\", \"size\": 500, \"order\": {\"_count\": \"asc\"}},\n                \"aggs\": {\n                    \"desc\": {\"terms\": {\"field\": \"rule.description\", \"size\": 1}},\n                    \"agent\": {\"terms\": {\"field\": \"agent.name\", \"size\": 1}},\n                    \"sample\": {\"top_hits\": {\"size\": 1, \"_source\": [\"rule.id\", \"rule.description\", \"rule.level\", \"rule.mitre.technique\", \"rule.mitre.id\", \"data.srcip\", \"agent.name\", \"timestamp\", \"full_log\"]}}\n                }\n            }\n        }\n    }\n    data = os_query(q)\n    for b in data.get(\"aggregations\", {}).get(\"rules\", {}).get(\"buckets\", []):\n        count = b.get(\"doc_count\", 0)\n        if count > 5:\n            break\n        sample_hits = b.get(\"sample\", {}).get(\"hits\", {}).get(\"hits\", [])\n        sample = sample_hits[0][\"_source\"] if sample_hits else {}\n        desc_buckets = b.get(\"desc\", {}).get(\"buckets\", [])\n        agent_buckets = b.get(\"agent\", {}).get(\"buckets\", [])\n        candidates.append({\n            \"type\": \"rare_rule\",\n            \"rule_id\": b[\"key\"],\n            \"rule_description\": desc_buckets[0][\"key\"] if desc_buckets else \"?\",\n            \"agent\": agent_buckets[0][\"key\"] if agent_buckets else \"?\",\n            \"count\": count,\n            \"sample\": sample\n        })\n        if len(candidates) >= 20:\n            break\nexcept Exception as e:\n    candidates.append({\"type\": \"error\", \"source\": \"rare_rules\", \"error\": str(e)[:100]})\n\n# 2. Off-hours alerts (0100-0500 EST = 0600-1000 UTC) on workstations\ntry:\n    q = {\n        \"size\": 10,\n        \"query\": {\"bool\": {\"must\": [\n            {\"range\": {\"timestamp\": {\"gte\": \"now-24h\"}}},\n            {\"terms\": {\"agent.name\": [\"PITBOSS\", \"WS01\", \"DC01\"]}}\n        ]}},\n        \"_source\": [\"rule.id\", \"rule.description\", \"rule.level\", \"rule.mitre.technique\", \"rule.mitre.id\", \"data.srcip\", \"agent.name\", \"timestamp\", \"full_log\"],\n        \"sort\": [{\"rule.level\": {\"order\": \"desc\"}}]\n    }\n    data = os_query(q)\n    for h in data.get(\"hits\", {}).get(\"hits\", []):\n        src = h[\"_source\"]\n        ts = src.get(\"timestamp\", \"\")\n        hour = -1\n        if ts and \"T\" in ts:\n            try:\n                hour = int(ts.split(\"T\")[1].split(\":\")[0])\n            except:\n                pass\n        if 6 <= hour < 10:\n            candidates.append({\n                \"type\": \"off_hours\",\n                \"rule_id\": src.get(\"rule\", {}).get(\"id\", \"?\"),\n                \"rule_description\": src.get(\"rule\", {}).get(\"description\", \"?\"),\n                \"agent\": src.get(\"agent\", {}).get(\"name\", \"?\"),\n                \"count\": 1,\n                \"sample\": src\n            })\nexcept Exception as e:\n    candidates.append({\"type\": \"error\", \"source\": \"off_hours\", \"error\": str(e)[:100]})\n\n# 3. New rules: fired today but zero hits in prior 7 days\ntry:\n    q24 = {\n        \"size\": 0,\n        \"query\": {\"range\": {\"timestamp\": {\"gte\": \"now-24h\"}}},\n        \"aggs\": {\"rules\": {\"terms\": {\"field\": \"rule.id\", \"size\": 200}}}\n    }\n    data24 = os_query(q24)\n    today_rules = set(b[\"key\"] for b in data24.get(\"aggregations\", {}).get(\"rules\", {}).get(\"buckets\", []))\n\n    q7 = {\n        \"size\": 0,\n        \"query\": {\"bool\": {\"must\": [\n            {\"range\": {\"timestamp\": {\"gte\": \"now-8d\", \"lt\": \"now-24h\"}}}\n        ]}},\n        \"aggs\": {\"rules\": {\"terms\": {\"field\": \"rule.id\", \"size\": 500}}}\n    }\n    data7 = os_query(q7)\n    prior_rules = set(b[\"key\"] for b in data7.get(\"aggregations\", {}).get(\"rules\", {}).get(\"buckets\", []))\n\n    new_rules = today_rules - prior_rules\n    for rule_id in list(new_rules)[:5]:\n        qs = {\n            \"size\": 1,\n            \"query\": {\"bool\": {\"must\": [\n                {\"range\": {\"timestamp\": {\"gte\": \"now-24h\"}}},\n                {\"term\": {\"rule.id\": rule_id}}\n            ]}},\n            \"_source\": [\"rule.id\", \"rule.description\", \"rule.level\", \"rule.mitre.technique\", \"rule.mitre.id\", \"data.srcip\", \"agent.name\", \"timestamp\", \"full_log\"]\n        }\n        sdata = os_query(qs)\n        shits = sdata.get(\"hits\", {}).get(\"hits\", [])\n        sample = shits[0][\"_source\"] if shits else {}\n        candidates.append({\n            \"type\": \"new_rule\",\n            \"rule_id\": rule_id,\n            \"rule_description\": sample.get(\"rule\", {}).get(\"description\", \"?\"),\n            \"agent\": sample.get(\"agent\", {}).get(\"name\", \"?\"),\n            \"count\": 1,\n            \"sample\": sample\n        })\nexcept Exception as e:\n    candidates.append({\"type\": \"error\", \"source\": \"new_rules\", \"error\": str(e)[:100]})\n\nreal_candidates = [c for c in candidates if c.get(\"type\") != \"error\"][:15]\nerror_entries = [c for c in candidates if c.get(\"type\") == \"error\"]\n\nhoneypot_agents = [\"gcp-vm\"]\nhoneypot_candidates = [c for c in real_candidates if c.get(\"agent\", \"\").lower() in honeypot_agents]\ninternal_candidates = [c for c in real_candidates if c.get(\"agent\", \"\").lower() not in honeypot_agents]\n\nprint(json.dumps({\n    \"internal_candidates\": internal_candidates,\n    \"honeypot_candidates\": honeypot_candidates,\n    \"internal_count\": len(internal_candidates),\n    \"honeypot_count\": len(honeypot_candidates),\n    \"total_found\": len(real_candidates),\n    \"errors\": error_entries\n}))",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 100.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "33679db4-b5e1-4697-94da-8379fb0d4072",
+      "is_valid": true,
+      "sharing": true,
+      "label": "classify_anomalies",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, re\n\nresults = self.full_execution.get(\"results\", []) if isinstance(self.full_execution, dict) else []\nprev_data = {}\nfor r in results:\n    if r.get(\"action\", {}).get(\"label\") == \"query_rare_patterns\":\n        try:\n            p = json.loads(r.get(\"result\", \"{}\"))\n            prev_data = p.get(\"message\", p) if isinstance(p, dict) else {}\n        except:\n            prev_data = {}\n\ninternal_candidates = prev_data.get(\"internal_candidates\", [])\nhoneypot_candidates = prev_data.get(\"honeypot_candidates\", [])\n\nif not internal_candidates and not honeypot_candidates:\n    print(json.dumps({\n        \"internal_classifications\": [],\n        \"honeypot_classifications\": [],\n        \"discord_internal\": \"Log Anomaly Finder: No rare patterns found in last 24h.\",\n        \"discord_honeypot\": \"\",\n        \"has_honeypot\": \"false\",\n        \"summary\": {\"total\": 0}\n    }))\n    import sys; sys.exit(0)\n\ndef build_candidate_text(candidates):\n    desc_parts = []\n    for i, c in enumerate(candidates):\n        sample_log = \"\"\n        if c.get(\"sample\", {}).get(\"full_log\"):\n            sample_log = \" | log: \" + str(c[\"sample\"][\"full_log\"])[:80]\n        mitre_list = c.get(\"sample\", {}).get(\"rule\", {}).get(\"mitre\", {}).get(\"technique\", [])\n        if isinstance(mitre_list, list):\n            mitre = \", \".join(mitre_list)\n        else:\n            mitre = str(mitre_list)\n        desc_parts.append(str(i+1) + \". [\" + c.get(\"type\", \"?\") + \"] \" + c.get(\"rule_description\", \"?\")[:60] + \" | agent=\" + c.get(\"agent\", \"?\") + \" | count=\" + str(c.get(\"count\", 0)) + \" | mitre=\" + mitre + sample_log)\n    return \"; \".join(desc_parts)\n\ndef call_ollama(candidates, system_prompt):\n    candidate_text = build_candidate_text(candidates)\n    json_format = '{\"items\": [{\"id\": 1, \"classification\": \"ANOMALOUS|MISCONFIG|TRANSIENT|BLIND_SPOT\", \"reason\": \"brief reason\"}]}'\n    prompt = \"/no_think Classify each candidate pattern. Return JSON: \" + json_format + \". Candidates: \" + candidate_text\n    payload = json.dumps({\n        \"model\": \"qwen3:8b\",\n        \"prompt\": prompt,\n        \"system\": system_prompt,\n        \"stream\": False,\n        \"format\": \"json\",\n        \"keep_alive\": \"24h\",\n        \"options\": {\"num_predict\": 2000, \"temperature\": 0.3}\n    }).encode()\n    req = urllib.request.Request(\"$ollama_url/api/generate\",\n        data=payload, headers={\"Content-Type\": \"application/json\"}, method=\"POST\")\n    resp = urllib.request.urlopen(req, timeout=120)\n    raw = json.loads(resp.read().decode()).get(\"response\", \"\")\n    raw = re.sub(r\"<think>.*?</think>\", \"\", raw, flags=re.DOTALL).strip()\n    return json.loads(raw) if raw else {}\n\ndef classify_group(candidates, system_prompt):\n    if not candidates:\n        return []\n    try:\n        llm_result = call_ollama(candidates, system_prompt)\n    except Exception as e:\n        llm_result = {}\n    classifications = []\n    for item in llm_result.get(\"items\", []):\n        idx = item.get(\"id\", 0) - 1\n        cat = item.get(\"classification\", \"TRANSIENT\").upper()\n        reason = item.get(\"reason\", \"\")[:250]\n        if 0 <= idx < len(candidates):\n            entry = {**candidates[idx], \"classification\": cat, \"reason\": reason}\n            entry.pop(\"sample\", None)\n            classifications.append(entry)\n    return classifications\n\ninternal_system = \"You are a SOC analyst classifying rare alert patterns in a home lab's internal network. ANOMALOUS = genuinely unusual, investigate. MISCONFIG = rule tuning or config issue. TRANSIENT = one-off, no concern. BLIND_SPOT = reveals a detection gap worth addressing. Context: smokehouse SPAN port generates Zeek/Suricata noise, PITBOSS is a Windows laptop on WiFi (T1092 removable media alerts normal), DC01/WS01 are AD lab VMs, sear is a Kali attack box. Focus on lateral movement, privilege escalation, and persistence indicators.\"\n\nhoneypot_system = \"You are a SOC analyst classifying rare alert patterns from an internet-facing WordPress login honeypot on GCP (agent: gcp-vm). SSH brute force, credential stuffing, and automated scanning are EXPECTED baseline -- classify these as TRANSIENT unless genuinely novel. ANOMALOUS = novel TTP, sophisticated technique, or post-auth activity. MISCONFIG = honeypot config issue. TRANSIENT = standard scanning/brute force noise. BLIND_SPOT = detection gap worth addressing. Only flag ANOMALOUS for real escalation: web shells, API abuse, targeted enumeration of non-standard endpoints, or new exploitation techniques.\"\n\ninternal_classifications = classify_group(internal_candidates, internal_system)\nhoneypot_classifications = classify_group(honeypot_candidates, honeypot_system)\n\ndef build_discord_report(classifications, candidates, title):\n    counts = {}\n    for c in classifications:\n        cat = c.get(\"classification\", \"?\")\n        counts[cat] = counts.get(cat, 0) + 1\n    anomalous = [c for c in classifications if c.get(\"classification\") == \"ANOMALOUS\"]\n    blind_spots = [c for c in classifications if c.get(\"classification\") == \"BLIND_SPOT\"]\n    lines = [\"**\" + title + \" (last 24h)**\"]\n    lines.append(str(len(candidates)) + \" rare patterns | \" + \" | \".join(k + \": \" + str(v) for k, v in sorted(counts.items())))\n    if anomalous:\n        lines.append(\"**ANOMALOUS:**\")\n        for a in anomalous[:3]:\n            lines.append(\"- \" + a.get(\"rule_description\", \"?\")[:80] + \" on \" + a.get(\"agent\", \"?\") + \" - \" + a.get(\"reason\", \"\")[:150])\n    if blind_spots:\n        lines.append(\"**BLIND SPOTS:**\")\n        for b in blind_spots[:3]:\n            lines.append(\"- \" + b.get(\"rule_description\", \"?\")[:80] + \" - \" + b.get(\"reason\", \"\")[:150])\n    if not anomalous and not blind_spots:\n        lines.append(\"All patterns transient/noise/misconfig.\")\n    report = \"\\\\n\".join(lines)\n    if len(report) > 1950:\n        report = report[:1947] + \"...\"\n    return report\n\ndiscord_internal = build_discord_report(internal_classifications, internal_candidates, \"Log Anomaly Finder - Internal\")\n\ndiscord_honeypot = \"\"\nhas_honeypot = \"false\"\nif honeypot_candidates:\n    discord_honeypot = build_discord_report(honeypot_classifications, honeypot_candidates, \"Log Anomaly Finder - Honeypot\")\n    has_honeypot = \"true\"\n\nall_classifications = internal_classifications + honeypot_classifications\nall_counts = {}\nfor c in all_classifications:\n    cat = c.get(\"classification\", \"?\")\n    all_counts[cat] = all_counts.get(cat, 0) + 1\n\nprint(json.dumps({\n    \"internal_classifications\": internal_classifications,\n    \"honeypot_classifications\": honeypot_classifications,\n    \"discord_internal\": discord_internal,\n    \"discord_honeypot\": discord_honeypot,\n    \"has_honeypot\": has_honeypot,\n    \"summary\": {\n        \"total\": len(internal_candidates) + len(honeypot_candidates),\n        \"internal_count\": len(internal_candidates),\n        \"honeypot_count\": len(honeypot_candidates),\n        \"counts\": all_counts,\n        \"anomalous_count\": len([c for c in all_classifications if c.get(\"classification\") == \"ANOMALOUS\"]),\n        \"blind_spot_count\": len([c for c in all_classifications if c.get(\"classification\") == \"BLIND_SPOT\"])\n    }\n}))",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 300.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "98347b7f-1c53-4f95-9846-f8c638ce2559",
+      "is_valid": true,
+      "sharing": true,
+      "label": "write_elk",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, base64, datetime\n\nctx = ssl.create_default_context()\nctx.check_hostname = False\nctx.verify_mode = ssl.CERT_NONE\n\nelk_auth = base64.b64encode(\"$elk_user:$elk_pass\".encode()).decode()\nelk_headers = {\"Content-Type\": \"application/json\", \"Authorization\": \"Basic \" + elk_auth}\n\nresults = self.full_execution.get(\"results\", []) if isinstance(self.full_execution, dict) else []\nclassify_data = {}\nfor r in results:\n    if r.get(\"action\", {}).get(\"label\") == \"classify_anomalies\":\n        try:\n            p = json.loads(r.get(\"result\", \"{}\"))\n            classify_data = p.get(\"message\", p) if isinstance(p, dict) else {}\n        except:\n            classify_data = {}\n\ninternal_classifications = classify_data.get(\"internal_classifications\", [])\nhoneypot_classifications = classify_data.get(\"honeypot_classifications\", [])\nsummary = classify_data.get(\"summary\", {})\nnow = datetime.datetime.utcnow().strftime(\"%Y-%m-%dT%H:%M:%SZ\")\n\nwritten = []\nerrors = []\n\ndef write_doc(doc):\n    try:\n        req = urllib.request.Request(\"$elk_url/log-anomalies/_doc\",\n            data=json.dumps(doc).encode(), headers=elk_headers, method=\"POST\")\n        resp = urllib.request.urlopen(req, context=ctx, timeout=10)\n        result = json.loads(resp.read().decode())\n        written.append(result.get(\"_id\", \"?\"))\n    except Exception as e:\n        errors.append(str(e)[:80])\n\nfor c in internal_classifications:\n    write_doc({\n        \"@timestamp\": now,\n        \"rule_id\": c.get(\"rule_id\", \"?\"),\n        \"rule_description\": c.get(\"rule_description\", \"?\"),\n        \"agent_name\": c.get(\"agent\", \"?\"),\n        \"alert_count\": c.get(\"count\", 0),\n        \"anomaly_type\": c.get(\"type\", \"?\"),\n        \"classification\": c.get(\"classification\", \"?\"),\n        \"llm_reasoning\": c.get(\"reason\", \"\"),\n        \"source_group\": \"internal\"\n    })\n\nfor c in honeypot_classifications:\n    write_doc({\n        \"@timestamp\": now,\n        \"rule_id\": c.get(\"rule_id\", \"?\"),\n        \"rule_description\": c.get(\"rule_description\", \"?\"),\n        \"agent_name\": c.get(\"agent\", \"?\"),\n        \"alert_count\": c.get(\"count\", 0),\n        \"anomaly_type\": c.get(\"type\", \"?\"),\n        \"classification\": c.get(\"classification\", \"?\"),\n        \"llm_reasoning\": c.get(\"reason\", \"\"),\n        \"source_group\": \"honeypot\"\n    })\n\nwrite_doc({\n    \"@timestamp\": now,\n    \"rule_id\": \"SUMMARY\",\n    \"rule_description\": \"Daily run summary - internal\",\n    \"classification\": \"SUMMARY\",\n    \"alert_count\": summary.get(\"internal_count\", 0),\n    \"source_group\": \"internal\",\n    \"run_summary\": summary\n})\n\nif classify_data.get(\"has_honeypot\") == \"true\":\n    write_doc({\n        \"@timestamp\": now,\n        \"rule_id\": \"SUMMARY\",\n        \"rule_description\": \"Daily run summary - honeypot\",\n        \"classification\": \"SUMMARY\",\n        \"alert_count\": summary.get(\"honeypot_count\", 0),\n        \"source_group\": \"honeypot\",\n        \"run_summary\": summary\n    })\n\nprint(json.dumps({\n    \"written\": len(written),\n    \"errors\": errors,\n    \"discord_internal\": classify_data.get(\"discord_internal\", \"Anomaly Finder: complete.\"),\n    \"discord_honeypot\": classify_data.get(\"discord_honeypot\", \"\"),\n    \"has_honeypot\": classify_data.get(\"has_honeypot\", \"false\")\n}))",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 500.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "http",
+      "app_version": "1.4.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "38ce445b-2bc1-4de0-b8fe-9cdd683d184e",
+      "is_valid": true,
+      "sharing": true,
+      "label": "discord_internal",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "POST",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "url",
+          "example": "",
+          "value": "$discord_webhook",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "headers",
+          "example": "",
+          "value": "Content-Type: application/json",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "body",
+          "example": "",
+          "value": "{\"content\":\"$write_elk.message.discord_internal\"}",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "verify",
+          "example": "",
+          "value": "true",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 700.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "http",
+      "app_version": "1.4.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "b7e3f912-4a8c-4d5f-a1b2-c9d0e8f71234",
+      "is_valid": true,
+      "sharing": true,
+      "label": "discord_honeypot",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "POST",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "url",
+          "example": "",
+          "value": "$discord_webhook_honeypot",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "headers",
+          "example": "",
+          "value": "Content-Type: application/json",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "body",
+          "example": "",
+          "value": "{\"content\":\"$write_elk.message.discord_honeypot\"}",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "verify",
+          "example": "",
+          "value": "true",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 700.001,
+        "y": 350.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    }
+  ],
+  "branches": [
+    {
+      "destination_id": "33679db4-b5e1-4697-94da-8379fb0d4072",
+      "id": "ff02e66b-8826-4b2d-8c51-9aa82dde3749",
+      "source_id": "f67fc368-df33-4ac9-b765-f0f9bf039776",
+      "label": "",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "98347b7f-1c53-4f95-9846-f8c638ce2559",
+      "id": "a19c7a8b-e8dc-4ebf-ae72-9141ef569795",
+      "source_id": "33679db4-b5e1-4697-94da-8379fb0d4072",
+      "label": "",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "38ce445b-2bc1-4de0-b8fe-9cdd683d184e",
+      "id": "9e16ce2e-6b02-4e82-8cb1-4a1f5a8bb824",
+      "source_id": "98347b7f-1c53-4f95-9846-f8c638ce2559",
+      "label": "",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "b7e3f912-4a8c-4d5f-a1b2-c9d0e8f71234",
+      "id": "c8f2a345-6b7d-4e9a-b1c2-d3e4f5a67890",
+      "source_id": "98347b7f-1c53-4f95-9846-f8c638ce2559",
+      "label": "",
+      "has_errors": false,
+      "conditions": [
+        {
+          "source": {
+            "description": "",
+            "id": "",
+            "name": "",
+            "example": "",
+            "value": "$write_elk.message.has_honeypot",
+            "multiline": false,
+            "multiselect": false,
+            "options": null,
+            "action_field": "",
+            "variant": "",
+            "required": false,
+            "configuration": false,
+            "tags": null,
+            "schema": {
+              "type": ""
+            },
+            "skip_multicheck": false,
+            "value_replace": null,
+            "unique_toggled": false,
+            "error": "",
+            "hidden": false
+          },
+          "condition": {
+            "description": "",
+            "id": "",
+            "name": "",
+            "example": "",
+            "value": "equals",
+            "multiline": false,
+            "multiselect": false,
+            "options": null,
+            "action_field": "",
+            "variant": "",
+            "required": false,
+            "configuration": false,
+            "tags": null,
+            "schema": {
+              "type": ""
+            },
+            "skip_multicheck": false,
+            "value_replace": null,
+            "unique_toggled": false,
+            "error": "",
+            "hidden": false
+          },
+          "destination": {
+            "description": "",
+            "id": "",
+            "name": "",
+            "example": "",
+            "value": "true",
+            "multiline": false,
+            "multiselect": false,
+            "options": null,
+            "action_field": "",
+            "variant": "",
+            "required": false,
+            "configuration": false,
+            "tags": null,
+            "schema": {
+              "type": ""
+            },
+            "skip_multicheck": false,
+            "value_replace": null,
+            "unique_toggled": false,
+            "error": "",
+            "hidden": false
+          }
+        }
+      ],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    }
+  ],
+  "visual_branches": null,
+  "triggers": [],
+  "comments": [],
+  "configuration": {
+    "exit_on_error": false,
+    "start_from_top": false,
+    "skip_notifications": false
+  },
+  "created": 1771421093,
+  "edited": 1771633032,
+  "last_runtime": 0,
+  "due_date": 0,
+  "id": "5fca80c6-178f-4ec5-ab23-f42ae7fd4b2b",
+  "is_valid": true,
+  "name": "Workflow 8: LLM Log Anomaly Finder",
+  "description": "Daily: hunts rare/unusual alert patterns, classifies via Ollama, writes to ELK log-anomalies index, notifies Discord.",
+  "start": "f67fc368-df33-4ac9-b765-f0f9bf039776",
+  "owner": "d4fac237-9bd7-4977-9b82-1c223a54b81f",
+  "sharing": "private",
+  "execution_org": {
+    "name": "default",
+    "id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+    "users": [],
+    "role": "admin",
+    "child_orgs": null,
+    "region_url": "",
+    "is_partner": false,
+    "image": "",
+    "creator_org": "",
+    "branding": {
+      "enable_chat": false,
+      "home_url": "",
+      "theme": "",
+      "documentation_link": "",
+      "global_user": false,
+      "support_email": "",
+      "logout_url": "",
+      "brand_color": "",
+      "brand_name": ""
+    }
+  },
+  "org_id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+  "workflow_variables": [
+    {
+      "description": "Discord webhook URL",
+      "id": "15b528d2-6731-4633-a37a-fec7fb984fc3",
+      "name": "discord_webhook",
+      "value": "YOUR_DISCORD_WEBHOOK_URL"
+    },
+    {
+      "description": "Ollama LLM endpoint",
+      "id": "ea535139-4e5e-4b64-9748-fa2b2c78a96d",
+      "name": "ollama_url",
+      "value": "http://10.10.20.30:11434"
+    },
+    {
+      "description": "Wazuh Indexer (OpenSearch) URL",
+      "id": "bea64a6a-4ea7-4fed-858e-321feb9b6a6e",
+      "name": "opensearch_url",
+      "value": "https://10.10.20.30:9200"
+    },
+    {
+      "description": "OpenSearch username",
+      "id": "86732bfb-a88d-47e2-9b9f-2be1c8027aa9",
+      "name": "opensearch_user",
+      "value": "admin"
+    },
+    {
+      "description": "OpenSearch password",
+      "id": "5ee43d5b-82d4-497a-8f07-22020de0eeab",
+      "name": "opensearch_pass",
+      "value": "YOUR_PASSWORD"
+    },
+    {
+      "description": "ELK Elasticsearch URL",
+      "id": "c4d8e4af-94b0-46dc-b509-2f83ef97f361",
+      "name": "elk_url",
+      "value": "https://10.10.30.23:9200"
+    },
+    {
+      "description": "ELK username",
+      "id": "5270c8f8-b708-4028-96ed-873135ed3efa",
+      "name": "elk_user",
+      "value": "elastic"
+    },
+    {
+      "description": "ELK password",
+      "id": "695d4e3f-282b-4508-8298-f3a1a6e105b7",
+      "name": "elk_pass",
+      "value": "YOUR_PASSWORD"
+    },
+    {
+      "description": "Discord webhook for honeypot anomalies",
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "discord_webhook_honeypot",
+      "value": "YOUR_DISCORD_WEBHOOK_HONEYPOT_URL"
+    }
+  ],
+  "execution_environment": "",
+  "previously_saved": true,
+  "categories": {
+    "siem": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "communication": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "assets": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "cases": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "network": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "intel": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "edr": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "iam": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "ai": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "email": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "other": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    }
+  },
+  "example_argument": "",
+  "public": false,
+  "default_return_value": "",
+  "contact_info": {
+    "name": "",
+    "url": ""
+  },
+  "published_id": "",
+  "revision_id": "",
+  "usecase_ids": null,
+  "input_questions": null,
+  "form_control": {
+    "input_markdown": "",
+    "output_yields": null,
+    "cleanup_actions": null,
+    "form_width": 0
+  },
+  "blogpost": "",
+  "video": "",
+  "status": "test",
+  "workflow_type": "",
+  "generated": false,
+  "hidden": false,
+  "background_processing": false,
+  "updated_by": "admin",
+  "validated": false,
+  "validation": {
+    "valid": true,
+    "changed_at": 1771633064000,
+    "last_valid": 1771633064000,
+    "validation_ran": true,
+    "notifications_created": 0,
+    "environment": "Shuffle",
+    "workflow_id": "",
+    "execution_id": "e231886e-6cf7-48d6-b434-cef02c126608",
+    "node_id": "",
+    "total_problems": 0,
+    "errors": [],
+    "subflow_apps": []
+  },
+  "parentorg_workflow": "",
+  "childorg_workflow_ids": null,
+  "suborg_distribution": [],
+  "backup_config": {
+    "onprem_backup": false,
+    "upload_repo": "",
+    "upload_branch": "",
+    "upload_username": "",
+    "upload_token": "",
+    "tokens_encrypted": false
+  },
+  "auth_groups": null
+}

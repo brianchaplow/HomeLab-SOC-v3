@@ -1,0 +1,5 @@
+*/15 * * * * cd /app && /usr/local/bin/python scripts/enrichment.py >> /app/logs/enrichment.log 2>&1
+0 * * * * cd /app && /usr/local/bin/python scripts/autoblock.py >> /app/logs/autoblock.log 2>&1
+0 6 * * * cd /app && /usr/local/bin/python scripts/digest.py --watch morning >> /app/logs/digest.log 2>&1
+0 18 * * * cd /app && /usr/local/bin/python scripts/digest.py --watch evening >> /app/logs/digest.log 2>&1
+0 8 * * 0 cd /app && /usr/local/bin/python scripts/digest.py --watch weekly >> /app/logs/digest.log 2>&1
