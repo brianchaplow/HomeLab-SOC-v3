@@ -1,0 +1,17 @@
+# Environment files (contain secrets)
+.env
+
+# Runtime data
+data/*.json
+logs/*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+
+# IDE
+.vscode/
+.idea/

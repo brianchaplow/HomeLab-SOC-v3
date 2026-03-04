@@ -1,0 +1,975 @@
+{
+    "workflow_as_code": false,
+    "actions": [
+        {
+            "app_name": "Shuffle Tools",
+            "app_version": "1.2.0",
+            "description": "",
+            "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+            "errors": [],
+            "id": "5a435bbd-d805-4efd-ae6a-83f933a88885",
+            "is_valid": true,
+            "isStartNode": true,
+            "sharing": true,
+            "label": "parse_webhook",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "execute_python",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "code",
+                    "example": "",
+                    "value": "import json\n\nbody = self.full_execution.get(\"execution_argument\", \"{}\")\nif isinstance(body, str):\n    body = json.loads(body)\noperation_id = body.get(\"operation_id\", \"\")\nstart_time = body.get(\"start_time\", \"now-24h\")\nend_time = body.get(\"end_time\", \"now\")\nif not operation_id:\n    print(json.dumps({\"error\": \"Missing operation_id in webhook payload\"}))\nelse:\n    print(json.dumps({\"operation_id\": operation_id, \"start_time\": start_time, \"end_time\": end_time}))",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 100.001,
+                "y": 200.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "Shuffle Tools",
+            "app_version": "1.2.0",
+            "description": "",
+            "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+            "errors": [],
+            "id": "0ca63b88-fc12-415c-b818-a44c1ce2ca19",
+            "is_valid": true,
+            "sharing": true,
+            "label": "query_caldera",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "execute_python",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "code",
+                    "example": "",
+                    "value": "import json, urllib.request\n\nresults = self.full_execution.get(\"results\", []) if isinstance(self.full_execution, dict) else []\nparams = {}\nfor r in results:\n    if r.get(\"action\", {}).get(\"label\") == \"parse_webhook\":\n        try:\n            p = json.loads(r.get(\"result\", \"{}\"))\n            params = p.get(\"message\", p) if isinstance(p, dict) else {}\n        except:\n            params = {}\n\nop_id = params.get(\"operation_id\", \"\")\nif not op_id:\n    print(json.dumps({\"error\": \"No operation_id\", \"techniques\": []}))\nelse:\n    try:\n        url = f\"http://10.10.30.21:8888/api/v2/operations/{op_id}\"\n        req = urllib.request.Request(url, headers={\"KEY\": \"YOUR_CALDERA_API_KEY\"})\n        resp = urllib.request.urlopen(req, timeout=15)\n        op = json.loads(resp.read().decode())\n        # Extract unique MITRE technique IDs from operation chain\n        techniques = set()\n        for chain_item in op.get(\"chain\", []):\n            ability = chain_item.get(\"ability\", {})\n            tid = ability.get(\"technique_id\", \"\")\n            tname = ability.get(\"technique_name\", \"\")\n            if tid:\n                techniques.add((tid, tname))\n        tech_list = [{\"id\": t[0], \"name\": t[1]} for t in sorted(techniques)]\n        op_name = op.get(\"name\", op_id)\n        print(json.dumps({\"operation\": op_name, \"techniques\": tech_list, \"total_links\": len(op.get(\"chain\", []))}))\n    except Exception as e:\n        print(json.dumps({\"error\": str(e)[:200], \"techniques\": []}))",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 400.001,
+                "y": 100.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "Shuffle Tools",
+            "app_version": "1.2.0",
+            "description": "",
+            "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+            "errors": [],
+            "id": "ac1ce543-93b3-4413-ab88-0e1cd390fb0f",
+            "is_valid": true,
+            "sharing": true,
+            "label": "query_wazuh_detections",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "execute_python",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "code",
+                    "example": "",
+                    "value": "import json, urllib.request, ssl, base64\n\nresults = self.full_execution.get(\"results\", []) if isinstance(self.full_execution, dict) else []\nparams = {}\nfor r in results:\n    if r.get(\"action\", {}).get(\"label\") == \"parse_webhook\":\n        try:\n            p = json.loads(r.get(\"result\", \"{}\"))\n            params = p.get(\"message\", p) if isinstance(p, dict) else {}\n        except:\n            params = {}\n\nstart = params.get(\"start_time\", \"now-24h\")\nend = params.get(\"end_time\", \"now\")\n\nctx = ssl.create_default_context()\nctx.check_hostname = False\nctx.verify_mode = ssl.CERT_NONE\n\nquery = {\n    \"size\": 0,\n    \"query\": {\"bool\": {\"must\": [\n        {\"range\": {\"timestamp\": {\"gte\": start, \"lte\": end}}}\n    ]}},\n    \"aggs\": {\n        \"detected_techniques\": {\n            \"terms\": {\"field\": \"rule.mitre.id\", \"size\": 100}\n        }\n    }\n}\n\ncreds = \"admin:YOUR_PASSWORD\"\nauth_header = base64.b64encode(creds.encode()).decode()\ntry:\n    req = urllib.request.Request(\n        \"https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search\",\n        data=json.dumps(query).encode(),\n        headers={\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {auth_header}\"},\n        method=\"POST\")\n    resp = urllib.request.urlopen(req, context=ctx, timeout=15)\n    data = json.loads(resp.read().decode())\n    detected = []\n    for b in data.get(\"aggregations\", {}).get(\"detected_techniques\", {}).get(\"buckets\", []):\n        detected.append({\"id\": b[\"key\"], \"count\": b[\"doc_count\"]})\n    print(json.dumps({\"detected_techniques\": detected, \"timeframe\": f\"{start} to {end}\"}))\nexcept Exception as e:\n    print(json.dumps({\"error\": str(e)[:200], \"detected_techniques\": []}))",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 400.001,
+                "y": 300.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "Shuffle Tools",
+            "app_version": "1.2.0",
+            "description": "",
+            "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+            "errors": [],
+            "id": "4f9c96c9-c839-40ae-8436-7b1ffa022e8f",
+            "is_valid": true,
+            "sharing": true,
+            "label": "analyze_gaps",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "execute_python",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "code",
+                    "example": "",
+                    "value": "import json, urllib.request, re\n\nresults = self.full_execution.get(\"results\", []) if isinstance(self.full_execution, dict) else []\ncaldera_data = {}\nwazuh_data = {}\nfor r in results:\n    label = r.get(\"action\", {}).get(\"label\", \"\")\n    if label == \"query_caldera\":\n        try:\n            p = json.loads(r.get(\"result\", \"{}\"))\n            caldera_data = p.get(\"message\", p) if isinstance(p, dict) else {}\n        except:\n            caldera_data = {}\n    elif label == \"query_wazuh_detections\":\n        try:\n            p = json.loads(r.get(\"result\", \"{}\"))\n            wazuh_data = p.get(\"message\", p) if isinstance(p, dict) else {}\n        except:\n            wazuh_data = {}\n\nexecuted = {t[\"id\"]: t[\"name\"] for t in caldera_data.get(\"techniques\", [])}\ndetected_ids = {t[\"id\"] for t in wazuh_data.get(\"detected_techniques\", [])}\ndetected_counts = {t[\"id\"]: t[\"count\"] for t in wazuh_data.get(\"detected_techniques\", [])}\n\ngaps = []\ndetected = []\nfor tid, tname in sorted(executed.items()):\n    if tid in detected_ids:\n        detected.append({\"id\": tid, \"name\": tname, \"alerts\": detected_counts.get(tid, 0)})\n    else:\n        gaps.append({\"id\": tid, \"name\": tname})\n\nop_name = caldera_data.get(\"operation\", \"Unknown\")\ntotal_links = caldera_data.get(\"total_links\", 0)\n\n# Ask Ollama for detection recommendations per gap\nrecommendations = []\nif gaps:\n    try:\n        gap_list = \"; \".join(f\"{g['id']} {g['name']}\" for g in gaps[:15])\n        prompt = f\"/no_think You are a detection engineer. For each MITRE ATT&CK technique listed below that was NOT detected by the SIEM during a red team operation, provide exactly one sentence of detection recommendation. Format each as 'TECHNIQUE_ID: recommendation'. Be specific about data sources, log types, or Wazuh rules needed. Techniques: {gap_list}\"\n        payload = json.dumps({\"model\": \"qwen3:8b\", \"prompt\": prompt, \"stream\": False,\n            \"options\": {\"num_predict\": 1000, \"temperature\": 0.3}}).encode()\n        req = urllib.request.Request(\"http://10.10.20.30:11434/api/generate\",\n            data=payload, headers={\"Content-Type\": \"application/json\"})\n        resp = urllib.request.urlopen(req, timeout=60)\n        text = json.loads(resp.read().decode()).get(\"response\", \"\")\n        text = re.sub(r\"<think>.*?</think>\", \"\", text, flags=re.DOTALL).strip()\n        if text:\n            recommendations = text.replace(\"\\r\", \"\").split(\"\\n\")\n            recommendations = [r.strip() for r in recommendations if r.strip()]\n        else:\n            recommendations = [\"LLM returned empty response\"]\n    except Exception as e:\n        recommendations = [f\"LLM unavailable: {str(e)[:60]}\"]\n\n# Build report\ncoverage_pct = round(len(detected) / len(executed) * 100, 1) if executed else 0\nreport_lines = [\n    f\"Detection Gap Analysis: {op_name}\",\n    f\"Executed: {len(executed)} techniques ({total_links} links) | Detected: {len(detected)} | Gaps: {len(gaps)} | Coverage: {coverage_pct}%\",\n    \"\",\n    \"DETECTED:\"\n]\nfor d in detected[:10]:\n    report_lines.append(f\"  [OK] {d['id']} {d['name']} ({d['alerts']} alerts)\")\nreport_lines.append(\"\")\nreport_lines.append(\"GAPS (not detected):\")\nfor g in gaps:\n    report_lines.append(f\"  [MISS] {g['id']} {g['name']}\")\nif recommendations:\n    report_lines.append(\"\")\n    report_lines.append(\"RECOMMENDATIONS:\")\n    for rec in recommendations[:15]:\n        report_lines.append(f\"  {rec}\")\n\nreport = \"\\\\n\".join(report_lines)\n# Discord summary (truncated)\ndiscord_summary = f\"**Detection Gap Analysis: {op_name}**\\\\nCoverage: {coverage_pct}% ({len(detected)}/{len(executed)} techniques detected)\\\\nGaps: {len(gaps)} techniques undetected\"\nif gaps[:3]:\n    discord_summary += \"\\\\nTop gaps: \" + \", \".join(f\"{g['id']}\" for g in gaps[:5])\n\nthehive_desc = report.replace(\"\\\\n\", \"\\n\")\n\nprint(json.dumps({\n    \"report\": report,\n    \"discord_summary\": discord_summary[:1900],\n    \"thehive_title\": f\"Detection Gap Analysis: {op_name} ({coverage_pct}% coverage)\",\n    \"thehive_description\": thehive_desc[:3000],\n    \"coverage_pct\": coverage_pct,\n    \"gap_count\": len(gaps),\n    \"detected_count\": len(detected)\n}))",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 700.001,
+                "y": 200.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "http",
+            "app_version": "1.4.0",
+            "description": "",
+            "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+            "errors": [],
+            "id": "687279b1-e0b6-4554-a3d3-23809657b87f",
+            "is_valid": true,
+            "sharing": true,
+            "label": "create_thehive_case",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "POST",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "url",
+                    "example": "",
+                    "value": "http://10.10.30.22:9000/api/case",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "headers",
+                    "example": "",
+                    "value": "Authorization: Bearer YOUR_THEHIVE_API_KEY\nContent-Type: application/json",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "body",
+                    "example": "",
+                    "value": "{\"title\":\"$analyze_gaps.message.thehive_title\",\"description\":\"$analyze_gaps.message.thehive_description\",\"severity\":2,\"tlp\":2,\"flag\":false,\"tags\":[\"detection-gap\",\"caldera\",\"ollama\"]}",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "verify",
+                    "example": "",
+                    "value": "false",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 1000.001,
+                "y": 100.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "http",
+            "app_version": "1.4.0",
+            "description": "",
+            "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+            "errors": [],
+            "id": "9bdb7b6d-4dbd-4ac5-ad0d-162b667eb9a1",
+            "is_valid": true,
+            "sharing": true,
+            "label": "discord_report",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "POST",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "url",
+                    "example": "",
+                    "value": "$discord_webhook",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "headers",
+                    "example": "",
+                    "value": "Content-Type: application/json",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "body",
+                    "example": "",
+                    "value": "{\"content\":\"$analyze_gaps.message.discord_summary\"}",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "verify",
+                    "example": "",
+                    "value": "true",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 1000.001,
+                "y": 300.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        }
+    ],
+    "branches": [
+        {
+            "destination_id": "0ca63b88-fc12-415c-b818-a44c1ce2ca19",
+            "id": "ae1bf5ec-0be6-4a88-bfc4-90ca7fd12395",
+            "source_id": "5a435bbd-d805-4efd-ae6a-83f933a88885",
+            "label": "",
+            "has_errors": false,
+            "conditions": null,
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        },
+        {
+            "destination_id": "ac1ce543-93b3-4413-ab88-0e1cd390fb0f",
+            "id": "bd1a8a0a-8372-4832-817a-821efbb80f9b",
+            "source_id": "5a435bbd-d805-4efd-ae6a-83f933a88885",
+            "label": "",
+            "has_errors": false,
+            "conditions": null,
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        },
+        {
+            "destination_id": "4f9c96c9-c839-40ae-8436-7b1ffa022e8f",
+            "id": "e28e74a6-c2cb-4363-8f26-59dff79152dc",
+            "source_id": "0ca63b88-fc12-415c-b818-a44c1ce2ca19",
+            "label": "",
+            "has_errors": false,
+            "conditions": null,
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        },
+        {
+            "destination_id": "4f9c96c9-c839-40ae-8436-7b1ffa022e8f",
+            "id": "e58bf6aa-cde7-4226-9efe-6676111e81d4",
+            "source_id": "ac1ce543-93b3-4413-ab88-0e1cd390fb0f",
+            "label": "",
+            "has_errors": false,
+            "conditions": null,
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        },
+        {
+            "destination_id": "687279b1-e0b6-4554-a3d3-23809657b87f",
+            "id": "77124564-7c62-46ec-997d-3d2174a65ffc",
+            "source_id": "4f9c96c9-c839-40ae-8436-7b1ffa022e8f",
+            "label": "",
+            "has_errors": false,
+            "conditions": null,
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        },
+        {
+            "destination_id": "9bdb7b6d-4dbd-4ac5-ad0d-162b667eb9a1",
+            "id": "a6409de8-c295-4467-80f2-309b85f2fa1c",
+            "source_id": "4f9c96c9-c839-40ae-8436-7b1ffa022e8f",
+            "label": "",
+            "has_errors": false,
+            "conditions": null,
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        }
+    ],
+    "visual_branches": null,
+    "triggers": [
+        {
+            "app_name": "",
+            "description": "Manual POST with {operation_id, start_time, end_time}",
+            "long_description": "",
+            "status": "running",
+            "app_version": "",
+            "errors": null,
+            "id": "528cf62c-437b-54fd-8c29-e25065056f2e",
+            "is_valid": true,
+            "isStartNode": true,
+            "label": "gap_webhook",
+            "small_image": "",
+            "large_image": "",
+            "environment": "Shuffle",
+            "trigger_type": "WEBHOOK",
+            "name": "gap_webhook",
+            "tags": null,
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "url",
+                    "example": "",
+                    "value": "http://localhost:5001/api/v1/hooks/webhook_528cf62c-437b-54fd-8c29-e25065056f2e",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "auth",
+                    "example": "",
+                    "value": "webhook_528cf62c-437b-54fd-8c29-e25065056f2e",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "custom_response_body",
+                    "example": "",
+                    "value": "",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "startnode",
+                    "example": "",
+                    "value": "5a435bbd-d805-4efd-ae6a-83f933a88885",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "position": {
+                "x": -100,
+                "y": 200
+            },
+            "priority": 0,
+            "source_workflow": "",
+            "execution_delay": 0,
+            "app_association": {
+                "name": "",
+                "app_version": "",
+                "id": "",
+                "link": "",
+                "is_valid": false,
+                "generated": false,
+                "downloaded": false,
+                "sharing": false,
+                "verified": false,
+                "invalid": false,
+                "activated": false,
+                "tested": false,
+                "hash": "",
+                "private_id": "",
+                "environment": "",
+                "small_image": "",
+                "large_image": "",
+                "contact_info": {
+                    "name": "",
+                    "url": ""
+                },
+                "folder_mount": {
+                    "folder_mount": false,
+                    "source_folder": "",
+                    "destination_folder": ""
+                },
+                "authentication": {
+                    "type": "",
+                    "required": false,
+                    "parameters": null,
+                    "redirect_uri": "",
+                    "token_uri": "",
+                    "refresh_uri": "",
+                    "scope": null,
+                    "client_id": "",
+                    "client_secret": "",
+                    "grant_type": ""
+                },
+                "actions": null,
+                "tags": null,
+                "categories": null,
+                "created": 0,
+                "edited": 0,
+                "last_runtime": 0,
+                "versions": null,
+                "loop_versions": null,
+                "owner": "",
+                "sharing_config": "",
+                "public": false,
+                "published_id": "",
+                "child_ids": null,
+                "reference_org": "",
+                "reference_url": "",
+                "action_file_path": "",
+                "template": false,
+                "documentation": "",
+                "description": "",
+                "documentation_download_url": "",
+                "primary_usecases": null,
+                "skipped_build": false,
+                "reference_info": {
+                    "onprem_backup": false,
+                    "is_partner": false,
+                    "partner_contacts": "",
+                    "documentation_url": "",
+                    "github_url": "",
+                    "triggers": null
+                },
+                "blogpost": "",
+                "video": "",
+                "company_url": "",
+                "contributors": null,
+                "revision_id": "",
+                "collection": ""
+            },
+            "parent_controlled": false,
+            "replacement_for_trigger": ""
+        }
+    ],
+    "comments": [],
+    "configuration": {
+        "exit_on_error": false,
+        "start_from_top": false,
+        "skip_notifications": false
+    },
+    "created": 1770946455,
+    "edited": 1771277528,
+    "last_runtime": 0,
+    "due_date": 0,
+    "id": "8034ea9b-bd8a-4958-ac23-46b16dceccc3",
+    "is_valid": true,
+    "name": "Workflow 3: Detection Gap Analyzer",
+    "description": "Compares Caldera operation techniques against Wazuh detections. Identifies gaps and provides Ollama-powered detection recommendations.",
+    "start": "5a435bbd-d805-4efd-ae6a-83f933a88885",
+    "owner": "d4fac237-9bd7-4977-9b82-1c223a54b81f",
+    "sharing": "private",
+    "execution_org": {
+        "name": "default",
+        "id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+        "users": [],
+        "role": "admin",
+        "child_orgs": null,
+        "region_url": "",
+        "is_partner": false,
+        "image": "",
+        "creator_org": "",
+        "branding": {
+            "enable_chat": false,
+            "home_url": "",
+            "theme": "",
+            "documentation_link": "",
+            "global_user": false,
+            "support_email": "",
+            "logout_url": "",
+            "brand_color": "",
+            "brand_name": ""
+        }
+    },
+    "org_id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+    "workflow_variables": [
+        {
+            "description": "Discord webhook URL",
+            "id": "08df42ee-5e0d-4778-91b5-0b8f17df6b0d",
+            "name": "discord_webhook",
+            "value": "YOUR_DISCORD_WEBHOOK_URL"
+        }
+    ],
+    "execution_environment": "",
+    "previously_saved": true,
+    "categories": {
+        "siem": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "communication": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "assets": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "cases": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "network": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "intel": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "edr": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "iam": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "ai": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "email": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "other": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        }
+    },
+    "example_argument": "",
+    "public": false,
+    "default_return_value": "",
+    "contact_info": {
+        "name": "",
+        "url": ""
+    },
+    "published_id": "",
+    "revision_id": "",
+    "usecase_ids": null,
+    "input_questions": null,
+    "form_control": {
+        "input_markdown": "",
+        "output_yields": null,
+        "cleanup_actions": null,
+        "form_width": 0
+    },
+    "blogpost": "",
+    "video": "",
+    "status": "test",
+    "workflow_type": "",
+    "generated": false,
+    "hidden": false,
+    "background_processing": false,
+    "updated_by": "admin",
+    "validated": false,
+    "validation": {
+        "valid": false,
+        "changed_at": 1770946571000,
+        "last_valid": 0,
+        "validation_ran": true,
+        "notifications_created": 0,
+        "environment": "Shuffle",
+        "workflow_id": "",
+        "execution_id": "14912c82-32d8-487b-93db-685e41f1786e",
+        "node_id": "",
+        "total_problems": 1,
+        "errors": [
+            {
+                "order": 0,
+                "action_id": "687279b1-e0b6-4554-a3d3-23809657b87f",
+                "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+                "app_name": "http",
+                "error": "Action 'create thehive case' failed: 'An exception occurred while running this function (2). See exception for more details and contact support if this persists (support@shuffler.io)'",
+                "type": "configuration",
+                "waiting": false
+            }
+        ],
+        "subflow_apps": []
+    },
+    "parentorg_workflow": "",
+    "childorg_workflow_ids": null,
+    "suborg_distribution": [],
+    "backup_config": {
+        "onprem_backup": false,
+        "upload_repo": "",
+        "upload_branch": "",
+        "upload_username": "",
+        "upload_token": "",
+        "tokens_encrypted": false
+    },
+    "auth_groups": null
+}

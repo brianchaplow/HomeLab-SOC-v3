@@ -1,0 +1,94 @@
+{
+  "items": [
+    {
+      "id": "ce67fc1c-b570-4692-ba4a-e40cbec0dbd9",
+      "version": "WzUzMCwyXQ==",
+      "monitoring_enabled": [
+        "logs",
+        "metrics"
+      ],
+      "inactivity_timeout": 1209600,
+      "data_output_id": "d9a9d4fe-a06e-42d8-aedc-2f584461b450",
+      "monitoring_output_id": "d9a9d4fe-a06e-42d8-aedc-2f584461b450",
+      "schema_version": "1.1.1",
+      "agents": 1,
+      "name": "SOC Endpoints",
+      "namespace": "default",
+      "status": "active",
+      "is_managed": false,
+      "revision": 5,
+      "updated_at": "2026-02-12T14:33:03.114Z",
+      "updated_by": "system",
+      "is_protected": false,
+      "unprivileged_agents": 0
+    },
+    {
+      "id": "99036d2d-5cdb-4829-9a2f-3b2fe4181046",
+      "version": "WzUzMSwyXQ==",
+      "monitoring_enabled": [
+        "logs",
+        "metrics"
+      ],
+      "inactivity_timeout": 1209600,
+      "data_output_id": "d9a9d4fe-a06e-42d8-aedc-2f584461b450",
+      "monitoring_output_id": "d9a9d4fe-a06e-42d8-aedc-2f584461b450",
+      "schema_version": "1.1.1",
+      "agents": 2,
+      "name": "Windows Endpoints",
+      "namespace": "default",
+      "status": "active",
+      "is_managed": false,
+      "revision": 5,
+      "updated_at": "2026-02-12T14:33:03.114Z",
+      "updated_by": "system",
+      "is_protected": false,
+      "unprivileged_agents": 0
+    },
+    {
+      "id": "003d80a3-8f80-46e6-ba05-8a513cafb3e8",
+      "version": "WzUzMiwyXQ==",
+      "monitoring_enabled": [
+        "logs",
+        "metrics"
+      ],
+      "inactivity_timeout": 1209600,
+      "data_output_id": "d9a9d4fe-a06e-42d8-aedc-2f584461b450",
+      "monitoring_output_id": "d9a9d4fe-a06e-42d8-aedc-2f584461b450",
+      "schema_version": "1.1.1",
+      "agents": 1,
+      "name": "Sensors",
+      "namespace": "default",
+      "status": "active",
+      "is_managed": false,
+      "revision": 5,
+      "updated_at": "2026-02-12T14:33:03.114Z",
+      "updated_by": "system",
+      "is_protected": false,
+      "unprivileged_agents": 1
+    },
+    {
+      "id": "fleet-server-policy",
+      "version": "WzUyMSwyXQ==",
+      "is_default_fleet_server": true,
+      "monitoring_enabled": [
+        "logs",
+        "metrics"
+      ],
+      "inactivity_timeout": 1209600,
+      "schema_version": "1.1.1",
+      "agents": 0,
+      "name": "Fleet Server Policy",
+      "namespace": "default",
+      "status": "active",
+      "is_managed": false,
+      "revision": 2,
+      "updated_at": "2026-02-12T14:30:08.065Z",
+      "updated_by": "system",
+      "is_protected": false,
+      "unprivileged_agents": 0
+    }
+  ],
+  "total": 4,
+  "page": 1,
+  "perPage": 20
+}

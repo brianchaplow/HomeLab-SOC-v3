@@ -1,0 +1,716 @@
+{
+    "workflow_as_code": false,
+    "actions": [
+        {
+            "app_name": "Shuffle Tools",
+            "app_version": "1.2.0",
+            "description": "",
+            "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+            "errors": [],
+            "id": "ed2402e6-10ff-4d54-b615-6a9d16c2cd22",
+            "is_valid": true,
+            "isStartNode": true,
+            "sharing": true,
+            "label": "query_clusters",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "execute_python",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "code",
+                    "example": "",
+                    "value": "import json, urllib.request, ssl, base64\n\nctx = ssl.create_default_context()\nctx.check_hostname = False\nctx.verify_mode = ssl.CERT_NONE\n\nquery = {\n    \"size\": 0,\n    \"query\": {\"bool\": {\"must\": [\n        {\"range\": {\"timestamp\": {\"gte\": \"now-24h\"}}}\n    ]}},\n    \"aggs\": {\n        \"clusters\": {\n            \"composite\": {\n                \"size\": 20,\n                \"sources\": [\n                    {\"src_ip\": {\"terms\": {\"field\": \"data.srcip\", \"missing_bucket\": True}}},\n                    {\"rule_id\": {\"terms\": {\"field\": \"rule.id\"}}},\n                    {\"agent\": {\"terms\": {\"field\": \"agent.name\"}}}\n                ]\n            },\n            \"aggs\": {\n                \"sample\": {\n                    \"top_hits\": {\n                        \"size\": 1,\n                        \"_source\": [\"rule.description\", \"rule.level\", \"rule.mitre.technique\", \"rule.mitre.id\", \"data.srcip\", \"agent.name\", \"timestamp\"]\n                    }\n                },\n                \"max_level\": {\"max\": {\"field\": \"rule.level\"}}\n            }\n        }\n    }\n}\n\ncreds = \"admin:YOUR_PASSWORD\"\nauth_header = base64.b64encode(creds.encode()).decode()\ntry:\n    req = urllib.request.Request(\n        \"https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search\",\n        data=json.dumps(query).encode(),\n        headers={\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {auth_header}\"},\n        method=\"POST\")\n    resp = urllib.request.urlopen(req, context=ctx, timeout=15)\n    data = json.loads(resp.read().decode())\n    buckets = data.get(\"aggregations\", {}).get(\"clusters\", {}).get(\"buckets\", [])\n    # Sort by doc_count descending, take top 10\n    buckets.sort(key=lambda x: x.get(\"doc_count\", 0), reverse=True)\n    clusters = []\n    for b in buckets[:10]:\n        key = b.get(\"key\", {})\n        sample_hits = b.get(\"sample\", {}).get(\"hits\", {}).get(\"hits\", [])\n        sample = sample_hits[0].get(\"_source\", {}) if sample_hits else {}\n        rule_desc = sample.get(\"rule\", {}).get(\"description\", \"Unknown\")\n        rule_level = sample.get(\"rule\", {}).get(\"level\", 0)\n        mitre_techs = sample.get(\"rule\", {}).get(\"mitre\", {}).get(\"technique\", [])\n        mitre_ids = sample.get(\"rule\", {}).get(\"mitre\", {}).get(\"id\", [])\n        clusters.append({\n            \"src_ip\": key.get(\"src_ip\", \"none\"),\n            \"rule_id\": key.get(\"rule_id\", \"\"),\n            \"agent\": key.get(\"agent\", \"\"),\n            \"count\": b.get(\"doc_count\", 0),\n            \"max_level\": int(b.get(\"max_level\", {}).get(\"value\", 0)),\n            \"rule_description\": rule_desc,\n            \"mitre_techniques\": mitre_techs[:3] if isinstance(mitre_techs, list) else [],\n            \"mitre_ids\": mitre_ids[:3] if isinstance(mitre_ids, list) else []\n        })\n    print(json.dumps({\"clusters\": clusters, \"total_clusters\": len(buckets)}))\nexcept Exception as e:\n    print(json.dumps({\"error\": str(e)[:200], \"clusters\": []}))",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 100.001,
+                "y": 200.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "Shuffle Tools",
+            "app_version": "1.2.0",
+            "description": "",
+            "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+            "errors": [],
+            "id": "5c6e3608-55fa-4e59-8726-d0e5bcd97f31",
+            "is_valid": true,
+            "sharing": true,
+            "label": "classify_clusters",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "execute_python",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "code",
+                    "example": "",
+                    "value": "import json, urllib.request, re\n\nresults = self.full_execution.get(\"results\", []) if isinstance(self.full_execution, dict) else []\ncluster_data = {}\nfor r in results:\n    if r.get(\"action\", {}).get(\"label\") == \"query_clusters\":\n        try:\n            p = json.loads(r.get(\"result\", \"{}\"))\n            cluster_data = p.get(\"message\", p) if isinstance(p, dict) else {}\n        except:\n            cluster_data = {}\n\nclusters = cluster_data.get(\"clusters\", [])\nif not clusters:\n    print(json.dumps({\"classifications\": [], \"investigate_items\": [], \"discord_report\": \"No alert clusters found in last 24h.\"}))\nelse:\n    cluster_desc = \"\"\n    for i, c in enumerate(clusters):\n        cluster_desc += f\"\\n{i+1}. {c['rule_description'][:60]} | {c['agent']} | {c['count']} alerts | lvl {c['max_level']}\"\n\n    try:\n        prompt = f'/no_think Classify each cluster. Return JSON: {{\"clusters\": [{{\"id\": 1, \"classification\": \"CAMPAIGN|ROUTINE|INVESTIGATE|MISCONFIG\", \"reason\": \"brief reason\"}}]}}. Clusters:{cluster_desc}'\n        payload = json.dumps({\n            \"model\": \"qwen3:8b\",\n            \"prompt\": prompt,\n            \"system\": \"You are a SOC analyst triaging alert clusters for a home lab SOC. Classify each cluster as CAMPAIGN (expected red team \u2014 only if activity involves VLAN 40 targets 10.10.40.x or known Caldera/sandcat artifacts), ROUTINE (normal lab noise \u2014 Suricata SPAN alerts, AD logon events, systemd restarts, SSH internet brute force on gcp-vm), INVESTIGATE (genuinely needs analyst review), or MISCONFIG (rule tuning needed). Always respond in valid JSON.\",\n            \"stream\": False,\n            \"format\": \"json\",\n            \"keep_alive\": \"24h\",\n            \"options\": {\"num_predict\": 2000, \"temperature\": 0.3}\n        }).encode()\n        req = urllib.request.Request(\"http://10.10.20.30:11434/api/generate\",\n            data=payload, headers={\"Content-Type\": \"application/json\"})\n        resp = urllib.request.urlopen(req, timeout=120)\n        raw = json.loads(resp.read().decode()).get(\"response\", \"\")\n        raw = re.sub(r\"<think>.*?</think>\", \"\", raw, flags=re.DOTALL).strip()\n        llm_result = json.loads(raw) if raw else {}\n    except Exception as e:\n        llm_result = {}\n        raw = f\"LLM error: {str(e)[:60]}\"\n\n    # Parse structured JSON response\n    classifications = []\n    investigate_items = []\n\n    llm_clusters = llm_result.get(\"clusters\", [])\n    if llm_clusters:\n        for lc in llm_clusters:\n            idx = lc.get(\"id\", 0) - 1\n            cat = lc.get(\"classification\", \"ROUTINE\").upper()\n            reason = lc.get(\"reason\", \"\")[:80]\n            if cat not in (\"CAMPAIGN\", \"ROUTINE\", \"INVESTIGATE\", \"MISCONFIG\"):\n                cat = \"ROUTINE\"\n            if 0 <= idx < len(clusters):\n                entry = {**clusters[idx], \"classification\": cat, \"reason\": reason}\n                classifications.append(entry)\n                if cat == \"INVESTIGATE\":\n                    investigate_items.append(entry)\n\n    # Fill any unclassified clusters as ROUTINE\n    classified_ids = {c.get(\"id\", 0) - 1 for c in llm_clusters} if llm_clusters else set()\n    for idx in range(len(clusters)):\n        if idx not in classified_ids:\n            classifications.append({**clusters[idx], \"classification\": \"ROUTINE\", \"reason\": \"unclassified\"})\n\n    # Build Discord report\n    report_lines = [\"**Daily Alert Cluster Triage (last 24h)**\"]\n    cat_counts = {}\n    for c in classifications:\n        cat = c.get(\"classification\", \"?\")\n        cat_counts[cat] = cat_counts.get(cat, 0) + 1\n    report_lines.append(\" | \".join(f\"{k}: {v}\" for k, v in sorted(cat_counts.items())))\n    for c in classifications:\n        emoji = {\"CAMPAIGN\": \"[CAM]\", \"ROUTINE\": \"[RTN]\", \"INVESTIGATE\": \"[INV]\", \"MISCONFIG\": \"[MIS]\"}.get(c.get(\"classification\", \"\"), \"[?]\")\n        report_lines.append(f\"{emoji} {c.get('rule_description','?')[:50]} on {c.get('agent','?')} ({c.get('count',0):,} alerts) - {c.get('reason','')[:60]}\")\n\n    discord_report = \"\\\\n\".join(report_lines)\n    if len(discord_report) > 1900:\n        discord_report = discord_report[:1897] + \"...\"\n\n    print(json.dumps({\n        \"classifications\": classifications,\n        \"investigate_items\": investigate_items,\n        \"discord_report\": discord_report\n    }))",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 400.001,
+                "y": 200.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "Shuffle Tools",
+            "app_version": "1.2.0",
+            "description": "",
+            "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+            "errors": [],
+            "id": "6555d17a-d9a1-4dc2-a93c-05ff51c26a1d",
+            "is_valid": true,
+            "sharing": true,
+            "label": "create_thehive_alerts",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "execute_python",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "code",
+                    "example": "",
+                    "value": "import json, urllib.request, datetime\n\nresults = self.full_execution.get(\"results\", []) if isinstance(self.full_execution, dict) else []\nclassify_data = {}\nfor r in results:\n    if r.get(\"action\", {}).get(\"label\") == \"classify_clusters\":\n        try:\n            p = json.loads(r.get(\"result\", \"{}\"))\n            classify_data = p.get(\"message\", p) if isinstance(p, dict) else {}\n        except:\n            classify_data = {}\n\ninvestigate_items = classify_data.get(\"investigate_items\", [])\ncreated = []\nerrors = []\nfor item in investigate_items[:5]:\n    try:\n        alert_body = {\n            \"title\": f\"[Triage] {item.get('rule_description', 'Unknown')[:80]} on {item.get('agent', '?')}\",\n            \"description\": f\"Auto-triaged alert cluster flagged for investigation.\\nRule: {item.get('rule_id', '?')} - {item.get('rule_description', '?')}\\nAgent: {item.get('agent', '?')}\\nSource IP: {item.get('src_ip', 'none')}\\nAlert count (24h): {item.get('count', 0)}\\nMax level: {item.get('max_level', 0)}\\nMITRE: {', '.join(item.get('mitre_ids', []))}\\nReason: {item.get('reason', 'Flagged by Ollama triage')}\",\n            \"type\": \"external\",\n            \"source\": \"shuffle-wf5\",\n            \"sourceRef\": f\"wf5-{item.get('rule_id', '0')}-{item.get('agent', 'unknown')}-{datetime.datetime.utcnow().strftime('%Y%m%d')}\",\n            \"severity\": 2,\n            \"tlp\": 2,\n            \"tags\": [\"auto-triage\", \"investigate\", \"ollama\"]\n        }\n        req = urllib.request.Request(\n            \"http://10.10.30.22:9000/api/alert\",\n            data=json.dumps(alert_body).encode(),\n            headers={\n                \"Authorization\": \"Bearer YOUR_THEHIVE_API_KEY\",\n                \"Content-Type\": \"application/json\"\n            },\n            method=\"POST\")\n        resp = urllib.request.urlopen(req, timeout=10)\n        result = json.loads(resp.read().decode())\n        created.append(result.get(\"id\", \"?\"))\n    except urllib.request.HTTPError as e:\n        body = e.read().decode()[:200] if hasattr(e, 'read') else ''\n        errors.append(f\"{e}: {body}\")\n    except Exception as e:\n        errors.append(str(e)[:100])\n\nprint(json.dumps({\"created_alerts\": created, \"errors\": errors, \"total_investigate\": len(investigate_items)}))",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 700.001,
+                "y": 100.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        },
+        {
+            "app_name": "http",
+            "app_version": "1.4.0",
+            "description": "",
+            "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+            "errors": [],
+            "id": "d9de2536-f6c7-4811-b91d-a639adc5360a",
+            "is_valid": true,
+            "sharing": true,
+            "label": "discord_report",
+            "public": true,
+            "generated": false,
+            "environment": "Shuffle",
+            "name": "POST",
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "url",
+                    "example": "",
+                    "value": "$discord_webhook",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "headers",
+                    "example": "",
+                    "value": "Content-Type: application/json",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "body",
+                    "example": "",
+                    "value": "{\"content\":\"$classify_clusters.message.discord_report\"}",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "verify",
+                    "example": "",
+                    "value": "true",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "execution_variable": {
+                "description": "",
+                "id": "",
+                "name": "",
+                "value": ""
+            },
+            "position": {
+                "x": 700.001,
+                "y": 300.001
+            },
+            "authentication_id": "",
+            "category": "",
+            "reference_url": "",
+            "sub_action": false,
+            "run_magic_output": false,
+            "run_magic_input": false,
+            "execution_delay": 0,
+            "category_label": null,
+            "suggestion": false,
+            "parent_controlled": false,
+            "source_workflow": "",
+            "source_execution": ""
+        }
+    ],
+    "branches": [
+        {
+            "destination_id": "5c6e3608-55fa-4e59-8726-d0e5bcd97f31",
+            "id": "e5d175f2-c580-439f-a93b-7ce96c6ddee9",
+            "source_id": "ed2402e6-10ff-4d54-b615-6a9d16c2cd22",
+            "label": "",
+            "has_errors": false,
+            "conditions": null,
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        },
+        {
+            "destination_id": "6555d17a-d9a1-4dc2-a93c-05ff51c26a1d",
+            "id": "8d4f0e63-4b22-4bb5-90df-e2161784e290",
+            "source_id": "5c6e3608-55fa-4e59-8726-d0e5bcd97f31",
+            "label": "",
+            "has_errors": false,
+            "conditions": null,
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        },
+        {
+            "destination_id": "d9de2536-f6c7-4811-b91d-a639adc5360a",
+            "id": "16ad64c4-6bdc-40f0-961f-89ee3b291a94",
+            "source_id": "5c6e3608-55fa-4e59-8726-d0e5bcd97f31",
+            "label": "",
+            "has_errors": false,
+            "conditions": null,
+            "decorator": false,
+            "parent_controlled": false,
+            "source_parent": ""
+        }
+    ],
+    "visual_branches": null,
+    "triggers": [
+        {
+            "app_name": "",
+            "description": "Daily at midnight EST (0500 UTC)",
+            "long_description": "",
+            "status": "running",
+            "app_version": "",
+            "errors": null,
+            "id": "f9bfa82f-10d3-5e13-a009-f641202cf6f7",
+            "is_valid": true,
+            "isStartNode": true,
+            "label": "daily_schedule",
+            "small_image": "",
+            "large_image": "",
+            "environment": "Shuffle",
+            "trigger_type": "SCHEDULE",
+            "name": "daily_schedule",
+            "tags": null,
+            "parameters": [
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "cron",
+                    "example": "",
+                    "value": "0 11 * * *",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "execution_argument",
+                    "example": "",
+                    "value": "{}",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                },
+                {
+                    "description": "",
+                    "id": "",
+                    "name": "startnode",
+                    "example": "",
+                    "value": "ed2402e6-10ff-4d54-b615-6a9d16c2cd22",
+                    "multiline": false,
+                    "multiselect": false,
+                    "options": null,
+                    "action_field": "",
+                    "variant": "",
+                    "required": false,
+                    "configuration": false,
+                    "tags": null,
+                    "schema": {
+                        "type": ""
+                    },
+                    "skip_multicheck": false,
+                    "value_replace": null,
+                    "unique_toggled": false,
+                    "error": "",
+                    "hidden": false
+                }
+            ],
+            "position": {
+                "x": -100,
+                "y": 200
+            },
+            "priority": 0,
+            "source_workflow": "",
+            "execution_delay": 0,
+            "app_association": {
+                "name": "",
+                "app_version": "",
+                "id": "",
+                "link": "",
+                "is_valid": false,
+                "generated": false,
+                "downloaded": false,
+                "sharing": false,
+                "verified": false,
+                "invalid": false,
+                "activated": false,
+                "tested": false,
+                "hash": "",
+                "private_id": "",
+                "environment": "",
+                "small_image": "",
+                "large_image": "",
+                "contact_info": {
+                    "name": "",
+                    "url": ""
+                },
+                "folder_mount": {
+                    "folder_mount": false,
+                    "source_folder": "",
+                    "destination_folder": ""
+                },
+                "authentication": {
+                    "type": "",
+                    "required": false,
+                    "parameters": null,
+                    "redirect_uri": "",
+                    "token_uri": "",
+                    "refresh_uri": "",
+                    "scope": null,
+                    "client_id": "",
+                    "client_secret": "",
+                    "grant_type": ""
+                },
+                "actions": null,
+                "tags": null,
+                "categories": null,
+                "created": 0,
+                "edited": 0,
+                "last_runtime": 0,
+                "versions": null,
+                "loop_versions": null,
+                "owner": "",
+                "sharing_config": "",
+                "public": false,
+                "published_id": "",
+                "child_ids": null,
+                "reference_org": "",
+                "reference_url": "",
+                "action_file_path": "",
+                "template": false,
+                "documentation": "",
+                "description": "",
+                "documentation_download_url": "",
+                "primary_usecases": null,
+                "skipped_build": false,
+                "reference_info": {
+                    "onprem_backup": false,
+                    "is_partner": false,
+                    "partner_contacts": "",
+                    "documentation_url": "",
+                    "github_url": "",
+                    "triggers": null
+                },
+                "blogpost": "",
+                "video": "",
+                "company_url": "",
+                "contributors": null,
+                "revision_id": "",
+                "collection": ""
+            },
+            "parent_controlled": false,
+            "replacement_for_trigger": ""
+        }
+    ],
+    "comments": [],
+    "configuration": {
+        "exit_on_error": false,
+        "start_from_top": false,
+        "skip_notifications": false
+    },
+    "created": 1770946765,
+    "edited": 1771281014,
+    "last_runtime": 0,
+    "due_date": 0,
+    "id": "74143222-05e1-45da-96c6-c9ce68617ed0",
+    "is_valid": true,
+    "name": "Workflow 5: Daily Alert Cluster Triage",
+    "description": "Daily at midnight EST: queries top 10 noisiest alert clusters, Ollama classifies as CAMPAIGN/ROUTINE/INVESTIGATE/MISCONFIG, auto-creates TheHive alerts for INVESTIGATE items.",
+    "start": "ed2402e6-10ff-4d54-b615-6a9d16c2cd22",
+    "owner": "d4fac237-9bd7-4977-9b82-1c223a54b81f",
+    "sharing": "private",
+    "execution_org": {
+        "name": "default",
+        "id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+        "users": [],
+        "role": "admin",
+        "child_orgs": null,
+        "region_url": "",
+        "is_partner": false,
+        "image": "",
+        "creator_org": "",
+        "branding": {
+            "enable_chat": false,
+            "home_url": "",
+            "theme": "",
+            "documentation_link": "",
+            "global_user": false,
+            "support_email": "",
+            "logout_url": "",
+            "brand_color": "",
+            "brand_name": ""
+        }
+    },
+    "org_id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+    "workflow_variables": [
+        {
+            "description": "Discord webhook URL",
+            "id": "ff0b0631-a6d9-4dfd-8f4b-42abe4188210",
+            "name": "discord_webhook",
+            "value": "YOUR_DISCORD_WEBHOOK_URL"
+        }
+    ],
+    "execution_environment": "",
+    "previously_saved": true,
+    "categories": {
+        "siem": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "communication": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "assets": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "cases": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "network": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "intel": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "edr": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "iam": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "ai": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "email": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        },
+        "other": {
+            "name": "",
+            "count": 0,
+            "id": "",
+            "description": "",
+            "large_image": ""
+        }
+    },
+    "example_argument": "",
+    "public": false,
+    "default_return_value": "",
+    "contact_info": {
+        "name": "",
+        "url": ""
+    },
+    "published_id": "",
+    "revision_id": "",
+    "usecase_ids": null,
+    "input_questions": null,
+    "form_control": {
+        "input_markdown": "",
+        "output_yields": null,
+        "cleanup_actions": null,
+        "form_width": 0
+    },
+    "blogpost": "",
+    "video": "",
+    "status": "test",
+    "workflow_type": "",
+    "generated": false,
+    "hidden": false,
+    "background_processing": false,
+    "updated_by": "admin",
+    "validated": false,
+    "validation": {
+        "valid": true,
+        "changed_at": 1771273092000,
+        "last_valid": 1771273092000,
+        "validation_ran": true,
+        "notifications_created": 0,
+        "environment": "Shuffle",
+        "workflow_id": "",
+        "execution_id": "73ad0cb7-8612-44c8-aacc-91a19d8f3ef2",
+        "node_id": "",
+        "total_problems": 0,
+        "errors": [],
+        "subflow_apps": []
+    },
+    "parentorg_workflow": "",
+    "childorg_workflow_ids": null,
+    "suborg_distribution": [],
+    "backup_config": {
+        "onprem_backup": false,
+        "upload_repo": "",
+        "upload_branch": "",
+        "upload_username": "",
+        "upload_token": "",
+        "tokens_encrypted": false
+    },
+    "auth_groups": null
+}

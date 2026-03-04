@@ -1,0 +1,118 @@
+services:
+  shuffle-frontend:
+    image: ghcr.io/shuffle/shuffle-frontend:latest
+    container_name: shuffle-frontend
+    hostname: shuffle-frontend
+    ports:
+      - "3443:80"
+      - "3444:443"
+    environment:
+      - BACKEND_HOSTNAME=shuffle-backend
+    restart: unless-stopped
+    depends_on:
+      - shuffle-backend
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  shuffle-backend:
+    image: ghcr.io/shuffle/shuffle-backend:latest
+    container_name: shuffle-backend
+    hostname: shuffle-backend
+    ports:
+      - "5001:5001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - shuffle-apps:/shuffle-apps
+      - shuffle-files:/shuffle-files
+    environment:
+      - SHUFFLE_APP_HOTLOAD_FOLDER=/shuffle-apps
+      - SHUFFLE_FILE_LOCATION=/shuffle-files
+      - SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200
+      - SHUFFLE_OPENSEARCH_USERNAME=admin
+      - SHUFFLE_OPENSEARCH_PASSWORD=${SHUFFLE_OS_PASSWORD}
+      - SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true
+      - ORG_ID=shuffle
+      - SHUFFLE_DEFAULT_USERNAME=admin
+      - SHUFFLE_DEFAULT_PASSWORD=${SHUFFLE_ADMIN_PASS}
+      - SHUFFLE_DEFAULT_APIKEY=
+      - SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600
+      - SHUFFLE_PASS_APP_PROXY=SHUFFLE_NOOP
+      - SHUFFLE_ENCRYPTION_MODIFIER=${SHUFFLE_ENCRYPTION_MODIFIER}
+      - HTTP_PROXY=
+      - HTTPS_PROXY=
+    restart: unless-stopped
+    depends_on:
+      shuffle-opensearch:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  shuffle-orborus:
+    image: ghcr.io/shuffle/shuffle-orborus:latest
+    container_name: shuffle-orborus
+    hostname: shuffle-orborus
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - SHUFFLE_APP_SDK_TIMEOUT=300
+      - SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600
+      - DOCKER_API_VERSION=1.40
+      - SHUFFLE_BASE_URL=http://shuffle-backend:5001
+      - SHUFFLE_WORKER_IMAGE=ghcr.io/shuffle/shuffle-worker:latest
+      - CLEANUP=true
+      - SHUFFLE_ORBORUS_EXECUTION_CONCURRENCY=5
+      - SHUFFLE_PASS_WORKER_PROXY=SHUFFLE_NOOP
+      - ORG_ID=shuffle
+      - ENVIRONMENT_NAME=Shuffle
+      - SHUFFLE_TENZIR_DISABLE=true
+      - TENZIR_DISABLE=true
+      - BASE_URL=http://shuffle-backend:5001
+    restart: unless-stopped
+    depends_on:
+      - shuffle-backend
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  shuffle-opensearch:
+    image: opensearchproject/opensearch:2.18.0
+    container_name: shuffle-opensearch
+    hostname: shuffle-opensearch
+    environment:
+      - cluster.name=shuffle-cluster
+      - node.name=shuffle-opensearch
+      - discovery.type=single-node
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${SHUFFLE_OS_PASSWORD}
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - bootstrap.memory_lock=true
+      - plugins.security.disabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - shuffle-os-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -u admin:${SHUFFLE_OS_PASSWORD} -k https://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+volumes:
+  shuffle-apps:
+  shuffle-files:
+  shuffle-os-data:
