@@ -1,0 +1,41 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'brisket-node'
+    static_configs:
+      - targets: ['host.docker.internal:9100']
+        labels:
+          host: brisket
+
+  - job_name: 'brisket-nvidia'
+    static_configs:
+      - targets: ['host.docker.internal:9835']
+        labels:
+          host: brisket
+
+  - job_name: 'sear-node'
+    static_configs:
+      - targets: ['10.10.20.20:9100']
+        labels:
+          host: sear
+          vlan: '20'
+
+  - job_name: 'smoker-node'
+    static_configs:
+      - targets: ['10.10.30.21:9100']
+        labels:
+          host: smoker
+          vlan: '30'
+
+  - job_name: 'pitcrew-node'
+    static_configs:
+      - targets: ['10.10.30.20:9100']
+        labels:
+          host: pitcrew
+          vlan: '30'

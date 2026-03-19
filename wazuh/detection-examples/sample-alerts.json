@@ -1,0 +1,149 @@
+{
+  "description": "Sample Suricata alerts from HomeLab SOC purple team exercises",
+  "source": "SQLmap attack against DVWA (VLAN 20 → VLAN 40)",
+  "alerts": [
+    {
+      "@timestamp": "2026-01-09T14:30:45.123Z",
+      "event_type": "alert",
+      "src_ip": "10.10.20.20",
+      "src_port": 45678,
+      "dest_ip": "10.10.40.10",
+      "dest_port": 80,
+      "proto": "TCP",
+      "alert": {
+        "action": "allowed",
+        "gid": 1,
+        "signature_id": 2006446,
+        "rev": 12,
+        "signature": "ET WEB_SERVER SQL Injection Attempt - UNION SELECT",
+        "category": "Web Application Attack",
+        "severity": 1
+      },
+      "http": {
+        "hostname": "10.10.40.10",
+        "url": "/vulnerabilities/sqli/?id=1' UNION SELECT null,null--&Submit=Submit",
+        "http_method": "GET",
+        "protocol": "HTTP/1.1",
+        "status": 200
+      },
+      "source": "suricata",
+      "vlan": "SOC"
+    },
+    {
+      "@timestamp": "2026-01-09T14:30:46.456Z",
+      "event_type": "alert",
+      "src_ip": "10.10.20.20",
+      "src_port": 45679,
+      "dest_ip": "10.10.40.10",
+      "dest_port": 80,
+      "proto": "TCP",
+      "alert": {
+        "action": "allowed",
+        "gid": 1,
+        "signature_id": 9000001,
+        "rev": 1,
+        "signature": "HOMELAB SQL Injection - UNION SELECT",
+        "category": "Web Application Attack",
+        "severity": 1
+      },
+      "http": {
+        "hostname": "10.10.40.10",
+        "url": "/vulnerabilities/sqli/?id=1' UNION SELECT username,password FROM users--",
+        "http_method": "GET",
+        "protocol": "HTTP/1.1",
+        "status": 200
+      },
+      "source": "suricata",
+      "vlan": "SOC"
+    },
+    {
+      "@timestamp": "2026-01-09T14:30:47.789Z",
+      "event_type": "alert",
+      "src_ip": "10.10.20.20",
+      "src_port": 45680,
+      "dest_ip": "10.10.40.10",
+      "dest_port": 80,
+      "proto": "TCP",
+      "alert": {
+        "action": "allowed",
+        "gid": 1,
+        "signature_id": 9000005,
+        "rev": 1,
+        "signature": "HOMELAB SQLmap Tool Detected",
+        "category": "Web Application Attack",
+        "severity": 1
+      },
+      "http": {
+        "hostname": "10.10.40.10",
+        "url": "/vulnerabilities/sqli/?id=1",
+        "http_user_agent": "sqlmap/1.7.2#stable (https://sqlmap.org)",
+        "http_method": "GET",
+        "protocol": "HTTP/1.1",
+        "status": 200
+      },
+      "source": "suricata",
+      "vlan": "SOC"
+    },
+    {
+      "@timestamp": "2026-01-09T14:31:15.234Z",
+      "event_type": "alert",
+      "src_ip": "10.10.20.20",
+      "src_port": 45712,
+      "dest_ip": "10.10.40.10",
+      "dest_port": 80,
+      "proto": "TCP",
+      "alert": {
+        "action": "allowed",
+        "gid": 1,
+        "signature_id": 9000004,
+        "rev": 1,
+        "signature": "HOMELAB SQL Injection - INFORMATION_SCHEMA access",
+        "category": "Web Application Attack",
+        "severity": 1
+      },
+      "http": {
+        "hostname": "10.10.40.10",
+        "url": "/vulnerabilities/sqli/?id=1' UNION SELECT table_name,null FROM INFORMATION_SCHEMA.tables--",
+        "http_method": "GET",
+        "protocol": "HTTP/1.1",
+        "status": 200
+      },
+      "source": "suricata",
+      "vlan": "SOC"
+    },
+    {
+      "@timestamp": "2026-01-09T14:32:00.567Z",
+      "event_type": "alert",
+      "src_ip": "10.10.20.20",
+      "src_port": 45800,
+      "dest_ip": "10.10.40.10",
+      "dest_port": 80,
+      "proto": "TCP",
+      "alert": {
+        "action": "allowed",
+        "gid": 1,
+        "signature_id": 9000003,
+        "rev": 1,
+        "signature": "HOMELAB SQL Injection - Time-based SLEEP",
+        "category": "Web Application Attack",
+        "severity": 1
+      },
+      "http": {
+        "hostname": "10.10.40.10",
+        "url": "/vulnerabilities/sqli/?id=1' AND SLEEP(5)--",
+        "http_method": "GET",
+        "protocol": "HTTP/1.1",
+        "status": 200
+      },
+      "source": "suricata",
+      "vlan": "SOC"
+    }
+  ],
+  "notes": {
+    "attack_source": "sear (Kali) - 10.10.20.20 on VLAN 20 (SOC)",
+    "attack_target": "DVWA - 10.10.40.10 on VLAN 40 (Targets)",
+    "tool_used": "sqlmap",
+    "custom_rules_triggered": ["9000001", "9000003", "9000004", "9000005"],
+    "et_rules_triggered": ["2006446"]
+  }
+}

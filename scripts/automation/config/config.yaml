@@ -1,0 +1,147 @@
+###############################################################################
+# SOC AUTOMATION CONFIGURATION
+# Purpose: Central config for enrichment, blocking, and digest settings
+###############################################################################
+
+# =============================================================================
+# ENRICHMENT SETTINGS
+# =============================================================================
+enrichment:
+  # AbuseIPDB settings
+  abuseipdb:
+    enabled: false
+    # Free tier: 1000 checks/day - be conservative
+    daily_limit: 900
+    # Cache results for 24 hours (don't re-check same IP)
+    cache_hours: 24
+  
+  # OpenSearch index to enrich
+  source_index: "apache-parsed-v2"
+  
+  # Field mappings
+  fields:
+    ip_field: "client_ip"
+    timestamp_field: "@timestamp"
+    # New fields we'll add
+    reputation_field: "threat_intel.abuseipdb"
+    enriched_flag: "threat_intel.enriched"
+
+# =============================================================================
+# AUTO-BLOCK SETTINGS
+# =============================================================================
+blocking:
+  enabled: false
+  
+  # CRITICAL: Only block CONFIRMED malicious IPs
+  # AbuseIPDB score ranges:
+  #   0-25:   Clean/Low risk
+  #   26-50:  Moderate risk (don't block - could be shared hosting)
+  #   51-75:  Suspicious (don't block - could be VPN users)
+  #   76-89:  High risk (monitor closely, consider manual review)
+  #   90-100: Confirmed malicious (safe to auto-block)
+  threshold: 90
+  
+  # Minimum number of reports before blocking
+  min_reports: 5
+  
+  # Cloudflare block settings
+  cloudflare:
+    enabled: false
+    # Block mode: "block" or "challenge" (captcha)
+    action: "block"
+    # Note added to firewall rule
+    note_prefix: "SOC Auto-Block"
+  
+  # Block duration (Cloudflare)
+  # Options: "1h", "24h", "7d", "30d", "permanent"
+  duration: "7d"
+
+# =============================================================================
+# WHITELIST - NEVER BLOCK THESE
+# =============================================================================
+whitelist:
+  # Your own IPs (home, mobile, VPN exits)
+  ips:
+    - "YOUR_HOME_IP_RANGE/24"      # Your home IP range
+    - "YOUR_HOME_IPV6_RANGE"       # Your IPv6 range
+  
+  # Known good fingerprints (your testing, friends, etc.)
+  fingerprints:
+    - "your_device_fingerprint_1"    # Device 1
+    - "your_device_fingerprint_2"    # Device 2
+    - "your_device_fingerprint_3"    # Device 3
+    - "your_device_fingerprint_4"    # Device 4
+  
+  # Known good user agents (legitimate bots)
+  user_agents:
+    - "Googlebot"
+    - "Bingbot"
+    - "DuckDuckBot"
+    - "facebookexternalhit"
+    - "Twitterbot"
+    - "LinkedInBot"
+  
+  # ASNs to never block (major providers with legitimate users)
+  asns:
+    - "AS7922"   # Comcast
+    - "AS701"    # Verizon
+    - "AS7018"   # AT&T
+
+# =============================================================================
+# DIGEST / WATCH TURNOVER SETTINGS
+# =============================================================================
+digest:
+  # Discord channel for reports
+  discord:
+    enabled: false
+    # Use thread for long reports (keeps channel clean)
+    use_threads: false
+  
+  # Morning watch (0600) - Oncoming brief
+  morning:
+    title: "🌅 MORNING WATCH TURNOVER"
+    subtitle: "0600 - Oncoming Watch Brief"
+    lookback_hours: 12
+    sections:
+      - overnight_summary
+      - active_threats
+      - blocked_ips
+      - anomalies
+      - action_items
+  
+  # Evening watch (1800) - Offgoing summary  
+  evening:
+    title: "🌙 EVENING WATCH TURNOVER"
+    subtitle: "1800 - Day Watch Summary"
+    lookback_hours: 12
+    sections:
+      - daily_summary
+      - visitor_highlights
+      - threat_activity
+      - scanner_report
+      - recommendations
+  
+  # Weekly report (Sunday 0800)
+  weekly:
+    title: "📊 WEEKLY THREAT INTELLIGENCE REPORT"
+    subtitle: "7-Day SOC Summary"
+    lookback_days: 7
+    sections:
+      - executive_summary
+      - traffic_trends
+      - threat_landscape
+      - top_attackers
+      - recommendations
+
+# =============================================================================
+# ALERT THRESHOLDS
+# =============================================================================
+alerts:
+  # Alert immediately (don't wait for digest) if:
+  immediate:
+    # IP with score >= this hits your site
+    high_threat_score: 95
+    # Same fingerprint from >= this many IPs in 1 hour
+    fingerprint_ip_count: 5
+    # Requests per minute from single IP
+    requests_per_minute: 60

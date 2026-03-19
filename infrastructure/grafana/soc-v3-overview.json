@@ -1,0 +1,1467 @@
+{
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "title": "Alert Overview",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "afcx9c3lv9af4c"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50000
+              },
+              {
+                "color": "red",
+                "value": 200000
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": "0"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Total Alerts",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "afcx9c3lv9af4c"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 4,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "rule.level",
+              "id": "2",
+              "settings": {
+                "order": "desc",
+                "orderBy": "_count",
+                "size": "10"
+              },
+              "type": "terms"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Alert Severity Distribution",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "afcx9c3lv9af4c"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "id": 3,
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": "0"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Alert Volume Over Time",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      },
+      "id": 101,
+      "title": "Detection Details",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "afcx9c3lv9af4c"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 4,
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "rule.description",
+              "id": "2",
+              "settings": {
+                "order": "desc",
+                "orderBy": "1",
+                "size": "10"
+              },
+              "type": "terms"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Top Alerting Rules",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "afcx9c3lv9af4c"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 5,
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "data.src_ip",
+              "id": "2",
+              "settings": {
+                "order": "desc",
+                "orderBy": "1",
+                "size": "10"
+              },
+              "type": "terms"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Top Source IPs",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 102,
+      "title": "Agents & MITRE ATT&CK",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "afcx9c3lv9af4c"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 17
+      },
+      "id": 6,
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "agent.name",
+              "id": "2",
+              "settings": {
+                "order": "desc",
+                "orderBy": "1",
+                "size": "10"
+              },
+              "type": "terms"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Alert Volume by Agent",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "afcx9c3lv9af4c"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 17
+      },
+      "id": 7,
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "rule.mitre.technique",
+              "id": "2",
+              "settings": {
+                "order": "desc",
+                "orderBy": "1",
+                "size": "10"
+              },
+              "type": "terms"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "rule.mitre.technique:*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "MITRE ATT&CK Techniques",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "afcx9c3lv9af4c"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 17
+      },
+      "id": 8,
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": "0"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "rule.level:>=8",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "High+ Severity Alert Trend",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 103,
+      "title": "Infrastructure Health",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 25
+      },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{job=\"brisket-node\",mode=\"idle\"}[5m])) * 100)",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "brisket CPU Usage",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 25
+      },
+      "id": 10,
+      "targets": [
+        {
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes{job=\"brisket-node\"} / node_memory_MemTotal_bytes{job=\"brisket-node\"})",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "brisket Memory Usage",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 25
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "nvidia_smi_utilization_gpu_ratio{job=\"brisket-nvidia\"} * 100",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "GPU Utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 25
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "nvidia_smi_memory_used_bytes{job=\"brisket-nvidia\"} / nvidia_smi_memory_total_bytes{job=\"brisket-nvidia\"} * 100",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "GPU Memory Used",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 31
+      },
+      "id": 13,
+      "targets": [
+        {
+          "expr": "100 - (avg by(job) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU Usage All Nodes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 31
+      },
+      "id": 14,
+      "targets": [
+        {
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Memory Usage All Nodes",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "title": "ELK Detection & Fleet Health (haccp)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "dfgab6839jwg0a"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 38
+      },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "bucketAggs": [],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "event.code:(4624 OR 4625 OR 4672)",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Win Security Events (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "dfgab6839jwg0a"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 38
+      },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "bucketAggs": [],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "event.code:4625",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Failed Logins (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "dfgab6839jwg0a"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 38
+      },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "bucketAggs": [],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "event.code:4672",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Privilege Use (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "dfgab6839jwg0a"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 38
+      },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "bucketAggs": [],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "_index:*.ds-logs-windows.sysmon*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Sysmon Events (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "dfgab6839jwg0a"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 38
+      },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "bucketAggs": [],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "_index:*.ds-logs-windows.powershell*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "PowerShell Events (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "dfgab6839jwg0a"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 38
+      },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "bucketAggs": [],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Total Fleet Docs (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "dfgab6839jwg0a"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "targets": [
+        {
+          "alias": "Logon Success (4624)",
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "15m"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "event.code:4624",
+          "refId": "A",
+          "timeField": "@timestamp"
+        },
+        {
+          "alias": "Logon Failure (4625)",
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "15m"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "event.code:4625",
+          "refId": "B",
+          "timeField": "@timestamp"
+        },
+        {
+          "alias": "Privilege Use (4672)",
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "15m"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "event.code:4672",
+          "refId": "C",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Security Events Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "dfgab6839jwg0a"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "event.code",
+              "id": "2",
+              "settings": {
+                "order": "desc",
+                "orderBy": "_count",
+                "size": "10"
+              },
+              "type": "terms"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "_index:*.ds-logs-system.security*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Top Windows Event IDs",
+      "type": "barchart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "title": "haccp Node Health",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 51
+      },
+      "targets": [
+        {
+          "expr": "100 - (avg(rate(node_cpu_seconds_total{instance=\"10.10.30.25:9100\",mode=\"idle\"}[5m])) * 100)",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "haccp CPU Usage",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 51
+      },
+      "targets": [
+        {
+          "expr": "(1 - (node_memory_MemAvailable_bytes{instance=\"10.10.30.25:9100\"} / node_memory_MemTotal_bytes{instance=\"10.10.30.25:9100\"})) * 100",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "haccp Memory Usage",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 51
+      },
+      "targets": [
+        {
+          "expr": "(1 - (node_filesystem_avail_bytes{instance=\"10.10.30.25:9100\",mountpoint=\"/\"} / node_filesystem_size_bytes{instance=\"10.10.30.25:9100\",mountpoint=\"/\"})) * 100",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "haccp Disk Usage (/)",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 51
+      },
+      "targets": [
+        {
+          "expr": "(1 - (node_filesystem_avail_bytes{instance=\"10.10.30.25:9100\",mountpoint=\"/opt/arkime/raw\"} / node_filesystem_size_bytes{instance=\"10.10.30.25:9100\",mountpoint=\"/opt/arkime/raw\"})) * 100",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "haccp PCAP Disk",
+      "type": "gauge"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 57
+      },
+      "title": "Zeek Network Telemetry",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "dfcx9br8luvi8d"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 20,
+            "gradientMode": "scheme",
+            "lineWidth": 1
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 58
+      },
+      "targets": [
+        {
+          "alias": "Connection",
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "15m"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "_index:zeek-conn*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Zeek Connection Volume",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "dfcx9br8luvi8d"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 20,
+            "gradientMode": "scheme",
+            "lineWidth": 1
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 58
+      },
+      "targets": [
+        {
+          "alias": "Query",
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "15m"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "_index:zeek-dns*",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ],
+      "title": "Zeek DNS Query Volume",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": [
+    "homelab",
+    "soc",
+    "wazuh",
+    "v3"
+  ],
+  "time": {
+    "from": "now-12h",
+    "to": "now"
+  },
+  "timezone": "utc",
+  "title": "SOC v3 Overview",
+  "uid": "soc-v3-overview"
+}
