@@ -1,0 +1,814 @@
+{
+  "workflow_as_code": false,
+  "actions": [
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "ac6072b1-26d1-44a1-ae98-b17fd8fd98b6",
+      "is_valid": true,
+      "isStartNode": true,
+      "sharing": true,
+      "label": "security_data",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, base64, datetime\n\nctx = ssl._create_unverified_context()\nnow = datetime.datetime.utcnow()\n\n# --- Wazuh OpenSearch: last 24h alerts ---\nquery = {\n    \"size\": 0,\n    \"track_total_hits\": True,\n    \"query\": {\"bool\": {\"must\": [{\"range\": {\"timestamp\": {\"gte\": \"now-24h\"}}}]}},\n    \"aggs\": {\n        \"by_level\": {\n            \"range\": {\n                \"field\": \"rule.level\",\n                \"ranges\": [\n                    {\"key\": \"critical\", \"from\": 12},\n                    {\"key\": \"high\", \"from\": 8, \"to\": 12}\n                ]\n            }\n        },\n        \"top_rule\": {\"terms\": {\"field\": \"rule.description\", \"size\": 1}}\n    }\n}\n\ncreds = \"$opensearch_user:$opensearch_pass\"\nauth = base64.b64encode(creds.encode()).decode()\nheaders = {\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {auth}\"}\n\ntry:\n    req = urllib.request.Request(\"$opensearch_url/wazuh-alerts-4.x-*/_search\",\n        data=json.dumps(query).encode(), headers=headers, method=\"POST\")\n    resp = urllib.request.urlopen(req, context=ctx, timeout=15)\n    data = json.loads(resp.read().decode())\n    total = data[\"hits\"][\"total\"][\"value\"]\n    buckets = {b[\"key\"]: b[\"doc_count\"] for b in data[\"aggregations\"][\"by_level\"][\"buckets\"]}\n    crit = buckets.get(\"critical\", 0)\n    high = buckets.get(\"high\", 0)\n    top_rules = data[\"aggregations\"][\"top_rule\"][\"buckets\"]\n    top_rule = top_rules[0][\"key\"] if top_rules else \"None\"\nexcept Exception as e:\n    total, crit, high, top_rule = 0, 0, 0, f\"Error: {str(e)[:80]}\"\n\n# --- TheHive: open cases ---\ntry:\n    req2 = urllib.request.Request(\"$thehive_url/api/case/_search?range=0-1000\",\n        data=json.dumps({\"query\": {\"_field\": \"status\", \"_value\": \"Open\"}}).encode(),\n        headers={\"Content-Type\": \"application/json\", \"Authorization\": \"Bearer $thehive_api_key\"},\n        method=\"POST\")\n    resp2 = urllib.request.urlopen(req2, timeout=10)\n    cases = json.loads(resp2.read().decode())\n    open_cases = len(cases) if isinstance(cases, list) else 0\nexcept Exception as e:\n    open_cases = f\"Error: {str(e)[:60]}\"\n\nsection = f\"SECURITY (last 24h)\\\\nAlerts: {total} ({crit} crit, {high} high)\\\\nOpen Cases: {open_cases}\\\\nTop Rule: {top_rule}\"\nprint(json.dumps({\"section\": section}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 400.001,
+        "y": 0.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "e8dd15d9-6310-488b-b149-878878e3423f",
+      "is_valid": true,
+      "sharing": true,
+      "label": "infra_data",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl\n\nctx = ssl._create_unverified_context()\nprom = \"http://10.10.20.30:9090\"\n\ndef prom_query(expr):\n    try:\n        url = f\"{prom}/api/v1/query?query={urllib.request.quote(expr)}\"\n        req = urllib.request.Request(url)\n        resp = urllib.request.urlopen(req, timeout=10)\n        data = json.loads(resp.read().decode())\n        return data.get(\"data\", {}).get(\"result\", [])\n    except Exception as e:\n        return []\n\n# Host health (up metric from node_exporter â€” jobs end in -node)\nup_results = prom_query('up{job=~\".*-node\"}')\nhosts_up = sum(1 for r in up_results if r[\"value\"][1] == \"1\")\nhosts_total = len(up_results)\n\n# Blackbox service health (blackbox-http and blackbox-icmp)\nsvc_results = prom_query('probe_success{job=~\"blackbox-.*\"}')\nsvcs_up = sum(1 for r in svc_results if r[\"value\"][1] == \"1\")\nsvcs_total = len(svc_results)\n\n# Worst disk usage (all node exporter targets, root mount)\ndisk_results = prom_query('100 - (node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"} / node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"} * 100)')\nworst_disk = \"N/A\"\nworst_pct = 0\nfor r in disk_results:\n    pct = float(r[\"value\"][1])\n    job = r[\"metric\"].get(\"job\", \"unknown\")\n    host = job.replace(\"-node\", \"\") if job.endswith(\"-node\") else r[\"metric\"].get(\"instance\", \"unknown\")\n    if pct > worst_pct:\n        worst_pct = pct\n        worst_disk = f\"{host} ({pct:.0f}%)\"\n\nsection = f\"INFRASTRUCTURE\\\\nHosts: {hosts_up}/{hosts_total} HEALTHY\\\\nServices: {svcs_up}/{svcs_total} UP\\\\nDisk Watch: {worst_disk}\"\nprint(json.dumps({\"section\": section}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 400.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "b3cba198-8068-4345-bd43-108ddd8e11ce",
+      "is_valid": true,
+      "sharing": true,
+      "label": "projects_data",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, base64\n\nctx = ssl._create_unverified_context()\ncreds = \"$opensearch_user:$opensearch_pass\"\nauth = base64.b64encode(creds.encode()).decode()\nheaders = {\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {auth}\"}\n\n# Capitol Signals: alerts last 24h\ntry:\n    q1 = {\"size\": 0, \"track_total_hits\": True, \"query\": {\"range\": {\"timestamp\": {\"gte\": \"now-24h\"}}}}\n    req1 = urllib.request.Request(\"$opensearch_url/cs-alerts-*/_search\",\n        data=json.dumps(q1).encode(), headers=headers, method=\"POST\")\n    resp1 = urllib.request.urlopen(req1, context=ctx, timeout=10)\n    cs_alerts = json.loads(resp1.read().decode())[\"hits\"][\"total\"][\"value\"]\nexcept:\n    cs_alerts = \"N/A\"\n\n# Capitol Signals: total trades tracked\ntry:\n    q2 = {\"size\": 0, \"track_total_hits\": True, \"query\": {\"match_all\": {}}}\n    req2 = urllib.request.Request(\"$opensearch_url/cs-trades-*/_search\",\n        data=json.dumps(q2).encode(), headers=headers, method=\"POST\")\n    resp2 = urllib.request.urlopen(req2, context=ctx, timeout=10)\n    cs_trades = json.loads(resp2.read().decode())[\"hits\"][\"total\"][\"value\"]\nexcept:\n    cs_trades = \"N/A\"\n\n# AlgoTrader status\ntry:\n    req3 = urllib.request.Request(\"http://10.10.20.30:8081/api/system/status\")\n    resp3 = urllib.request.urlopen(req3, timeout=5)\n    at_data = json.loads(resp3.read().decode())\n    at_status = at_data.get(\"status\", \"unknown\")\n    at_pnl = at_data.get(\"daily_pnl\", at_data.get(\"pnl\", \"N/A\"))\n    at_line = f\"{at_status} | PnL: {at_pnl}\"\nexcept Exception as e:\n    at_line = f\"Unreachable ({str(e)[:40]})\"\n\nsection = f\"PROJECTS\\\\nCapitol Signals: {cs_alerts} alerts (24h), {cs_trades} trades total\\\\nAlgoTrader: {at_line}\"\nprint(json.dumps({\"section\": section}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 400.001,
+        "y": 400.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "9d9bb211-0afd-4f55-96f6-5101b52e885c",
+      "is_valid": true,
+      "sharing": true,
+      "label": "websites_data",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, base64\n\nctx = ssl._create_unverified_context()\nprom = \"http://10.10.20.30:9090\"\n\ndef prom_query(expr):\n    try:\n        url = f\"{prom}/api/v1/query?query={urllib.request.quote(expr)}\"\n        req = urllib.request.Request(url)\n        resp = urllib.request.urlopen(req, timeout=10)\n        data = json.loads(resp.read().decode())\n        return data.get(\"data\", {}).get(\"result\", [])\n    except:\n        return []\n\n# Website probe status\nprobes = prom_query('probe_success{job=\"blackbox-http\"}')\nlatencies = prom_query('probe_duration_seconds{job=\"blackbox-http\"}')\n\nlat_map = {}\nfor r in latencies:\n    inst = r[\"metric\"].get(\"instance\", \"\")\n    lat_map[inst] = float(r[\"value\"][1]) * 1000\n\nlines = []\nexternal_sites = []\ninternal_up = 0\ninternal_total = 0\nfor r in probes:\n    inst = r[\"metric\"].get(\"instance\", \"\")\n    status = \"UP\" if r[\"value\"][1] == \"1\" else \"DOWN\"\n    lat = lat_map.get(inst, 0)\n    domain = inst.replace(\"https://\", \"\").replace(\"http://\", \"\").split(\"/\")[0].split(\":\")[0]\n    if \"brianchaplow\" in domain or \"bytesbourbonbbq\" in domain:\n        external_sites.append(f\"{domain}: {status} ({lat:.0f}ms)\")\n    else:\n        internal_total += 1\n        if status == \"UP\":\n            internal_up += 1\n\nfor s in external_sites:\n    lines.append(s)\n\nif internal_total > 0:\n    lines.append(f\"Internal services: {internal_up}/{internal_total} UP\")\n\nif not lines:\n    lines.append(\"No probe data available\")\n\n# ELK: visitor fingerprints last 24h\ntry:\n    elk_creds = \"$elk_user:$elk_pass\"\n    elk_auth = base64.b64encode(elk_creds.encode()).decode()\n    elk_headers = {\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {elk_auth}\"}\n    q = {\"size\": 0, \"track_total_hits\": True, \"query\": {\"range\": {\"@timestamp\": {\"gte\": \"now-24h\"}}}}\n    req = urllib.request.Request(\"$elk_url/visitor-fingerprints/_search\",\n        data=json.dumps(q).encode(), headers=elk_headers, method=\"POST\")\n    resp = urllib.request.urlopen(req, context=ctx, timeout=10)\n    visitors = json.loads(resp.read().decode())[\"hits\"][\"total\"][\"value\"]\n    lines.append(f\"Visitors (24h): {visitors}\")\nexcept Exception as e:\n    lines.append(f\"Visitors: N/A ({str(e)[:40]})\")\n\nsection = \"WEBSITES\\\\n\" + \"\\\\n\".join(lines)\nprint(json.dumps({\"section\": section}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 400.001,
+        "y": 600.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "4a49b2ef-8e15-41b5-b573-e5f6f6e53ad4",
+      "is_valid": true,
+      "sharing": true,
+      "label": "overnight_data",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, base64\n\nctx = ssl._create_unverified_context()\nelk_creds = \"$elk_user:$elk_pass\"\nelk_auth = base64.b64encode(elk_creds.encode()).decode()\nelk_headers = {\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {elk_auth}\"}\n\n# ML anomalies â€” record-level results (score > 50, last 12h)\nanomalies = []\ntry:\n    q1 = {\n        \"size\": 5,\n        \"query\": {\n            \"bool\": {\n                \"must\": [\n                    {\"term\": {\"result_type\": \"record\"}},\n                    {\"range\": {\"timestamp\": {\"gte\": \"now-12h\"}}},\n                    {\"range\": {\"record_score\": {\"gt\": 50}}}\n                ]\n            }\n        },\n        \"sort\": [{\"record_score\": \"desc\"}]\n    }\n    req1 = urllib.request.Request(\"$elk_url/.ml-anomalies-*/_search\",\n        data=json.dumps(q1).encode(), headers=elk_headers, method=\"POST\")\n    resp1 = urllib.request.urlopen(req1, context=ctx, timeout=10)\n    ml_data = json.loads(resp1.read().decode())\n    hits = ml_data.get(\"hits\", {}).get(\"hits\", [])\n    for h in hits:\n        src = h[\"_source\"]\n        score = src.get(\"record_score\", 0)\n        job = src.get(\"job_id\", \"?\")\n        func = src.get(\"function_description\", src.get(\"function\", \"?\"))\n        by_val = src.get(\"by_field_value\", \"\")\n        part_val = src.get(\"partition_field_value\", \"\")\n        detail = by_val or part_val or \"\"\n        anomalies.append(f\"{job} {func}({detail}) score={score:.0f}\")\nexcept Exception as e:\n    anomalies.append(f\"ML query error: {str(e)[:60]}\")\n\nif not anomalies:\n    anomaly_line = \"No high-score anomalies (12h)\"\nelse:\n    anomaly_line = \"; \".join(anomalies[:3])\n\n# OpenCTI threat intel: new IOCs last 24h\ntry:\n    q2 = {\"size\": 0, \"track_total_hits\": True, \"query\": {\"range\": {\"@timestamp\": {\"gte\": \"now-24h\"}}}}\n    req2 = urllib.request.Request(\"$elk_url/opencti-threat-intel/_search\",\n        data=json.dumps(q2).encode(), headers=elk_headers, method=\"POST\")\n    resp2 = urllib.request.urlopen(req2, context=ctx, timeout=10)\n    ioc_count = json.loads(resp2.read().decode())[\"hits\"][\"total\"][\"value\"]\nexcept:\n    ioc_count = \"N/A\"\n\nsection = f\"OVERNIGHT NOTABLE\\\\nML Anomalies: {anomaly_line}\\\\nThreat Intel IOCs (24h): {ioc_count}\"\nprint(json.dumps({\"section\": section}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 400.001,
+        "y": 800.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "3aedefe1-0d53-465a-8cb8-edef70918730",
+      "is_valid": true,
+      "sharing": true,
+      "label": "compose_message",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, datetime, urllib.request, re\n\ntoday = datetime.datetime.utcnow().strftime(\"%Y-%m-%d\")\n\nresults = self.full_execution.get(\"results\", []) if isinstance(self.full_execution, dict) else []\n\nsection_map = {}\nfor r in results:\n    label = r.get(\"action\", {}).get(\"label\", \"\")\n    if label in (\"security_data\", \"infra_data\", \"projects_data\", \"websites_data\", \"overnight_data\"):\n        try:\n            p = json.loads(r.get(\"result\", \"{}\"))\n            msg = p.get(\"message\", p) if isinstance(p, dict) else p\n            if isinstance(msg, str):\n                msg = json.loads(msg)\n            section_map[label] = msg.get(\"section\", str(msg))\n        except:\n            section_map[label] = label + \": parse error\"\n\nraw_sections = []\nfor lbl in [\"security_data\", \"infra_data\", \"projects_data\", \"websites_data\", \"overnight_data\"]:\n    raw_sections.append(section_map.get(lbl, lbl + \": data unavailable\"))\n\n# Combine all section data for Ollama synthesis\nall_data = \" | \".join(raw_sections)\nif len(all_data) > 3000:\n    all_data = all_data[:3000]\n\ndef sanitize(s):\n    s = re.sub(r\"<think>.*?</think>\", \"\", s, flags=re.DOTALL)\n    s = s.replace(chr(92), \"\").replace('\"', \"'\").replace(chr(13), \"\").replace(chr(9), \" \")\n    s = \"\".join(c for c in s if ord(c) >= 32)\n    return s.strip()\n\nassessment = \"\"\ntry:\n    prompt = \"/no_think You are the SOC watch officer writing the evening digest for a home lab SOC. Synthesize the following operational data into a concise end-of-day summary. Structure: 1) Security posture for the day in one sentence (alert volume, threat level, any critical/high alerts). 2) Infrastructure status in one sentence (hosts up/down, resource concerns). 3) Notable items from the day or projects if any. 4) Items to watch overnight, or 'No items to watch -- steady state.' Do not use markdown. Plain text only. Be specific with numbers. Data: \" + all_data\n    payload = json.dumps({\n        \"model\": \"qwen3:8b\",\n        \"prompt\": prompt,\n        \"system\": \"You are a SOC watch officer. Write in telegraphic military style: short declarative sentences, present tense for status, past tense for events. No filler, no editorializing. Be specific about numbers and hostnames.\",\n        \"stream\": False,\n        \"keep_alive\": \"24h\",\n        \"options\": {\"temperature\": 0.3}\n    }).encode()\n    req = urllib.request.Request(\"$ollama_url/api/generate\",\n        data=payload, headers={\"Content-Type\": \"application/json\"})\n    resp = urllib.request.urlopen(req, timeout=180)\n    text = json.loads(resp.read().decode()).get(\"response\", \"\")\n    text = re.sub(r\"<think>.*?</think>\", \"\", text, flags=re.DOTALL).strip()\n    text = text.replace(\"\\n\", \" \").replace(\"\\r\", \"\")\n    if not text:\n        retry_payload = json.dumps({\n            \"model\": \"qwen3:8b\",\n            \"prompt\": \"/no_think \" + prompt.replace(\"/no_think \", \"\"),\n            \"stream\": False, \"keep_alive\": \"24h\",\n            \"options\": {\"temperature\": 0.3}\n        }).encode()\n        retry_req = urllib.request.Request(\"$ollama_url/api/generate\",\n            data=retry_payload, headers={\"Content-Type\": \"application/json\"})\n        retry_resp = urllib.request.urlopen(retry_req, timeout=180)\n        text = json.loads(retry_resp.read().decode()).get(\"response\", \"\")\n        text = re.sub(r\"<think>.*?</think>\", \"\", text, flags=re.DOTALL).strip()\n        text = text.replace(\"\\n\", \" \").replace(\"\\r\", \"\")\n    if text:\n        assessment = sanitize(text)\n    else:\n        assessment = \"Watch officer assessment unavailable.\"\nexcept Exception as e:\n    assessment = \"LLM unavailable: \" + str(e)[:60]\n\nNL = chr(92) + \"n\"\nheader = \"**EVENING DIGEST -- \" + today + \"**\"\nparts = [header, \"---\", \"__Watch Officer Assessment__\", assessment, \"---\"]\nfor s in raw_sections:\n    parts.append(s)\n    parts.append(\"---\")\n\nbody = NL.join(parts)\nif len(body) > 1950:\n    body = body[:1947] + \"...\"\n\nresult = {\"content\": body}\nprint(json.dumps(result))",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 400.001,
+        "y": 1000.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "http",
+      "app_version": "1.4.0",
+      "description": "",
+      "app_id": "890ad2d2-a7f7-4681-babe-9fcc5af32690",
+      "errors": [],
+      "id": "f0d12ee6-f937-46f7-a93b-8f49158150eb",
+      "is_valid": true,
+      "sharing": true,
+      "label": "discord_send",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "POST",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "url",
+          "example": "",
+          "value": "$discord_webhook_briefing",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "headers",
+          "example": "",
+          "value": "Content-Type: application/json",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "body",
+          "example": "",
+          "value": "{\"content\":\"$compose_message.message.content\"}",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "verify",
+          "example": "",
+          "value": "true",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 400.001,
+        "y": 1200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    }
+  ],
+  "branches": [
+    {
+      "destination_id": "e8dd15d9-6310-488b-b149-878878e3423f",
+      "id": "c0c3263f-6b45-42d7-bd93-100d85bfc5c6",
+      "source_id": "ac6072b1-26d1-44a1-ae98-b17fd8fd98b6",
+      "label": "",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "b3cba198-8068-4345-bd43-108ddd8e11ce",
+      "id": "8c139a48-207f-4acc-9b35-e224c4ec716e",
+      "source_id": "e8dd15d9-6310-488b-b149-878878e3423f",
+      "label": "",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "9d9bb211-0afd-4f55-96f6-5101b52e885c",
+      "id": "0ee6a558-4da8-4cf9-8dc8-a7199b668b14",
+      "source_id": "b3cba198-8068-4345-bd43-108ddd8e11ce",
+      "label": "",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "4a49b2ef-8e15-41b5-b573-e5f6f6e53ad4",
+      "id": "d983ee82-ae81-47cb-9eac-51ad68c7b80e",
+      "source_id": "9d9bb211-0afd-4f55-96f6-5101b52e885c",
+      "label": "",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "3aedefe1-0d53-465a-8cb8-edef70918730",
+      "id": "afb01d0c-ef6a-4746-9bd7-262b74afb03f",
+      "source_id": "4a49b2ef-8e15-41b5-b573-e5f6f6e53ad4",
+      "label": "",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "f0d12ee6-f937-46f7-a93b-8f49158150eb",
+      "id": "d81845c2-99b2-4e65-bf90-66f71d252c20",
+      "source_id": "3aedefe1-0d53-465a-8cb8-edef70918730",
+      "label": "",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    }
+  ],
+  "visual_branches": null,
+  "triggers": [],
+  "comments": [],
+  "configuration": {
+    "exit_on_error": false,
+    "start_from_top": false,
+    "skip_notifications": false
+  },
+  "created": 1774310761,
+  "edited": 1774909104,
+  "last_runtime": 0,
+  "due_date": 0,
+  "id": "3f92a661-b8f5-47ca-aff4-7e70bf11db92",
+  "is_valid": true,
+  "name": "WF11 — Evening Digest",
+  "description": "Daily 1730 EST digest: security, infra, projects, websites, notable. Posts to #morning-briefing Discord.",
+  "start": "ac6072b1-26d1-44a1-ae98-b17fd8fd98b6",
+  "owner": "d4fac237-9bd7-4977-9b82-1c223a54b81f",
+  "sharing": "private",
+  "execution_org": {
+    "name": "default",
+    "id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+    "users": [],
+    "role": "admin",
+    "child_orgs": null,
+    "region_url": "",
+    "is_partner": false,
+    "image": "",
+    "creator_org": "",
+    "branding": {
+      "enable_chat": false,
+      "home_url": "",
+      "theme": "",
+      "documentation_link": "",
+      "global_user": false,
+      "support_email": "",
+      "logout_url": "",
+      "brand_color": "",
+      "brand_name": ""
+    }
+  },
+  "org_id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+  "workflow_variables": [
+    {
+      "description": "Discord webhook for #morning-briefing",
+      "id": "3d8637cd-97f6-44c7-a919-3325d37b77c3",
+      "name": "discord_webhook_briefing",
+      "value": "REDACTED"
+    },
+    {
+      "description": "Wazuh OpenSearch URL",
+      "id": "eb8b96fc-3f67-4d50-b783-230d93f3727f",
+      "name": "opensearch_url",
+      "value": "https://10.10.20.30:9200"
+    },
+    {
+      "description": "OpenSearch user",
+      "id": "e10808ac-cb68-480e-a10e-0275e1a3c869",
+      "name": "opensearch_user",
+      "value": "admin"
+    },
+    {
+      "description": "OpenSearch password",
+      "id": "a44798b4-59e1-4e8c-b636-82fb604ca361",
+      "name": "opensearch_pass",
+      "value": "REDACTED"
+    },
+    {
+      "description": "TheHive URL",
+      "id": "4562d5f4-5ff8-42c2-bdfb-a8064ac9eabb",
+      "name": "thehive_url",
+      "value": "http://10.10.30.22:9000"
+    },
+    {
+      "description": "TheHive API key",
+      "id": "c8fab948-0aaa-4937-ae57-e74a7bf02ccf",
+      "name": "thehive_api_key",
+      "value": "REDACTED"
+    },
+    {
+      "description": "ELK Elasticsearch URL",
+      "id": "1ce53440-70ad-4244-941b-fce2dc683130",
+      "name": "elk_url",
+      "value": "https://10.10.30.25:9200"
+    },
+    {
+      "description": "ELK user",
+      "id": "d7d10040-e45c-41b1-a867-723962c4a05b",
+      "name": "elk_user",
+      "value": "elastic"
+    },
+    {
+      "description": "ELK password",
+      "id": "d6859217-dae1-4890-a32d-6ba197e40b83",
+      "name": "elk_pass",
+      "value": "REDACTED"
+    },
+    {
+      "description": "Ollama LLM inference URL",
+      "id": "d23a22f7-b871-48f9-9fcc-32fcbf30139b",
+      "name": "ollama_url",
+      "value": "http://10.10.20.30:11434"
+    }
+  ],
+  "execution_environment": "Shuffle",
+  "previously_saved": true,
+  "categories": {
+    "siem": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "communication": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "assets": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "cases": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "network": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "intel": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "edr": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "iam": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "ai": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "email": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "other": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    }
+  },
+  "example_argument": "",
+  "public": false,
+  "default_return_value": "",
+  "contact_info": {
+    "name": "",
+    "url": ""
+  },
+  "published_id": "",
+  "revision_id": "",
+  "usecase_ids": null,
+  "input_questions": null,
+  "form_control": {
+    "input_markdown": "",
+    "output_yields": null,
+    "cleanup_actions": null,
+    "form_width": 0
+  },
+  "blogpost": "",
+  "video": "",
+  "status": "test",
+  "workflow_type": "",
+  "generated": false,
+  "hidden": false,
+  "background_processing": false,
+  "updated_by": "admin",
+  "validated": false,
+  "validation": {
+    "valid": true,
+    "changed_at": 1775856679000,
+    "last_valid": 1775856679000,
+    "validation_ran": true,
+    "notifications_created": 0,
+    "environment": "Shuffle",
+    "workflow_id": "",
+    "execution_id": "8c799c31-3dd3-4a5e-8d23-085c83530684",
+    "node_id": "",
+    "total_problems": 0,
+    "errors": [],
+    "subflow_apps": []
+  },
+  "parentorg_workflow": "",
+  "childorg_workflow_ids": null,
+  "suborg_distribution": [],
+  "backup_config": {
+    "onprem_backup": false,
+    "upload_repo": "",
+    "upload_branch": "",
+    "upload_username": "",
+    "upload_token": "",
+    "tokens_encrypted": false
+  },
+  "auth_groups": null
+}

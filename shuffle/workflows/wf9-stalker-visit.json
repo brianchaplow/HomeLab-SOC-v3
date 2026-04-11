@@ -1,0 +1,558 @@
+{
+  "workflow_as_code": false,
+  "actions": [
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "a1000001-0000-0000-0000-000000000001",
+      "is_valid": true,
+      "isStartNode": true,
+      "sharing": true,
+      "label": "query_elk",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, base64\n\nctx = ssl.create_default_context()\nctx.check_hostname = False\nctx.verify_mode = ssl.CERT_NONE\n\nelk_auth = base64.b64encode(\"$elk_user:$elk_pass\".encode()).decode()\n\nquery = {\n    \"query\": {\n        \"bool\": {\n            \"must\": [\n                {\"range\": {\"@timestamp\": {\"gte\": \"now-5m\"}}},\n                {\"bool\": {\"should\": [\n                    {\"term\": {\"client_ip\": \"2600:4040::/32\"}},\n                    {\"terms\": {\"fingerprint\": []}}\n                ], \"minimum_should_match\": 1}}\n            ]\n        }\n    },\n    \"size\": 20,\n    \"sort\": [{\"@timestamp\": \"desc\"}]\n}\n\nreq = urllib.request.Request(\n    \"$elk_url/visitor-fingerprints/_search\",\n    data=json.dumps(query).encode(),\n    headers={\n        \"Content-Type\": \"application/json\",\n        \"Authorization\": \"Basic \" + elk_auth\n    },\n    method=\"POST\"\n)\n\ntry:\n    resp = urllib.request.urlopen(req, context=ctx, timeout=15)\n    data = json.loads(resp.read().decode())\n    hits = data.get(\"hits\", {}).get(\"hits\", [])\n    total = data.get(\"hits\", {}).get(\"total\", {}).get(\"value\", 0)\n    result = {\"has_matches\": str(total > 0).lower(), \"total\": total, \"hits\": []}\n    for h in hits:\n        src = h.get(\"_source\", {})\n        geo = src.get(\"geo\", {})\n        result[\"hits\"].append({\n            \"fingerprint\": src.get(\"fingerprint\", \"unknown\"),\n            \"client_ip\": src.get(\"client_ip\", \"unknown\"),\n            \"site\": src.get(\"site\", \"unknown\"),\n            \"page\": src.get(\"page\", \"unknown\"),\n            \"geo_country\": geo.get(\"country\", \"unknown\"),\n            \"geo_city\": geo.get(\"city\", \"unknown\"),\n            \"geo_region\": geo.get(\"region\", \"unknown\"),\n            \"timestamp\": src.get(\"@timestamp\", \"unknown\"),\n            \"user_agent\": src.get(\"user_agent\", \"unknown\")\n        })\n    print(json.dumps(result))\nexcept Exception as e:\n    print(json.dumps({\"has_matches\": \"false\", \"total\": 0, \"hits\": [], \"error\": str(e)}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 100.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "a1000003-0000-0000-0000-000000000003",
+      "is_valid": true,
+      "sharing": true,
+      "label": "format_alert",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json\n\nraw = '$query_elk.message'\ntry:\n    query_data = json.loads(raw) if isinstance(raw, str) else raw\nexcept:\n    query_data = {}\n\nhits = query_data.get(\"hits\", [])\ntotal = query_data.get(\"total\", 0)\n\nif not hits:\n    print(json.dumps({\"message\": \"No stalker visits found\"}))\nelse:\n    lines = []\n    lines.append(\"**STALKER VISIT ALERT**\")\n    lines.append(f\"Detected {total} visit(s) in last 5 minutes:\")\n    lines.append(\"\")\n    for i, h in enumerate(hits[:5]):\n        lines.append(f\"**Visit {i+1}:**\")\n        lines.append(f\"  Fingerprint: `{h.get('fingerprint', 'unknown')}`\")\n        lines.append(f\"  IP: `{h.get('client_ip', 'unknown')}`\")\n        lines.append(f\"  Site: {h.get('site', 'unknown')}\")\n        lines.append(f\"  Page: {h.get('page', 'unknown')}\")\n        geo = f\"{h.get('geo_city', '?')}, {h.get('geo_region', '?')}, {h.get('geo_country', '?')}\"\n        lines.append(f\"  Location: {geo}\")\n        lines.append(f\"  Time: {h.get('timestamp', 'unknown')}\")\n        ua = h.get(\"user_agent\", \"unknown\")\n        if len(ua) > 80:\n            ua = ua[:77] + \"...\"\n        lines.append(f\"  UA: {ua}\")\n        lines.append(\"\")\n\n    if total > 5:\n        lines.append(f\"... and {total - 5} more visit(s)\")\n\n    msg = \"\\\\n\".join(lines)\n    msg = msg.replace('\"', \"'\")\n    if len(msg) > 1950:\n        msg = msg[:1947] + \"...\"\n    print(json.dumps({\"message\": msg}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 500.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "http",
+      "app_version": "1.4.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "a1000004-0000-0000-0000-000000000004",
+      "is_valid": true,
+      "sharing": true,
+      "label": "send_discord",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "POST",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "url",
+          "example": "",
+          "value": "$discord_webhook_stalker",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "headers",
+          "example": "",
+          "value": "Content-Type: application/json",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "body",
+          "example": "",
+          "value": "{\"content\":\"$format_alert.message.message\"}",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "verify",
+          "example": "",
+          "value": "true",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 700.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    }
+  ],
+  "branches": [
+    {
+      "destination_id": "a1000003-0000-0000-0000-000000000003",
+      "id": "b1000001-0000-0000-0000-000000000001",
+      "source_id": "a1000001-0000-0000-0000-000000000001",
+      "label": "",
+      "has_errors": false,
+      "conditions": [
+        {
+          "source": {
+            "description": "",
+            "id": "",
+            "name": "",
+            "example": "",
+            "value": "$query_elk.message.has_matches",
+            "multiline": false,
+            "multiselect": false,
+            "options": null,
+            "action_field": "",
+            "variant": "",
+            "required": false,
+            "configuration": false,
+            "tags": null,
+            "schema": {
+              "type": ""
+            },
+            "skip_multicheck": false,
+            "value_replace": null,
+            "unique_toggled": false,
+            "error": "",
+            "hidden": false
+          },
+          "condition": {
+            "description": "",
+            "id": "",
+            "name": "",
+            "example": "",
+            "value": "equals",
+            "multiline": false,
+            "multiselect": false,
+            "options": null,
+            "action_field": "",
+            "variant": "",
+            "required": false,
+            "configuration": false,
+            "tags": null,
+            "schema": {
+              "type": ""
+            },
+            "skip_multicheck": false,
+            "value_replace": null,
+            "unique_toggled": false,
+            "error": "",
+            "hidden": false
+          },
+          "destination": {
+            "description": "",
+            "id": "",
+            "name": "",
+            "example": "",
+            "value": "true",
+            "multiline": false,
+            "multiselect": false,
+            "options": null,
+            "action_field": "",
+            "variant": "",
+            "required": false,
+            "configuration": false,
+            "tags": null,
+            "schema": {
+              "type": ""
+            },
+            "skip_multicheck": false,
+            "value_replace": null,
+            "unique_toggled": false,
+            "error": "",
+            "hidden": false
+          }
+        }
+      ],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "a1000004-0000-0000-0000-000000000004",
+      "id": "b1000002-0000-0000-0000-000000000002",
+      "source_id": "a1000003-0000-0000-0000-000000000003",
+      "label": "",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    }
+  ],
+  "visual_branches": null,
+  "triggers": [],
+  "comments": [],
+  "configuration": {
+    "exit_on_error": false,
+    "start_from_top": false,
+    "skip_notifications": false
+  },
+  "created": 1771802001,
+  "edited": 1774106479,
+  "last_runtime": 0,
+  "due_date": 0,
+  "id": "3fada29b-7257-43c7-a726-974d58034055",
+  "is_valid": true,
+  "name": "Workflow 9: Stalker Visit Alert",
+  "description": "Monitors visitor-fingerprints index for stalker IP prefix 2600:4040: and alerts via Discord every 5 minutes",
+  "start": "a1000001-0000-0000-0000-000000000001",
+  "owner": "d4fac237-9bd7-4977-9b82-1c223a54b81f",
+  "sharing": "private",
+  "execution_org": {
+    "name": "default",
+    "id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+    "users": [],
+    "role": "admin",
+    "child_orgs": null,
+    "region_url": "",
+    "is_partner": false,
+    "image": "",
+    "creator_org": "",
+    "branding": {
+      "enable_chat": false,
+      "home_url": "",
+      "theme": "",
+      "documentation_link": "",
+      "global_user": false,
+      "support_email": "",
+      "logout_url": "",
+      "brand_color": "",
+      "brand_name": ""
+    }
+  },
+  "org_id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+  "workflow_variables": [
+    {
+      "description": "Discord webhook URL",
+      "id": "15b528d2-6731-4633-a37a-fec7fb984fc3",
+      "name": "discord_webhook_stalker",
+      "value": "REDACTED"
+    },
+    {
+      "description": "ELK Elasticsearch URL",
+      "id": "c4d8e4af-94b0-46dc-b509-2f83ef97f361",
+      "name": "elk_url",
+      "value": "https://10.10.30.25:9200"
+    },
+    {
+      "description": "ELK username",
+      "id": "5270c8f8-b708-4028-96ed-873135ed3efa",
+      "name": "elk_user",
+      "value": "elastic"
+    },
+    {
+      "description": "ELK password",
+      "id": "695d4e3f-282b-4508-8298-f3a1a6e105b7",
+      "name": "elk_pass",
+      "value": "REDACTED"
+    }
+  ],
+  "execution_environment": "",
+  "previously_saved": true,
+  "categories": {
+    "siem": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "communication": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "assets": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "cases": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "network": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "intel": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "edr": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "iam": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "ai": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "email": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "other": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    }
+  },
+  "example_argument": "",
+  "public": false,
+  "default_return_value": "",
+  "contact_info": {
+    "name": "",
+    "url": ""
+  },
+  "published_id": "",
+  "revision_id": "",
+  "usecase_ids": null,
+  "input_questions": null,
+  "form_control": {
+    "input_markdown": "",
+    "output_yields": null,
+    "cleanup_actions": null,
+    "form_width": 0
+  },
+  "blogpost": "",
+  "video": "",
+  "status": "test",
+  "workflow_type": "",
+  "generated": false,
+  "hidden": false,
+  "background_processing": false,
+  "updated_by": "admin",
+  "validated": false,
+  "validation": {
+    "valid": true,
+    "changed_at": 1775922003000,
+    "last_valid": 1775922003000,
+    "validation_ran": true,
+    "notifications_created": 0,
+    "environment": "Shuffle",
+    "workflow_id": "",
+    "execution_id": "6f759e8b-222a-4b78-86d6-0690c54b30f1",
+    "node_id": "",
+    "total_problems": 0,
+    "errors": [],
+    "subflow_apps": []
+  },
+  "parentorg_workflow": "",
+  "childorg_workflow_ids": null,
+  "suborg_distribution": [],
+  "backup_config": {
+    "onprem_backup": false,
+    "upload_repo": "",
+    "upload_branch": "",
+    "upload_username": "",
+    "upload_token": "",
+    "tokens_encrypted": false
+  },
+  "auth_groups": null
+}

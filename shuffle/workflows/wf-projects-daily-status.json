@@ -1,0 +1,660 @@
+{
+  "workflow_as_code": false,
+  "actions": [
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "a328e928-2880-4fa5-a928-83c8dc92b9f2",
+      "is_valid": true,
+      "isStartNode": true,
+      "sharing": true,
+      "label": "query_capitol_signals",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, urllib.error, socket\n\nresult = {\"status\": \"down\", \"http_code\": 0, \"latency_ms\": 0, \"note\": \"\"}\ntry:\n    import time\n    t0 = time.time()\n    req = urllib.request.Request('http://10.10.20.30:5010/health')\n    resp = urllib.request.urlopen(req, timeout=5)\n    result['http_code'] = resp.status\n    result['latency_ms'] = int((time.time() - t0) * 1000)\n    body = resp.read().decode()\n    result['status'] = 'up' if resp.status == 200 else 'degraded'\n    result['note'] = body[:200].replace('\"', \"'\").replace('\\\\', '')\nexcept (urllib.error.URLError, socket.timeout) as e:\n    result['status'] = 'down'\n    result['note'] = str(e)[:100].replace('\"', \"'\").replace('\\\\', '')\n\nprint(json.dumps(result))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 100.001,
+        "y": 100.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "0a6fddf7-c2dd-4762-bb9f-1768ddc12682",
+      "is_valid": true,
+      "sharing": true,
+      "label": "query_websites",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, urllib.error, socket, time, ssl\n\nctx = ssl.create_default_context()\nctx.check_hostname = False\nctx.verify_mode = ssl.CERT_NONE\n\ndef probe(url):\n    out = {'url': url, 'status': 'down', 'http_code': 0, 'latency_ms': 0}\n    try:\n        t0 = time.time()\n        req = urllib.request.Request(url, method='HEAD', headers={'User-Agent': 'WF-PROJECTS/1.0'})\n        resp = urllib.request.urlopen(req, timeout=5, context=ctx)\n        out['http_code'] = resp.status\n        out['latency_ms'] = int((time.time() - t0) * 1000)\n        out['status'] = 'up' if 200 <= resp.status < 400 else 'degraded'\n    except (urllib.error.URLError, socket.timeout) as e:\n        out['status'] = 'down'\n    return out\n\nsites = [probe('https://brianchaplow.com/'), probe('https://bytesbourbonbbq.com/')]\nprint(json.dumps({'sites': sites}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 100.001,
+        "y": 250.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "ca7df0c3-9611-4d7e-893f-f07ec640b75e",
+      "is_valid": true,
+      "sharing": true,
+      "label": "compose_projects_message",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, datetime\n\ncs = json.loads('''$query_capitol_signals.message''')\nws = json.loads('''$query_websites.message''')\n\ndef emoji(status):\n    return {'up': '\\ud83d\\udfe2', 'degraded': '\\ud83d\\udfe1', 'down': '\\ud83d\\udd34'}.get(status, '\\u26aa')\n\ndown_count = 0\nif cs.get('status') == 'down': down_count += 1\nfor s in ws.get('sites', []):\n    if s.get('status') == 'down': down_count += 1\n\nif down_count == 0:\n    color = 3066993\nelif down_count == 1:\n    color = 15105570\nelse:\n    color = 15158332\n\nnow_utc = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'\ndate_et = datetime.datetime.utcnow().strftime('%Y-%m-%d')\n\nfields = [\n    {'name': 'Capitol Signals', 'value': f\"{emoji(cs.get('status'))} {cs.get('status','?')} \\u00b7 HTTP {cs.get('http_code',0)} \\u00b7 {cs.get('latency_ms',0)}ms\", 'inline': False}\n]\nfor s in ws.get('sites', []):\n    url = s.get('url', '?')\n    name = url.replace('https://','').replace('/','')\n    fields.append({'name': name, 'value': f\"{emoji(s.get('status'))} HTTP {s.get('http_code',0)} \\u00b7 {s.get('latency_ms',0)}ms\", 'inline': False})\nfields.append({'name': 'AlgoTrader', 'value': '\\u23f8 Paused since 2026-04-01', 'inline': False})\n\nembed = {\n    'title': f'Project Status \\u2014 {date_et} ET',\n    'description': 'Daily project health check',\n    'color': color,\n    'fields': fields,\n    'footer': {'text': 'WF-PROJECTS \\u00b7 brisket'},\n    'timestamp': now_utc\n}\nbody = json.dumps({'embeds': [embed]})\nprint(json.dumps({'embed_body': body}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 100.001,
+        "y": 400.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "http",
+      "app_version": "1.4.0",
+      "description": "",
+      "app_id": "890ad2d2-a7f7-4681-babe-9fcc5af32690",
+      "errors": [],
+      "id": "fbba5b81-9af1-48db-901f-6d857eb5fbf0",
+      "is_valid": true,
+      "sharing": true,
+      "label": "discord_send",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "POST",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "url",
+          "example": "",
+          "value": "$discord_webhook_projects",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "headers",
+          "example": "",
+          "value": "Content-Type=application/json",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "body",
+          "example": "",
+          "value": "$compose_projects_message.message.embed_body",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 100.001,
+        "y": 550.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    }
+  ],
+  "branches": [
+    {
+      "destination_id": "0a6fddf7-c2dd-4762-bb9f-1768ddc12682",
+      "id": "b1111111-1111-4111-b111-111111111111",
+      "source_id": "a328e928-2880-4fa5-a928-83c8dc92b9f2",
+      "label": "",
+      "has_errors": false,
+      "conditions": null,
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "ca7df0c3-9611-4d7e-893f-f07ec640b75e",
+      "id": "b2222222-2222-4222-b222-222222222222",
+      "source_id": "0a6fddf7-c2dd-4762-bb9f-1768ddc12682",
+      "label": "",
+      "has_errors": false,
+      "conditions": null,
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "fbba5b81-9af1-48db-901f-6d857eb5fbf0",
+      "id": "b3333333-3333-4333-b333-333333333333",
+      "source_id": "ca7df0c3-9611-4d7e-893f-f07ec640b75e",
+      "label": "",
+      "has_errors": false,
+      "conditions": null,
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    }
+  ],
+  "visual_branches": null,
+  "triggers": [
+    {
+      "app_name": "",
+      "description": "",
+      "long_description": "",
+      "status": "stopped",
+      "app_version": "",
+      "errors": null,
+      "id": "t1111111-1111-4111-b111-111111111111",
+      "is_valid": false,
+      "isStartNode": false,
+      "label": "",
+      "small_image": "",
+      "large_image": "",
+      "environment": "",
+      "trigger_type": "SCHEDULE",
+      "name": "SCHEDULE",
+      "tags": null,
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "cron",
+          "example": "",
+          "value": "0 8 * * *",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "priority": 0,
+      "source_workflow": "",
+      "execution_delay": 0,
+      "app_association": {
+        "name": "",
+        "app_version": "",
+        "id": "",
+        "link": "",
+        "is_valid": false,
+        "generated": false,
+        "downloaded": false,
+        "sharing": false,
+        "verified": false,
+        "invalid": false,
+        "activated": false,
+        "tested": false,
+        "hash": "",
+        "private_id": "",
+        "environment": "",
+        "small_image": "",
+        "large_image": "",
+        "contact_info": {
+          "name": "",
+          "url": ""
+        },
+        "folder_mount": {
+          "folder_mount": false,
+          "source_folder": "",
+          "destination_folder": ""
+        },
+        "authentication": {
+          "type": "",
+          "required": false,
+          "parameters": null,
+          "redirect_uri": "",
+          "token_uri": "",
+          "refresh_uri": "",
+          "scope": null,
+          "client_id": "",
+          "client_secret": "",
+          "grant_type": ""
+        },
+        "actions": null,
+        "tags": null,
+        "categories": null,
+        "created": 0,
+        "edited": 0,
+        "last_runtime": 0,
+        "versions": null,
+        "loop_versions": null,
+        "owner": "",
+        "sharing_config": "",
+        "public": false,
+        "published_id": "",
+        "child_ids": null,
+        "reference_org": "",
+        "reference_url": "",
+        "action_file_path": "",
+        "template": false,
+        "documentation": "",
+        "description": "",
+        "documentation_download_url": "",
+        "primary_usecases": null,
+        "skipped_build": false,
+        "reference_info": {
+          "onprem_backup": false,
+          "is_partner": false,
+          "partner_contacts": "",
+          "documentation_url": "",
+          "github_url": "",
+          "triggers": null
+        },
+        "blogpost": "",
+        "video": "",
+        "company_url": "",
+        "contributors": null,
+        "revision_id": "",
+        "collection": ""
+      },
+      "parent_controlled": false,
+      "replacement_for_trigger": ""
+    }
+  ],
+  "comments": [],
+  "configuration": {
+    "exit_on_error": false,
+    "start_from_top": false,
+    "skip_notifications": false
+  },
+  "created": 1775853115,
+  "edited": 1775853115,
+  "last_runtime": 0,
+  "due_date": 0,
+  "errors": [
+    "Trigger SCHEDULE needs to be started"
+  ],
+  "id": "f9d207a3-eb0c-43ca-9d0a-51c123153741",
+  "is_valid": true,
+  "name": "WF-PROJECTS — Daily Project Status",
+  "description": "Daily (0800 ET) project status report — Capitol Signals, brianchaplow.com, bytesbourbonbbq.com, and AlgoTrader (paused). Posts to #project-status.",
+  "start": "a328e928-2880-4fa5-a928-83c8dc92b9f2",
+  "owner": "",
+  "sharing": "private",
+  "execution_org": {
+    "name": "default",
+    "id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+    "users": [],
+    "role": "admin",
+    "child_orgs": null,
+    "region_url": "",
+    "is_partner": false,
+    "image": "",
+    "creator_org": "",
+    "branding": {
+      "enable_chat": false,
+      "home_url": "",
+      "theme": "",
+      "documentation_link": "",
+      "global_user": false,
+      "support_email": "",
+      "logout_url": "",
+      "brand_color": "",
+      "brand_name": ""
+    }
+  },
+  "org_id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+  "workflow_variables": [
+    {
+      "description": "Discord webhook URL for #project-status channel",
+      "id": "90fb2ae9-c11c-43e5-9277-871c749603de",
+      "name": "discord_webhook_projects",
+      "value": "REDACTED"
+    }
+  ],
+  "execution_environment": "",
+  "previously_saved": true,
+  "categories": {
+    "siem": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "communication": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "assets": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "cases": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "network": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "intel": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "edr": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "iam": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "ai": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "email": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "other": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    }
+  },
+  "example_argument": "",
+  "public": false,
+  "default_return_value": "",
+  "contact_info": {
+    "name": "",
+    "url": ""
+  },
+  "published_id": "",
+  "revision_id": "",
+  "usecase_ids": null,
+  "input_questions": null,
+  "form_control": {
+    "input_markdown": "",
+    "output_yields": null,
+    "cleanup_actions": null,
+    "form_width": 0
+  },
+  "blogpost": "",
+  "video": "",
+  "status": "test",
+  "workflow_type": "",
+  "generated": false,
+  "hidden": false,
+  "background_processing": false,
+  "updated_by": "admin",
+  "validated": false,
+  "validation": {
+    "valid": true,
+    "changed_at": 1775908818000,
+    "last_valid": 1775908818000,
+    "validation_ran": true,
+    "notifications_created": 0,
+    "environment": "Shuffle",
+    "workflow_id": "",
+    "execution_id": "7c41e152-0bdb-4974-84be-0e6c7c3bfe86",
+    "node_id": "",
+    "total_problems": 0,
+    "errors": [
+      {
+        "order": -1,
+        "action_id": "t1111111-1111-4111-b111-111111111111",
+        "app_id": "",
+        "app_name": "",
+        "error": "Schedule not started",
+        "type": "SCHEDULE",
+        "waiting": false
+      }
+    ],
+    "subflow_apps": []
+  },
+  "parentorg_workflow": "",
+  "childorg_workflow_ids": null,
+  "suborg_distribution": [],
+  "backup_config": {
+    "onprem_backup": false,
+    "upload_repo": "",
+    "upload_branch": "",
+    "upload_username": "",
+    "upload_token": "",
+    "tokens_encrypted": false
+  },
+  "auth_groups": null
+}

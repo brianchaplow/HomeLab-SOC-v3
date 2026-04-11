@@ -1,0 +1,864 @@
+{
+  "workflow_as_code": false,
+  "actions": [
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "35ef926f-e7cc-4f52-988e-769ee11f684c",
+      "is_valid": true,
+      "isStartNode": true,
+      "sharing": true,
+      "label": "query_tier1_events",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, base64, hashlib\n\n# Domain allowlist: skip known-good domains that produce FP TI matches.\n# These domains are in OpenCTI because TI feeds include them as infrastructure\n# for threat actors (C2 fronting, etc.), but in this homelab they are legitimate.\n# Review and prune this list quarterly.\nALLOWED_DOMAIN_SUFFIXES = [\n    \".google.com\",\n    \".googleapis.com\",\n    \".gstatic.com\",\n    \".discord.gg\",\n    \".discord.com\",\n    \".discordapp.com\",\n    \".docker.io\",\n    \".docker.com\",\n    \".microsoft.com\",\n    \".azure-dns.com\",\n    \".azure.com\",\n    \".anthropic.com\",\n    \".in-addr.arpa\",\n    \".meethue.com\",\n    \".gvt1.com\",\n    \".adobe.io\",\n    \".asus.com\",\n]\n\ndef is_allowed(value):\n    if not value:\n        return False\n    v = value.lower().rstrip(\".\")\n    return any(v.endswith(s) or v == s.lstrip(\".\") for s in ALLOWED_DOMAIN_SUFFIXES)\n\nctx = ssl._create_unverified_context()\ncreds = \"$elk_user:$elk_pass\"\nauth = base64.b64encode(creds.encode()).decode()\nheaders = {\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {auth}\"}\n\nquery = {\n    \"track_total_hits\": True,\n    \"size\": 100,\n    \"sort\": [{\"@timestamp\": \"desc\"}],\n    \"query\": {\n        \"bool\": {\n            \"filter\": [\n                {\"term\": {\"tags\": \"tier1_ti_match\"}},\n                {\"range\": {\"@timestamp\": {\"gte\": \"now-10m\"}}}\n            ]\n        }\n    }\n}\n\nevents = []\nraw_count = 0\ntry:\n    req = urllib.request.Request(\n        \"$elk_url/logs-zeek.haccp-default/_search\",\n        data=json.dumps(query).encode(),\n        headers=headers,\n        method=\"POST\"\n    )\n    resp = urllib.request.urlopen(req, context=ctx, timeout=15)\n    data = json.loads(resp.read().decode())\n    hits = data.get(\"hits\", {}).get(\"hits\", [])\n    raw_count = len(hits)\n\n    seen = {}\n    for h in hits:\n        src = h.get(\"_source\", {})\n        ti = src.get(\"ti\", {})\n        llm = src.get(\"llm\", {})\n\n        match_field = ti.get(\"match_field\", \"\")\n        matched_value = \"\"\n        if match_field == \"id_resp_h\":\n            matched_value = src.get(\"id_resp_h\", \"\")\n        elif match_field == \"server_name\":\n            matched_value = src.get(\"server_name\", \"\")\n        elif match_field == \"query\":\n            matched_value = src.get(\"query\", \"\")\n        elif match_field == \"host\":\n            host_val = src.get(\"host\", \"\")\n            if isinstance(host_val, str):\n                matched_value = host_val\n        elif match_field == \"sha256\":\n            matched_value = src.get(\"sha256\", \"\")\n\n        # Skip allowlisted domains (still logged in ES, just not cased).\n        # IP-based (id_resp_h) and file-hash (sha256) matches are never skipped.\n        if match_field in (\"server_name\", \"query\", \"host\") and is_allowed(matched_value):\n            continue\n\n        community_id = src.get(\"community_id\", \"\")\n        if community_id:\n            dedupe_key = f\"cid:{community_id}\"\n        else:\n            dedupe_key = f\"mf:{match_field}:{matched_value}:{src.get('id_orig_h','')}\"\n\n        if dedupe_key in seen:\n            continue\n\n        seen[dedupe_key] = True\n        events.append({\n            \"zeek_uid\": src.get(\"uid\", \"\"),\n            \"timestamp\": src.get(\"@timestamp\", \"\"),\n            \"id_orig_h\": src.get(\"id_orig_h\", \"\"),\n            \"id_resp_h\": src.get(\"id_resp_h\", \"\"),\n            \"id_resp_p\": src.get(\"id_resp_p\", 0),\n            \"community_id\": community_id,\n            \"ti_type\": ti.get(\"type\", \"\"),\n            \"ti_provider\": ti.get(\"provider\", \"\"),\n            \"ti_confidence\": ti.get(\"confidence\", 0),\n            \"ti_match_field\": match_field,\n            \"ti_matched_value\": matched_value,\n            \"llm_classification\": llm.get(\"classification\", \"\"),\n            \"llm_confidence\": llm.get(\"confidence\", 0),\n            \"llm_summary\": (llm.get(\"summary\", \"\") or \"\").replace('\"', \"'\").replace(\"\\\\\", \"\")[:500],\n            \"llm_event_summary\": (llm.get(\"event_summary\", \"\") or \"\").replace('\"', \"'\").replace(\"\\\\\", \"\")[:500]\n        })\nexcept Exception as e:\n    print(json.dumps({\"events\": [], \"raw_count\": 0, \"error\": str(e)[:200]}))\nelse:\n    print(json.dumps({\"events\": events, \"raw_count\": raw_count}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 100.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "69d33a07-35ee-48be-8e2a-840049bc240d",
+      "is_valid": true,
+      "sharing": true,
+      "label": "dedupe_against_thehive",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, time\n\nupstream = json.loads('''$query_tier1_events.message''')\nevents = upstream.get(\"events\", [])\n\nif not events:\n    print(json.dumps({\"new_events\": [], \"skipped_count\": 0, \"has_new\": \"false\"}))\nelse:\n    batch_community_ids = [e[\"community_id\"] for e in events if e.get(\"community_id\")]\n\n    if not batch_community_ids:\n        has_new = \"true\" if events else \"false\"\n        print(json.dumps({\"new_events\": events, \"skipped_count\": 0, \"has_new\": has_new}))\n    else:\n        ctx = ssl._create_unverified_context()\n        headers = {\n            \"Content-Type\": \"application/json\",\n            \"Authorization\": \"Bearer $thehive_api_key\"\n        }\n        six_hours_ago_ms = int((time.time() - 21600) * 1000)\n        search_body = {\n            \"query\": {\n                \"_and\": [\n                    {\"_gte\": {\"_field\": \"createdAt\", \"_value\": six_hours_ago_ms}},\n                    {\"_in\": {\n                        \"_field\": \"customFields.community_id.string\",\n                        \"_values\": batch_community_ids\n                    }}\n                ]\n            }\n        }\n        existing_cids = set()\n        try:\n            req = urllib.request.Request(\n                \"$thehive_url/api/case/_search?range=0-100\",\n                data=json.dumps(search_body).encode(),\n                headers=headers,\n                method=\"POST\"\n            )\n            resp = urllib.request.urlopen(req, context=ctx, timeout=10)\n            cases = json.loads(resp.read().decode())\n            if isinstance(cases, dict):\n                cases = cases.get(\"data\", [])\n            if not isinstance(cases, list):\n                cases = []\n            for c in cases:\n                cf = c.get(\"customFields\", {})\n                cid = None\n                if isinstance(cf, dict):\n                    cid_field = cf.get(\"community_id\", {})\n                    if isinstance(cid_field, dict):\n                        cid = cid_field.get(\"string\") or cid_field.get(\"value\")\n                if cid:\n                    existing_cids.add(cid)\n        except Exception as e:\n            has_new = \"true\" if events else \"false\"\n            print(json.dumps({\"new_events\": events, \"skipped_count\": 0, \"has_new\": has_new, \"dedupe_error\": str(e)[:200]}))\n        else:\n            new_events = [e for e in events if e.get(\"community_id\") not in existing_cids]\n            skipped = len(events) - len(new_events)\n            has_new = \"true\" if new_events else \"false\"\n            print(json.dumps({\"new_events\": new_events, \"skipped_count\": skipped, \"has_new\": has_new}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 400.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "15cf5775-30c3-4b1f-ac30-83ff11467969",
+      "is_valid": true,
+      "sharing": true,
+      "label": "create_cases",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, urllib.parse\n\ndedupe = json.loads('''$dedupe_against_thehive.message''')\nnew_events = dedupe.get(\"new_events\", [])\nskipped_count = dedupe.get(\"skipped_count\", 0)\n\ncap_hit = len(new_events) > 10\nevents_to_process = new_events[:10]\n\nctx = ssl._create_unverified_context()\nheaders = {\n    \"Content-Type\": \"application/json\",\n    \"Authorization\": \"Bearer $thehive_api_key\"\n}\n\ndef severity_from_conf(c):\n    try:\n        cv = float(c or 0)\n    except:\n        cv = 0.0\n    if cv >= 0.8:\n        return 3\n    if cv >= 0.5:\n        return 2\n    return 1\n\ncases = []\ncase_errors = []\n\nfor ev in events_to_process:\n    community_id = ev.get(\"community_id\", \"\")\n    ts = ev.get(\"timestamp\", \"\")\n\n    arkime_expr = f'communityId == \"{community_id}\"' if community_id else f'ip.dst == {ev.get(\"id_resp_h\",\"\")}'\n    arkime_url = f\"https://10.10.30.25:8005/sessions?expression={urllib.parse.quote(arkime_expr)}\"\n\n    kibana_filter_a = f\"(filters:!((meta:(key:community_id,type:phrase),query:(match_phrase:(community_id:'{community_id}')))))\"\n    kibana_url = f\"http://10.10.30.25:5601/app/dashboards#/view/2988f47d-bf0e-4a37-a284-2e055d244ed1?_g=(time:(from:now-24h,to:now))&_a={urllib.parse.quote(kibana_filter_a)}\"\n\n    severity = severity_from_conf(ev.get(\"llm_confidence\"))\n\n    title = f\"[haccp tier1] {ev.get('ti_match_field','')}={ev.get('ti_matched_value','')} ({ev.get('ti_provider','')})\"[:250]\n\n    desc = ev.get(\"llm_summary\", \"\") or \"\"\n    if ev.get(\"llm_event_summary\"):\n        desc += f\"\\n\\nEvent: {ev['llm_event_summary']}\"\n    if ev.get(\"zeek_uid\"):\n        desc += f\"\\nZeek UID: {ev['zeek_uid']}\"\n    if ts:\n        desc += f\"\\n@timestamp: {ts}\"\n\n    # Step 1: POST case WITHOUT customFields (TheHive 4.1.24 silently drops them on POST)\n    case_body = {\n        \"title\": title,\n        \"description\": desc[:4000],\n        \"severity\": severity,\n        \"tlp\": 2,\n        \"pap\": 2,\n        \"tags\": [\n            \"phase14\",\n            \"tier1_ti_match\",\n            f\"provider:{ev.get('ti_provider','')}\",\n            f\"ti_type:{ev.get('ti_type','')}\",\n            f\"match_field:{ev.get('ti_match_field','')}\"\n        ]\n    }\n\n    try:\n        req = urllib.request.Request(\n            \"$thehive_url/api/v1/case\",\n            data=json.dumps(case_body).encode(),\n            headers=headers,\n            method=\"POST\"\n        )\n        resp = urllib.request.urlopen(req, context=ctx, timeout=10)\n        created = json.loads(resp.read().decode())\n        case_id = created.get(\"_id\") or created.get(\"id\")\n\n        # Step 2: PATCH custom fields onto the case (POST+PATCH pattern per Correction 5)\n        custom_fields = {\n            \"community_id\": {\"string\": community_id or \"\"},\n            \"zeek_uid\": {\"string\": ev.get(\"zeek_uid\", \"\") or \"\"},\n            \"arkime_url\": {\"string\": arkime_url},\n            \"kibana_url\": {\"string\": kibana_url}\n        }\n        patch_req = urllib.request.Request(\n            f\"$thehive_url/api/v1/case/{case_id}\",\n            data=json.dumps({\"customFields\": custom_fields}).encode(),\n            headers=headers,\n            method=\"PATCH\"\n        )\n        urllib.request.urlopen(patch_req, context=ctx, timeout=10)\n\n        case_url = f\"$thehive_url/index.html#!/case/{case_id}/details\"\n        cases.append({\n            \"case_id\": case_id,\n            \"case_url\": case_url,\n            \"title\": title,\n            \"severity\": severity,\n            \"community_id\": community_id,\n            \"ti_match_field\": ev.get(\"ti_match_field\", \"\"),\n            \"ti_matched_value\": ev.get(\"ti_matched_value\", \"\"),\n            \"ti_provider\": ev.get(\"ti_provider\", \"\"),\n            \"ti_type\": ev.get(\"ti_type\", \"\"),\n            \"llm_classification\": ev.get(\"llm_classification\", \"\"),\n            \"llm_confidence\": ev.get(\"llm_confidence\", 0),\n            \"llm_summary\": ev.get(\"llm_summary\", \"\"),\n            \"id_orig_h\": ev.get(\"id_orig_h\", \"\"),\n            \"id_resp_h\": ev.get(\"id_resp_h\", \"\"),\n            \"id_resp_p\": ev.get(\"id_resp_p\", 0),\n            \"arkime_url\": arkime_url,\n            \"kibana_url\": kibana_url,\n            \"timestamp\": ts\n        })\n    except Exception as e:\n        case_errors.append({\"community_id\": community_id, \"error\": str(e)[:200]})\n\nprint(json.dumps({\n    \"cases\": cases,\n    \"case_errors\": case_errors,\n    \"skipped_count\": skipped_count,\n    \"cap_hit\": cap_hit,\n    \"total_new\": len(new_events)\n}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 700.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "a36bccfc-e662-45e9-8414-a78ae14947cc",
+      "is_valid": true,
+      "sharing": true,
+      "label": "build_discord_embed",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json\n\nresult = json.loads('''$create_cases.message''')\ncases = result.get(\"cases\", [])\nskipped = result.get(\"skipped_count\", 0)\ncap_hit = result.get(\"cap_hit\", False)\ntotal = result.get(\"total_new\", 0)\n\nif not cases:\n    print(json.dumps({\"embed_body\": json.dumps({\"content\": \"\"})}))\nelse:\n    def color_for(sev):\n        return {3: 15158332, 2: 15105570, 1: 15844367}.get(sev, 15844367)\n\n    embeds = []\n    for c in cases[:5]:\n        title = f\"[tier1] {c.get('ti_match_field','')}={c.get('ti_matched_value','')}\"[:256]\n        desc = (c.get(\"llm_summary\", \"\") or \"\")[:150]\n\n        fields = [\n            {\"name\": \"From \\u2192 To\", \"value\": f\"{c.get('id_orig_h','')} \\u2192 {c.get('id_resp_h','')}:{c.get('id_resp_p','')}\", \"inline\": True},\n            {\"name\": \"Provider\", \"value\": str(c.get(\"ti_provider\", \"\") or \"?\"), \"inline\": True},\n            {\"name\": \"TI Type\", \"value\": str(c.get(\"ti_type\", \"\") or \"?\"), \"inline\": True},\n            {\"name\": \"Classification\", \"value\": str(c.get(\"llm_classification\", \"\") or \"?\"), \"inline\": True},\n            {\"name\": \"Confidence\", \"value\": str(c.get(\"llm_confidence\", \"\") or \"?\"), \"inline\": True},\n            {\"name\": \"Pivots\", \"value\": f\"[Kibana]({c.get('kibana_url','')}) \\u00b7 [Arkime]({c.get('arkime_url','')})\", \"inline\": False}\n        ]\n\n        footer_text = f\"WF-HACCP-1 \\u00b7 phase14 \\u00b7 dedupe {skipped}/{total}\"\n        if cap_hit:\n            footer_text += \" \\u00b7 cap hit, overflow next run\"\n        if len(cases) > 5:\n            footer_text += f\" \\u00b7 +{len(cases)-5} more cases (see TheHive)\"\n\n        embed = {\n            \"title\": title,\n            \"url\": c.get(\"case_url\", \"\"),\n            \"description\": desc,\n            \"color\": color_for(c.get(\"severity\", 1)),\n            \"fields\": fields,\n            \"footer\": {\"text\": footer_text},\n            \"timestamp\": c.get(\"timestamp\", \"\")\n        }\n        embeds.append(embed)\n\n    body = json.dumps({\"embeds\": embeds})\n    print(json.dumps({\"embed_body\": body}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 1000.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "http",
+      "app_version": "1.4.0",
+      "description": "",
+      "app_id": "890ad2d2-a7f7-4681-babe-9fcc5af32690",
+      "errors": [],
+      "id": "22a3ac8b-d04f-4360-b5d3-e1edbae4d32d",
+      "is_valid": true,
+      "sharing": true,
+      "label": "discord_send",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "POST",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "url",
+          "example": "",
+          "value": "$discord_webhook",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "headers",
+          "example": "",
+          "value": "Content-Type=application/json",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "body",
+          "example": "",
+          "value": "$build_discord_embed.message.embed_body",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 1300.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    }
+  ],
+  "branches": [
+    {
+      "destination_id": "69d33a07-35ee-48be-8e2a-840049bc240d",
+      "id": "3ee96f24-b06b-406e-8c39-d62af214465f",
+      "source_id": "35ef926f-e7cc-4f52-988e-769ee11f684c",
+      "label": "query_to_dedupe",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "15cf5775-30c3-4b1f-ac30-83ff11467969",
+      "id": "772e7af7-893b-4543-bc92-94217e1e33f9",
+      "source_id": "69d33a07-35ee-48be-8e2a-840049bc240d",
+      "label": "dedupe_to_create",
+      "has_errors": false,
+      "conditions": [
+        {
+          "source": {
+            "description": "",
+            "id": "",
+            "name": "",
+            "example": "",
+            "value": "$dedupe_against_thehive.message.has_new",
+            "multiline": false,
+            "multiselect": false,
+            "options": null,
+            "action_field": "",
+            "variant": "",
+            "required": false,
+            "configuration": false,
+            "tags": null,
+            "schema": {
+              "type": ""
+            },
+            "skip_multicheck": false,
+            "value_replace": null,
+            "unique_toggled": false,
+            "error": "",
+            "hidden": false
+          },
+          "condition": {
+            "description": "",
+            "id": "",
+            "name": "",
+            "example": "",
+            "value": "equals",
+            "multiline": false,
+            "multiselect": false,
+            "options": null,
+            "action_field": "",
+            "variant": "",
+            "required": false,
+            "configuration": false,
+            "tags": null,
+            "schema": {
+              "type": ""
+            },
+            "skip_multicheck": false,
+            "value_replace": null,
+            "unique_toggled": false,
+            "error": "",
+            "hidden": false
+          },
+          "destination": {
+            "description": "",
+            "id": "",
+            "name": "",
+            "example": "",
+            "value": "true",
+            "multiline": false,
+            "multiselect": false,
+            "options": null,
+            "action_field": "",
+            "variant": "",
+            "required": false,
+            "configuration": false,
+            "tags": null,
+            "schema": {
+              "type": ""
+            },
+            "skip_multicheck": false,
+            "value_replace": null,
+            "unique_toggled": false,
+            "error": "",
+            "hidden": false
+          }
+        }
+      ],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "a36bccfc-e662-45e9-8414-a78ae14947cc",
+      "id": "3b5b3d1f-f21b-421d-b6c5-96bfd668af3b",
+      "source_id": "15cf5775-30c3-4b1f-ac30-83ff11467969",
+      "label": "create_to_embed",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "22a3ac8b-d04f-4360-b5d3-e1edbae4d32d",
+      "id": "aae651ef-95da-4b0a-a10d-73e605ee9790",
+      "source_id": "a36bccfc-e662-45e9-8414-a78ae14947cc",
+      "label": "embed_to_discord",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    }
+  ],
+  "visual_branches": null,
+  "triggers": [
+    {
+      "app_name": "",
+      "description": "",
+      "long_description": "",
+      "status": "stopped",
+      "app_version": "",
+      "errors": null,
+      "id": "28962e27-06e3-4635-b051-82700948a69b",
+      "is_valid": false,
+      "isStartNode": false,
+      "label": "schedule_5min",
+      "small_image": "",
+      "large_image": "",
+      "environment": "Shuffle",
+      "trigger_type": "SCHEDULE",
+      "name": "",
+      "tags": null,
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "cron",
+          "example": "",
+          "value": "*/5 * * * *",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "execution_argument",
+          "example": "",
+          "value": "{\"type\":\"scheduled_tier1_poll\"}",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "position": {
+        "x": 100,
+        "y": 50
+      },
+      "priority": 0,
+      "source_workflow": "",
+      "execution_delay": 0,
+      "app_association": {
+        "name": "",
+        "app_version": "",
+        "id": "",
+        "link": "",
+        "is_valid": false,
+        "generated": false,
+        "downloaded": false,
+        "sharing": false,
+        "verified": false,
+        "invalid": false,
+        "activated": false,
+        "tested": false,
+        "hash": "",
+        "private_id": "",
+        "environment": "",
+        "small_image": "",
+        "large_image": "",
+        "contact_info": {
+          "name": "",
+          "url": ""
+        },
+        "folder_mount": {
+          "folder_mount": false,
+          "source_folder": "",
+          "destination_folder": ""
+        },
+        "authentication": {
+          "type": "",
+          "required": false,
+          "parameters": null,
+          "redirect_uri": "",
+          "token_uri": "",
+          "refresh_uri": "",
+          "scope": null,
+          "client_id": "",
+          "client_secret": "",
+          "grant_type": ""
+        },
+        "actions": null,
+        "tags": null,
+        "categories": null,
+        "created": 0,
+        "edited": 0,
+        "last_runtime": 0,
+        "versions": null,
+        "loop_versions": null,
+        "owner": "",
+        "sharing_config": "",
+        "public": false,
+        "published_id": "",
+        "child_ids": null,
+        "reference_org": "",
+        "reference_url": "",
+        "action_file_path": "",
+        "template": false,
+        "documentation": "",
+        "description": "",
+        "documentation_download_url": "",
+        "primary_usecases": null,
+        "skipped_build": false,
+        "reference_info": {
+          "onprem_backup": false,
+          "is_partner": false,
+          "partner_contacts": "",
+          "documentation_url": "",
+          "github_url": "",
+          "triggers": null
+        },
+        "blogpost": "",
+        "video": "",
+        "company_url": "",
+        "contributors": null,
+        "revision_id": "",
+        "collection": ""
+      },
+      "parent_controlled": false,
+      "replacement_for_trigger": ""
+    }
+  ],
+  "comments": [],
+  "configuration": {
+    "exit_on_error": false,
+    "start_from_top": false,
+    "skip_notifications": false
+  },
+  "created": 1775859519,
+  "edited": 1775906955,
+  "last_runtime": 0,
+  "due_date": 0,
+  "errors": [
+    "Trigger  needs to be started"
+  ],
+  "tags": [
+    "phase14",
+    "tier1",
+    "haccp",
+    "investigation"
+  ],
+  "id": "3e0e633d-7538-4685-9348-9c2317cc33e5",
+  "is_valid": true,
+  "name": "WF-HACCP-1 â€” Phase14 Tier1 Investigation",
+  "description": "Polls haccp ES every 5min for tier1_ti_match events, dedupes against TheHive (6h window on community_id), creates cases with POST+PATCH pattern, posts Discord embeds with Kibana+Arkime deep-links. Zero Ollama calls (reads pre-enriched llm.* fields).",
+  "start": "35ef926f-e7cc-4f52-988e-769ee11f684c",
+  "owner": "",
+  "sharing": "private",
+  "execution_org": {
+    "name": "default",
+    "id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+    "users": [],
+    "role": "admin",
+    "child_orgs": null,
+    "region_url": "",
+    "is_partner": false,
+    "image": "",
+    "creator_org": "",
+    "branding": {
+      "enable_chat": false,
+      "home_url": "",
+      "theme": "",
+      "documentation_link": "",
+      "global_user": false,
+      "support_email": "",
+      "logout_url": "",
+      "brand_color": "",
+      "brand_name": ""
+    }
+  },
+  "org_id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+  "workflow_variables": [
+    {
+      "description": "haccp Elasticsearch URL",
+      "id": "8f286778-0cb7-4a3b-8ca3-f92700182888",
+      "name": "elk_url",
+      "value": "https://10.10.30.25:9200"
+    },
+    {
+      "description": "haccp ES username",
+      "id": "24b56ea5-fb5e-4a7e-b419-6281c64b922a",
+      "name": "elk_user",
+      "value": "elastic"
+    },
+    {
+      "description": "haccp ES password",
+      "id": "77d2f423-e342-4f15-a41f-cd53f66aa8a1",
+      "name": "elk_pass",
+      "value": "REDACTED"
+    },
+    {
+      "description": "TheHive base URL",
+      "id": "343f6a45-cf41-4b75-b9ef-d4fd07837c6d",
+      "name": "thehive_url",
+      "value": "http://10.10.30.22:9000"
+    },
+    {
+      "description": "TheHive API key",
+      "id": "cdf56711-8d57-4de7-a925-19bc27a085b4",
+      "name": "thehive_api_key",
+      "value": "REDACTED"
+    },
+    {
+      "description": "Discord webhook URL for SOC alerts",
+      "id": "ed4aca4c-3cc2-4c38-a260-2ef0c82459fd",
+      "name": "discord_webhook",
+      "value": "REDACTED"
+    }
+  ],
+  "execution_environment": "",
+  "previously_saved": true,
+  "categories": {
+    "siem": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "communication": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "assets": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "cases": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "network": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "intel": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "edr": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "iam": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "ai": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "email": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "other": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    }
+  },
+  "example_argument": "",
+  "public": false,
+  "default_return_value": "",
+  "contact_info": {
+    "name": "",
+    "url": ""
+  },
+  "published_id": "",
+  "revision_id": "",
+  "usecase_ids": null,
+  "input_questions": null,
+  "form_control": {
+    "input_markdown": "",
+    "output_yields": null,
+    "cleanup_actions": null,
+    "form_width": 0
+  },
+  "blogpost": "",
+  "video": "",
+  "status": "test",
+  "workflow_type": "",
+  "generated": false,
+  "hidden": false,
+  "background_processing": false,
+  "updated_by": "admin",
+  "validated": false,
+  "validation": {
+    "valid": true,
+    "changed_at": 1775922012000,
+    "last_valid": 1775922012000,
+    "validation_ran": true,
+    "notifications_created": 0,
+    "environment": "Shuffle",
+    "workflow_id": "",
+    "execution_id": "2436f7c5-fedd-4bf9-b03b-ecbc72796a27",
+    "node_id": "",
+    "total_problems": 0,
+    "errors": [
+      {
+        "order": -1,
+        "action_id": "28962e27-06e3-4635-b051-82700948a69b",
+        "app_id": "",
+        "app_name": "",
+        "error": "Schedule not started",
+        "type": "SCHEDULE",
+        "waiting": false
+      }
+    ],
+    "subflow_apps": []
+  },
+  "parentorg_workflow": "",
+  "childorg_workflow_ids": null,
+  "suborg_distribution": [],
+  "backup_config": {
+    "onprem_backup": false,
+    "upload_repo": "",
+    "upload_branch": "",
+    "upload_username": "",
+    "upload_token": "",
+    "tokens_encrypted": false
+  },
+  "auth_groups": null
+}
