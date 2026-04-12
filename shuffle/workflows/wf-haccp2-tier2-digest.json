@@ -1,0 +1,707 @@
+{
+  "workflow_as_code": false,
+  "actions": [
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "0dddf4a7-e2a9-4d98-9217-bdef27912f8e",
+      "is_valid": true,
+      "isStartNode": true,
+      "sharing": true,
+      "label": "query_novel_entities",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, base64\n\nctx = ssl._create_unverified_context()\ncreds = \"$elk_user:$elk_pass\"\nauth = base64.b64encode(creds.encode()).decode()\nheaders = {\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {auth}\"}\nerrors = []\n\ndef es_post(path, body):\n    req = urllib.request.Request(\n        f\"$elk_url{path}\",\n        data=json.dumps(body).encode(),\n        headers=headers,\n        method=\"POST\"\n    )\n    resp = urllib.request.urlopen(req, context=ctx, timeout=20)\n    return json.loads(resp.read().decode())\n\ntype_summary = {}\nja3_count = 0\nsnis = []\ndns_2lds = []\nja4s = []\nuser_agents = []\nips_top20 = []\n\n# Query A: type summary\ntry:\n    r = es_post(\"/haccp-entities-seen/_search\", {\n        \"size\": 0,\n        \"track_total_hits\": True,\n        \"query\": {\"range\": {\"first_seen\": {\"gte\": \"now-12h\"}}},\n        \"aggs\": {\"by_type\": {\"terms\": {\"field\": \"entity_type\", \"size\": 10}}}\n    })\n    for b in r.get(\"aggs\", r.get(\"aggregations\", {})).get(\"by_type\", {}).get(\"buckets\", []):\n        type_summary[b[\"key\"]] = b[\"doc_count\"]\n    ja3_count = type_summary.get(\"ja3\", 0)\nexcept Exception as e:\n    errors.append(f\"query_A: {str(e)[:150]}\")\n\n# Query B: non-ja3 entity values\nNON_JA3 = [\"sni\", \"dns_query_2ld\", \"ja4\", \"http_user_agent\", \"external_dst_ip\"]\nall_novel_ips = []\ntry:\n    r = es_post(\"/haccp-entities-seen/_search\", {\n        \"size\": 300,\n        \"query\": {\"bool\": {\"filter\": [\n            {\"range\": {\"first_seen\": {\"gte\": \"now-12h\"}}},\n            {\"terms\": {\"entity_type\": NON_JA3}}\n        ]}},\n        \"sort\": [{\"first_seen\": \"desc\"}],\n        \"_source\": [\"entity_type\", \"entity_value\", \"first_seen\"]\n    })\n    for h in r.get(\"hits\", {}).get(\"hits\", []):\n        src = h.get(\"_source\", {})\n        et = src.get(\"entity_type\", \"\")\n        ev = src.get(\"entity_value\", \"\")\n        fs = src.get(\"first_seen\", 0)\n        if et == \"sni\":\n            snis.append(ev)\n        elif et == \"dns_query_2ld\":\n            dns_2lds.append(ev)\n        elif et == \"ja4\":\n            ja4s.append(ev)\n        elif et == \"http_user_agent\":\n            user_agents.append(ev)\n        elif et == \"external_dst_ip\":\n            all_novel_ips.append({\"ip\": ev, \"first_seen_ms\": fs})\nexcept Exception as e:\n    errors.append(f\"query_B: {str(e)[:150]}\")\n\n# Query C: top 20 novel IPs by connection count\nif all_novel_ips:\n    try:\n        ip_list = [x[\"ip\"] for x in all_novel_ips]\n        r = es_post(\"/logs-zeek.haccp-default/_search\", {\n            \"size\": 0,\n            \"track_total_hits\": True,\n            \"query\": {\"bool\": {\"filter\": [\n                {\"range\": {\"@timestamp\": {\"gte\": \"now-12h\"}}},\n                {\"terms\": {\"id_resp_h\": ip_list}}\n            ]}},\n            \"aggs\": {\"by_ip\": {\"terms\": {\"field\": \"id_resp_h\", \"size\": 20}}}\n        })\n        ip_fs_map = {x[\"ip\"]: x[\"first_seen_ms\"] for x in all_novel_ips}\n        for b in r.get(\"aggs\", r.get(\"aggregations\", {})).get(\"by_ip\", {}).get(\"buckets\", []):\n            ips_top20.append({\n                \"ip\": b[\"key\"],\n                \"count\": b[\"doc_count\"],\n                \"first_seen_ms\": ip_fs_map.get(b[\"key\"], 0)\n            })\n    except Exception as e:\n        errors.append(f\"query_C: {str(e)[:150]}\")\n\ntotal_excluding_ja3 = len(snis) + len(dns_2lds) + len(ja4s) + len(user_agents) + len(all_novel_ips)\n\nprint(json.dumps({\n    \"window_hours\": 12,\n    \"ja3_count\": ja3_count,\n    \"type_summary\": type_summary,\n    \"total_excluding_ja3\": total_excluding_ja3,\n    \"ips_top20\": ips_top20,\n    \"snis\": snis,\n    \"dns_2lds\": dns_2lds,\n    \"ja4s\": ja4s,\n    \"user_agents\": user_agents,\n    \"errors\": errors\n}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 100.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "fad7d8ef-f571-4056-b8e0-2940daabecde",
+      "is_valid": true,
+      "sharing": true,
+      "label": "enrich_geoip",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, base64\n\nupstream = json.loads('''$query_novel_entities.message''')\nif isinstance(upstream, str):\n    try:\n        upstream = json.loads(upstream)\n    except:\n        upstream = {}\n\nips_top20 = upstream.get(\"ips_top20\", [])\ngeoip_errors = []\n\nif not ips_top20:\n    print(json.dumps({\"ips_enriched\": [], \"geoip_errors\": []}))\n    import sys; sys.exit(0)\n\nctx = ssl._create_unverified_context()\ncreds = \"$elk_user:$elk_pass\"\nauth = base64.b64encode(creds.encode()).decode()\nheaders = {\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {auth}\"}\n\npipeline_body = {\n    \"pipeline\": {\"processors\": [\n        {\"geoip\": {\"field\": \"ip\", \"target_field\": \"geo\",\n                   \"properties\": [\"country_name\", \"country_iso_code\"],\n                   \"ignore_missing\": True}},\n        {\"geoip\": {\"field\": \"ip\", \"target_field\": \"asn\",\n                   \"database_file\": \"GeoLite2-ASN.mmdb\",\n                   \"properties\": [\"asn\", \"organization_name\"],\n                   \"ignore_missing\": True}}\n    ]},\n    \"docs\": [{\"_source\": {\"ip\": row[\"ip\"]}} for row in ips_top20]\n}\n\nips_enriched = []\ntry:\n    req = urllib.request.Request(\n        \"$elk_url/_ingest/pipeline/_simulate\",\n        data=json.dumps(pipeline_body).encode(),\n        headers=headers,\n        method=\"POST\"\n    )\n    resp = urllib.request.urlopen(req, context=ctx, timeout=15)\n    sim = json.loads(resp.read().decode())\n    for i, doc in enumerate(sim.get(\"docs\", [])):\n        src = doc.get(\"doc\", {}).get(\"_source\", {})\n        geo = src.get(\"geo\", {})\n        asn = src.get(\"asn\", {})\n        row = ips_top20[i] if i < len(ips_top20) else {\"ip\": \"?\", \"count\": 0, \"first_seen_ms\": 0}\n        ips_enriched.append({\n            \"ip\": row[\"ip\"],\n            \"count\": row[\"count\"],\n            \"first_seen_ms\": row.get(\"first_seen_ms\", 0),\n            \"country\": geo.get(\"country_name\", \"?\"),\n            \"country_iso\": geo.get(\"country_iso_code\", \"?\"),\n            \"asn\": asn.get(\"asn\"),\n            \"asn_org\": asn.get(\"organization_name\", \"?\")\n        })\nexcept Exception as e:\n    geoip_errors.append(str(e)[:200])\n    for row in ips_top20:\n        ips_enriched.append({\n            \"ip\": row[\"ip\"],\n            \"count\": row[\"count\"],\n            \"first_seen_ms\": row.get(\"first_seen_ms\", 0),\n            \"country\": \"?\", \"country_iso\": \"?\", \"asn\": None, \"asn_org\": \"?\"\n        })\n\nprint(json.dumps({\"ips_enriched\": ips_enriched, \"geoip_errors\": geoip_errors}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 400.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "68144e35-5be7-48d6-84e0-633f7dc9c575",
+      "is_valid": true,
+      "sharing": true,
+      "label": "compose_digest",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, datetime\n\nquery = json.loads('''$query_novel_entities.message''')\nif isinstance(query, str):\n    try:\n        query = json.loads(query)\n    except:\n        query = {}\n\ngeo = json.loads('''$enrich_geoip.message''')\nif isinstance(geo, str):\n    try:\n        geo = json.loads(geo)\n    except:\n        geo = {}\n\nja3_count = query.get(\"ja3_count\", 0)\ntotal = query.get(\"total_excluding_ja3\", 0)\nips = geo.get(\"ips_enriched\", [])\nsnis = query.get(\"snis\", [])\ndns_2lds = query.get(\"dns_2lds\", [])\nja4s = query.get(\"ja4s\", [])\nuas = query.get(\"user_agents\", [])\nq_errors = query.get(\"errors\", [])\ng_errors = geo.get(\"geoip_errors\", [])\n\nKIBANA_URL = \"http://10.10.30.25:5601/app/discover#/?_g=(time:(from:now-24h,to:now))&_a=(index:%27logs-zeek.haccp-default%27,query:(language:kuery,query:%27tags:tier2_novel%27))\"\n\ndef sanitize(s):\n    return str(s).replace('\"', \"'\").replace(\"\\\\\", \"\")[:200]\n\ndef build_list(items, max_show=15, max_chars=80):\n    if not items:\n        return \"_(none)_\"\n    lines = []\n    for item in items[:max_show]:\n        v = sanitize(item)\n        if len(v) > max_chars:\n            v = v[:max_chars-3] + \"...\"\n        lines.append(f\"`{v}`\")\n    if len(items) > max_show:\n        lines.append(f\"...and {len(items) - max_show} more\")\n    return \"\\\\n\".join(lines)\n\ndef build_ip_list(ips):\n    if not ips:\n        return \"_(none)_\"\n    lines = []\n    for row in ips[:20]:\n        org = sanitize(row.get(\"asn_org\", \"?\"))[:40]\n        iso = row.get(\"country_iso\", \"?\")\n        lines.append(f\"`{row['ip']}` \\u00b7 {row['count']} conns \\u00b7 {iso} \\u00b7 {org}\")\n    return \"\\\\n\".join(lines)\n\nfields = []\nif ips:\n    fields.append({\"name\": \"\\U0001f310 Top IPs by volume\", \"value\": build_ip_list(ips), \"inline\": False})\nif snis:\n    fields.append({\"name\": f\"\\U0001f512 New SNIs ({len(snis)})\", \"value\": build_list(snis), \"inline\": False})\nif dns_2lds:\n    fields.append({\"name\": f\"\\U0001f9ed New DNS 2LDs ({len(dns_2lds)})\", \"value\": build_list(dns_2lds), \"inline\": False})\nif ja4s:\n    fields.append({\"name\": f\"\\U0001f446 New JA4s ({len(ja4s)})\", \"value\": build_list(ja4s), \"inline\": False})\nif uas:\n    fields.append({\"name\": f\"\\U0001f575 New User-Agents ({len(uas)})\", \"value\": build_list(uas, max_chars=80), \"inline\": False})\n\ntitle = f\"HACCP Tier2 Digest: {total} new entities (last 12h)\"\ndesc = f\"JA3 fingerprints: {ja3_count} new (summary only, see drill-down)\"\nif total == 0 and ja3_count == 0:\n    desc = \"No new entities in the last 12h, pipeline healthy\"\n\nfooter_text = f\"WF-HACCP-2 \\u00b7 12h window \\u00b7 drill: {KIBANA_URL[:80]}...\"\nall_errors = len(q_errors) + len(g_errors)\nif all_errors > 0:\n    footer_text += f\" \\u00b7 \\u26a0\\ufe0f Partial: {all_errors} query errors\"\n\nnow = datetime.datetime.utcnow().strftime(\"%Y-%m-%dT%H:%M:%SZ\")\n\nembed = {\n    \"title\": title[:256],\n    \"description\": desc,\n    \"color\": 3447003,\n    \"fields\": fields,\n    \"footer\": {\"text\": footer_text[:2048]},\n    \"timestamp\": now\n}\n\nbody = json.dumps({\"embeds\": [embed]})\nif len(body) > 5500:\n    for priority in [\"\\U0001f575\", \"\\U0001f446\", \"\\U0001f9ed\", \"\\U0001f512\"]:\n        for i, f in enumerate(embed[\"fields\"]):\n            if priority in f[\"name\"]:\n                embed[\"fields\"][i][\"value\"] = \"...truncated to fit Discord embed limit\"\n                body = json.dumps({\"embeds\": [embed]})\n                if len(body) <= 5500:\n                    break\n        if len(body) <= 5500:\n            break\n\nprint(json.dumps({\"embed_body\": body}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 700.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "http",
+      "app_version": "1.4.0",
+      "description": "",
+      "app_id": "890ad2d2-a7f7-4681-babe-9fcc5af32690",
+      "errors": [],
+      "id": "5a2757ab-df83-43de-b5ca-57ff090da77e",
+      "is_valid": true,
+      "sharing": true,
+      "label": "discord_send",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "POST",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "url",
+          "example": "",
+          "value": "$discord_webhook_tier2",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "headers",
+          "example": "",
+          "value": "Content-Type=application/json",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "body",
+          "example": "",
+          "value": "$compose_digest.message.embed_body",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 1000.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    }
+  ],
+  "branches": [
+    {
+      "destination_id": "fad7d8ef-f571-4056-b8e0-2940daabecde",
+      "id": "10fc5d2c-25c1-45f2-be5c-84f912b5d91f",
+      "source_id": "0dddf4a7-e2a9-4d98-9217-bdef27912f8e",
+      "label": "query_to_enrich",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "68144e35-5be7-48d6-84e0-633f7dc9c575",
+      "id": "0363980d-0a06-4d09-9def-bdab9f0eb4eb",
+      "source_id": "fad7d8ef-f571-4056-b8e0-2940daabecde",
+      "label": "enrich_to_compose",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "5a2757ab-df83-43de-b5ca-57ff090da77e",
+      "id": "0c83e832-2339-45b3-877e-fedb0b625b5d",
+      "source_id": "68144e35-5be7-48d6-84e0-633f7dc9c575",
+      "label": "compose_to_discord",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    }
+  ],
+  "visual_branches": null,
+  "triggers": [
+    {
+      "app_name": "",
+      "description": "",
+      "long_description": "",
+      "status": "stopped",
+      "app_version": "",
+      "errors": null,
+      "id": "b55cbc77-46ea-4e3e-b90a-6c3d7aa7b68a",
+      "is_valid": false,
+      "isStartNode": false,
+      "label": "schedule_daily",
+      "small_image": "",
+      "large_image": "",
+      "environment": "Shuffle",
+      "trigger_type": "SCHEDULE",
+      "name": "",
+      "tags": null,
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "cron",
+          "example": "",
+          "value": "30 7 * * *",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "execution_argument",
+          "example": "",
+          "value": "{\"type\":\"scheduled_tier2_digest\"}",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "position": {
+        "x": 100,
+        "y": 50
+      },
+      "priority": 0,
+      "source_workflow": "",
+      "execution_delay": 0,
+      "app_association": {
+        "name": "",
+        "app_version": "",
+        "id": "",
+        "link": "",
+        "is_valid": false,
+        "generated": false,
+        "downloaded": false,
+        "sharing": false,
+        "verified": false,
+        "invalid": false,
+        "activated": false,
+        "tested": false,
+        "hash": "",
+        "private_id": "",
+        "environment": "",
+        "small_image": "",
+        "large_image": "",
+        "contact_info": {
+          "name": "",
+          "url": ""
+        },
+        "folder_mount": {
+          "folder_mount": false,
+          "source_folder": "",
+          "destination_folder": ""
+        },
+        "authentication": {
+          "type": "",
+          "required": false,
+          "parameters": null,
+          "redirect_uri": "",
+          "token_uri": "",
+          "refresh_uri": "",
+          "scope": null,
+          "client_id": "",
+          "client_secret": "",
+          "grant_type": ""
+        },
+        "actions": null,
+        "tags": null,
+        "categories": null,
+        "created": 0,
+        "edited": 0,
+        "last_runtime": 0,
+        "versions": null,
+        "loop_versions": null,
+        "owner": "",
+        "sharing_config": "",
+        "public": false,
+        "published_id": "",
+        "child_ids": null,
+        "reference_org": "",
+        "reference_url": "",
+        "action_file_path": "",
+        "template": false,
+        "documentation": "",
+        "description": "",
+        "documentation_download_url": "",
+        "primary_usecases": null,
+        "skipped_build": false,
+        "reference_info": {
+          "onprem_backup": false,
+          "is_partner": false,
+          "partner_contacts": "",
+          "documentation_url": "",
+          "github_url": "",
+          "triggers": null
+        },
+        "blogpost": "",
+        "video": "",
+        "company_url": "",
+        "contributors": null,
+        "revision_id": "",
+        "collection": ""
+      },
+      "parent_controlled": false,
+      "replacement_for_trigger": ""
+    }
+  ],
+  "comments": [],
+  "configuration": {
+    "exit_on_error": false,
+    "start_from_top": false,
+    "skip_notifications": false
+  },
+  "created": 1775993635,
+  "edited": 1775993635,
+  "last_runtime": 0,
+  "due_date": 0,
+  "errors": [
+    "Trigger  needs to be started"
+  ],
+  "tags": [
+    "phase14",
+    "tier2",
+    "haccp",
+    "digest"
+  ],
+  "id": "5c8016af-7593-42eb-85fe-4ae9166fbc8e",
+  "is_valid": true,
+  "name": "WF-HACCP-2: Tier2 Novel-Entity Digest",
+  "description": "Once-daily digest of newly observed entities (IPs, SNIs, DNS 2LDs, JA4s, User-Agents) from haccp-entities-seen, with GeoIP enrichment on the top IPs, posted to #tier2-digest. Zero Ollama calls, zero TheHive cases.",
+  "start": "0dddf4a7-e2a9-4d98-9217-bdef27912f8e",
+  "owner": "",
+  "sharing": "private",
+  "execution_org": {
+    "name": "default",
+    "id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+    "users": [],
+    "role": "admin",
+    "child_orgs": null,
+    "region_url": "",
+    "is_partner": false,
+    "image": "",
+    "creator_org": "",
+    "branding": {
+      "enable_chat": false,
+      "home_url": "",
+      "theme": "",
+      "documentation_link": "",
+      "global_user": false,
+      "support_email": "",
+      "logout_url": "",
+      "brand_color": "",
+      "brand_name": ""
+    }
+  },
+  "org_id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+  "workflow_variables": [
+    {
+      "description": "haccp Elasticsearch URL",
+      "id": "b9c39521-8413-4fd0-8e0e-1be3bebf0b26",
+      "name": "elk_url",
+      "value": "https://10.10.30.25:9200"
+    },
+    {
+      "description": "haccp ES username",
+      "id": "5b04e477-bc1d-4f31-8def-a90c0fcf24b9",
+      "name": "elk_user",
+      "value": "elastic"
+    },
+    {
+      "description": "haccp ES password",
+      "id": "d3e4ed67-b234-463b-a707-ed910f44cee2",
+      "name": "elk_pass",
+      "value": "REDACTED"
+    },
+    {
+      "description": "Discord webhook for #tier2-digest",
+      "id": "c5172103-f2dc-4880-8699-ec19c0828dd7",
+      "name": "discord_webhook_tier2",
+      "value": "REDACTED"
+    }
+  ],
+  "execution_environment": "",
+  "previously_saved": true,
+  "categories": {
+    "siem": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "communication": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "assets": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "cases": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "network": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "intel": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "edr": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "iam": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "ai": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "email": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "other": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    }
+  },
+  "example_argument": "",
+  "public": false,
+  "default_return_value": "",
+  "contact_info": {
+    "name": "",
+    "url": ""
+  },
+  "published_id": "",
+  "revision_id": "",
+  "usecase_ids": null,
+  "input_questions": null,
+  "form_control": {
+    "input_markdown": "",
+    "output_yields": null,
+    "cleanup_actions": null,
+    "form_width": 0
+  },
+  "blogpost": "",
+  "video": "",
+  "status": "test",
+  "workflow_type": "",
+  "generated": false,
+  "hidden": false,
+  "background_processing": false,
+  "updated_by": "admin",
+  "validated": false,
+  "validation": {
+    "valid": false,
+    "changed_at": 1775996169000,
+    "last_valid": 0,
+    "validation_ran": true,
+    "notifications_created": 0,
+    "environment": "Shuffle",
+    "workflow_id": "",
+    "execution_id": "e2edbdbd-8234-42f8-949a-43d20b042707",
+    "node_id": "",
+    "total_problems": 1,
+    "errors": [
+      {
+        "order": 0,
+        "action_id": "5a2757ab-df83-43de-b5ca-57ff090da77e",
+        "app_id": "890ad2d2-a7f7-4681-babe-9fcc5af32690",
+        "app_name": "http",
+        "error": "Status 400 for action 'discord send'. Are the fields correct?",
+        "type": "configuration",
+        "waiting": false
+      }
+    ],
+    "subflow_apps": []
+  },
+  "parentorg_workflow": "",
+  "childorg_workflow_ids": null,
+  "suborg_distribution": [],
+  "backup_config": {
+    "onprem_backup": false,
+    "upload_repo": "",
+    "upload_branch": "",
+    "upload_username": "",
+    "upload_token": "",
+    "tokens_encrypted": false
+  },
+  "auth_groups": null
+}
