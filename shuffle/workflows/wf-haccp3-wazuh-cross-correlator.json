@@ -1,0 +1,794 @@
+{
+  "workflow_as_code": false,
+  "actions": [
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "1d7ed962-d56d-4bdc-9d59-d0a5bcfa8813",
+      "is_valid": true,
+      "isStartNode": true,
+      "sharing": true,
+      "label": "query_wazuh_alerts",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, base64\n\nmin_level = int(\"$min_alert_level\")\n\nctx = ssl.create_default_context()\nctx.check_hostname = False\nctx.verify_mode = ssl.CERT_NONE\n\ncreds = \"$opensearch_user:$opensearch_pass\"\nauth = base64.b64encode(creds.encode()).decode()\nheaders = {\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {auth}\"}\nerrors = []\n\ndef is_private(ip):\n    return ip.startswith(\"10.\") or ip.startswith(\"192.168.\") or ip.startswith(\"172.16.\")\n\ndef os_post(path, body):\n    req = urllib.request.Request(\n        f\"$opensearch_url{path}\",\n        data=json.dumps(body).encode(),\n        headers=headers,\n        method=\"POST\"\n    )\n    resp = urllib.request.urlopen(req, context=ctx, timeout=20)\n    return json.loads(resp.read().decode())\n\ndef run_ip_agg(ip_field):\n    \"\"\"Aggregate alerts by an IP field, return {ip: {count, max_level, top_rule, agents}}.\"\"\"\n    query = {\n        \"size\": 0,\n        \"track_total_hits\": True,\n        \"query\": {\n            \"bool\": {\n                \"filter\": [\n                    {\"range\": {\"timestamp\": {\"gte\": \"now-24h\"}}},\n                    {\"range\": {\"rule.level\": {\"gte\": min_level}}},\n                    {\"exists\": {\"field\": ip_field}}\n                ]\n            }\n        },\n        \"aggs\": {\n            \"by_ip\": {\n                \"terms\": {\"field\": ip_field, \"size\": 200},\n                \"aggs\": {\n                    \"max_level\": {\"max\": {\"field\": \"rule.level\"}},\n                    \"top_rule\": {\"terms\": {\"field\": \"rule.description.keyword\", \"size\": 1}},\n                    \"agents\": {\"terms\": {\"field\": \"agent.name\", \"size\": 3}}\n                }\n            }\n        }\n    }\n    r = os_post(\"/wazuh-alerts-*/_search\", query)\n    total = r.get(\"hits\", {}).get(\"total\", {}).get(\"value\", 0)\n    details = {}\n    for b in r.get(\"aggregations\", {}).get(\"by_ip\", {}).get(\"buckets\", []):\n        ip = b[\"key\"]\n        if is_private(ip):\n            continue\n        rule_buckets = b.get(\"top_rule\", {}).get(\"buckets\", [])\n        agent_buckets = b.get(\"agents\", {}).get(\"buckets\", [])\n        details[ip] = {\n            \"count\": b[\"doc_count\"],\n            \"max_level\": int(b.get(\"max_level\", {}).get(\"value\", 0) or 0),\n            \"top_rule\": rule_buckets[0][\"key\"] if rule_buckets else \"\",\n            \"agents\": [a[\"key\"] for a in agent_buckets]\n        }\n    return details, total\n\nwazuh_details = {}\nwazuh_total = 0\n\n# Query A: aggregate by data.srcip\ntry:\n    src_details, src_total = run_ip_agg(\"data.srcip\")\n    wazuh_details.update(src_details)\n    wazuh_total = src_total\nexcept Exception as e:\n    errors.append(f\"srcip: {str(e)[:150]}\")\n\n# Query B: aggregate by data.dstip, merge into same dict\ntry:\n    dst_details, dst_total = run_ip_agg(\"data.dstip\")\n    for ip, info in dst_details.items():\n        if ip in wazuh_details:\n            existing = wazuh_details[ip]\n            existing[\"count\"] += info[\"count\"]\n            if info[\"max_level\"] > existing[\"max_level\"]:\n                existing[\"max_level\"] = info[\"max_level\"]\n                existing[\"top_rule\"] = info[\"top_rule\"]\n            for a in info[\"agents\"]:\n                if a not in existing[\"agents\"]:\n                    existing[\"agents\"].append(a)\n        else:\n            wazuh_details[ip] = info\n    wazuh_total = max(wazuh_total, dst_total)\nexcept Exception as e:\n    errors.append(f\"dstip: {str(e)[:150]}\")\n\nwazuh_ips = sorted(wazuh_details.keys())\n\nprint(json.dumps({\n    \"wazuh_ips\": wazuh_ips,\n    \"wazuh_details\": wazuh_details,\n    \"wazuh_total\": wazuh_total,\n    \"min_level_used\": min_level,\n    \"errors\": errors\n}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 100.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "daa77fd6-a715-40d6-acc7-77b326173ccb",
+      "is_valid": true,
+      "sharing": true,
+      "label": "query_tier1_matches",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, base64\n\nctx = ssl.create_default_context()\nctx.check_hostname = False\nctx.verify_mode = ssl.CERT_NONE\n\ncreds = \"$elk_user:$elk_pass\"\nauth = base64.b64encode(creds.encode()).decode()\nheaders = {\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {auth}\"}\nerrors = []\n\ndef is_private(ip):\n    return ip.startswith(\"10.\") or ip.startswith(\"192.168.\") or ip.startswith(\"172.16.\")\n\ndef es_post(path, body):\n    req = urllib.request.Request(\n        f\"$elk_url{path}\",\n        data=json.dumps(body).encode(),\n        headers=headers,\n        method=\"POST\"\n    )\n    resp = urllib.request.urlopen(req, context=ctx, timeout=20)\n    return json.loads(resp.read().decode())\n\ndef run_tier1_agg(ip_field):\n    \"\"\"Aggregate tier1 events by an IP field.\"\"\"\n    query = {\n        \"size\": 0,\n        \"track_total_hits\": True,\n        \"query\": {\n            \"bool\": {\n                \"filter\": [\n                    {\"term\": {\"tags\": \"tier1_ti_match\"}},\n                    {\"range\": {\"@timestamp\": {\"gte\": \"now-24h\"}}}\n                ]\n            }\n        },\n        \"aggs\": {\n            \"by_ip\": {\n                \"terms\": {\"field\": ip_field, \"size\": 200},\n                \"aggs\": {\n                    \"providers\": {\"terms\": {\"field\": \"ti.provider\", \"size\": 3}},\n                    \"types\": {\"terms\": {\"field\": \"ti.type\", \"size\": 3}}\n                }\n            }\n        }\n    }\n    r = es_post(\"/logs-zeek.haccp-default/_search\", query)\n    total = r.get(\"hits\", {}).get(\"total\", {}).get(\"value\", 0)\n    details = {}\n    for b in r.get(\"aggregations\", {}).get(\"by_ip\", {}).get(\"buckets\", []):\n        ip = b[\"key\"]\n        if is_private(ip):\n            continue\n        prov_buckets = b.get(\"providers\", {}).get(\"buckets\", [])\n        type_buckets = b.get(\"types\", {}).get(\"buckets\", [])\n        details[ip] = {\n            \"count\": b[\"doc_count\"],\n            \"ti_providers\": [p[\"key\"] for p in prov_buckets],\n            \"ti_types\": [t[\"key\"] for t in type_buckets]\n        }\n    return details, total\n\ntier1_details = {}\ntier1_total = 0\n\n# Query A: aggregate by id_resp_h (destination IPs matching TI)\ntry:\n    resp_details, resp_total = run_tier1_agg(\"id_resp_h\")\n    tier1_details.update(resp_details)\n    tier1_total = resp_total\nexcept Exception as e:\n    errors.append(f\"id_resp_h: {str(e)[:150]}\")\n\n# Query B: aggregate by id_orig_h (source IPs generating tier1 traffic)\ntry:\n    orig_details, orig_total = run_tier1_agg(\"id_orig_h\")\n    for ip, info in orig_details.items():\n        if ip in tier1_details:\n            existing = tier1_details[ip]\n            existing[\"count\"] += info[\"count\"]\n            for p in info[\"ti_providers\"]:\n                if p not in existing[\"ti_providers\"]:\n                    existing[\"ti_providers\"].append(p)\n            for t in info[\"ti_types\"]:\n                if t not in existing[\"ti_types\"]:\n                    existing[\"ti_types\"].append(t)\n        else:\n            tier1_details[ip] = info\nexcept Exception as e:\n    errors.append(f\"id_orig_h: {str(e)[:150]}\")\n\ntier1_ips = sorted(tier1_details.keys())\n\nprint(json.dumps({\n    \"tier1_ips\": tier1_ips,\n    \"tier1_details\": tier1_details,\n    \"tier1_total\": tier1_total,\n    \"errors\": errors\n}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 400.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "80e1f95f-53a3-44c1-8ae7-91d0bf44a9d3",
+      "is_valid": true,
+      "sharing": true,
+      "label": "correlate",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json\n\nwazuh = json.loads('''$query_wazuh_alerts.message''')\nif isinstance(wazuh, str):\n    try:\n        wazuh = json.loads(wazuh)\n    except:\n        wazuh = {}\n\ntier1 = json.loads('''$query_tier1_matches.message''')\nif isinstance(tier1, str):\n    try:\n        tier1 = json.loads(tier1)\n    except:\n        tier1 = {}\n\nwazuh_ips = set(wazuh.get(\"wazuh_ips\", []))\ntier1_ips = set(tier1.get(\"tier1_ips\", []))\nwazuh_details = wazuh.get(\"wazuh_details\", {})\ntier1_details = tier1.get(\"tier1_details\", {})\n\ndual_hit_ips = wazuh_ips & tier1_ips\n\ndual_hits = []\nfor ip in dual_hit_ips:\n    wd = wazuh_details.get(ip, {})\n    td = tier1_details.get(ip, {})\n    dual_hits.append({\n        \"ip\": ip,\n        \"wazuh_count\": wd.get(\"count\", 0),\n        \"wazuh_max_level\": wd.get(\"max_level\", 0),\n        \"wazuh_top_rule\": wd.get(\"top_rule\", \"\"),\n        \"wazuh_agents\": wd.get(\"agents\", []),\n        \"tier1_count\": td.get(\"count\", 0),\n        \"tier1_providers\": td.get(\"ti_providers\", []),\n        \"tier1_types\": td.get(\"ti_types\", [])\n    })\n\n# Sort by Wazuh max_level descending (highest severity first)\ndual_hits.sort(key=lambda x: x[\"wazuh_max_level\"], reverse=True)\n\nw_errors = wazuh.get(\"errors\", [])\nt_errors = tier1.get(\"errors\", [])\n\nprint(json.dumps({\n    \"dual_hits\": dual_hits,\n    \"dual_hit_count\": len(dual_hits),\n    \"wazuh_total\": wazuh.get(\"wazuh_total\", 0),\n    \"tier1_total\": tier1.get(\"tier1_total\", 0),\n    \"min_level_used\": wazuh.get(\"min_level_used\", 7),\n    \"all_errors\": w_errors + t_errors\n}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 700.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "6161395b-6162-426f-a632-7d12699d62b3",
+      "is_valid": true,
+      "sharing": true,
+      "label": "compose_discord",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, datetime\n\ndata = json.loads('''$correlate.message''')\nif isinstance(data, str):\n    try:\n        data = json.loads(data)\n    except:\n        data = {}\n\ndual_hits = data.get(\"dual_hits\", [])\ndual_hit_count = data.get(\"dual_hit_count\", 0)\nwazuh_total = data.get(\"wazuh_total\", 0)\ntier1_total = data.get(\"tier1_total\", 0)\nmin_level = data.get(\"min_level_used\", 7)\nall_errors = data.get(\"all_errors\", [])\n\nKIBANA_URL = \"http://10.10.30.25:5601/app/discover#/?_g=(time:(from:now-24h,to:now))\"\n\ndef sanitize(s):\n    return str(s).replace('\"', \"'\").replace(\"\\\\\", \"\")[:200]\n\nnow = datetime.datetime.utcnow().strftime(\"%Y-%m-%dT%H:%M:%SZ\")\n\nif dual_hit_count > 0:\n    fields = []\n    for hit in dual_hits[:10]:\n        ip = hit[\"ip\"]\n        agents_str = \", \".join(hit.get(\"wazuh_agents\", [])[:3])\n        providers_str = \", \".join(hit.get(\"tier1_providers\", [])[:3])\n        types_str = \", \".join(hit.get(\"tier1_types\", [])[:3])\n        rule_text = sanitize(hit.get(\"wazuh_top_rule\", \"\"))\n        val = (f\"Wazuh: {hit.get('wazuh_count', 0)} alerts, \"\n               f\"max level {hit.get('wazuh_max_level', 0)}, \"\n               f\"'{rule_text}' on {agents_str}\\n\"\n               f\"TI: {hit.get('tier1_count', 0)} matches, \"\n               f\"{providers_str}, {types_str}\")\n        fields.append({\"name\": f\"`{ip}`\", \"value\": val[:1024], \"inline\": False})\n\n    footer_text = (f\"WF-HACCP-3 nightly | \"\n                   f\"Wazuh: {wazuh_total} (lvl>={min_level}) | \"\n                   f\"tier1: {tier1_total} | \"\n                   f\"drill: {KIBANA_URL[:60]}...\")\n    if dual_hit_count > 10:\n        footer_text += f\" | +{dual_hit_count - 10} more (raise min_alert_level or check Kibana)\"\n    if all_errors:\n        footer_text += f\" | {len(all_errors)} query error(s)\"\n\n    embed = {\n        \"title\": f\"WF-HACCP-3: {dual_hit_count} dual-hit IP(s) in last 24h\",\n        \"description\": f\"IPs that triggered both a Wazuh alert (level >= {min_level}) and a haccp tier1 TI match.\",\n        \"color\": 15158332,\n        \"fields\": fields,\n        \"footer\": {\"text\": footer_text[:2048]},\n        \"timestamp\": now\n    }\n    body = json.dumps({\"embeds\": [embed]})\n\n    # Truncate if embed exceeds Discord limit\n    if len(body) > 5500:\n        while len(embed[\"fields\"]) > 1 and len(json.dumps({\"embeds\": [embed]})) > 5500:\n            embed[\"fields\"].pop()\n        embed[\"fields\"].append({\"name\": \"...\", \"value\": f\"+{dual_hit_count - len(embed['fields']) + 1} more, see Kibana\", \"inline\": False})\n        body = json.dumps({\"embeds\": [embed]})\nelse:\n    content = (f\"WF-HACCP-3 nightly cross-correlation: \"\n              f\"0 dual-hits in last 24h. \"\n              f\"Wazuh alerts with IPs: {wazuh_total} (level >= {min_level}), \"\n              f\"tier1 TI matches: {tier1_total}.\")\n    if all_errors:\n        content += f\" ({len(all_errors)} query error(s))\"\n    body = json.dumps({\"content\": content})\n\nprint(json.dumps({\"body\": body}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 1000.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "http",
+      "app_version": "1.4.0",
+      "description": "",
+      "app_id": "890ad2d2-a7f7-4681-babe-9fcc5af32690",
+      "errors": [],
+      "id": "65134e00-fe06-4802-9e51-2eb15767e5c7",
+      "is_valid": true,
+      "sharing": true,
+      "label": "discord_send",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "POST",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "url",
+          "example": "",
+          "value": "$discord_webhook",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "headers",
+          "example": "",
+          "value": "Content-Type=application/json",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "body",
+          "example": "",
+          "value": "$compose_discord.message.body",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 1300.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    }
+  ],
+  "branches": [
+    {
+      "destination_id": "daa77fd6-a715-40d6-acc7-77b326173ccb",
+      "id": "2648497b-657f-4e61-aba7-6acbef00ddc0",
+      "source_id": "1d7ed962-d56d-4bdc-9d59-d0a5bcfa8813",
+      "label": "wazuh_to_tier1",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "80e1f95f-53a3-44c1-8ae7-91d0bf44a9d3",
+      "id": "8ceb050a-2c0d-4b2e-b686-9c2277074b24",
+      "source_id": "daa77fd6-a715-40d6-acc7-77b326173ccb",
+      "label": "tier1_to_correlate",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "6161395b-6162-426f-a632-7d12699d62b3",
+      "id": "2745a81e-2462-4261-9be7-929e38d071fb",
+      "source_id": "80e1f95f-53a3-44c1-8ae7-91d0bf44a9d3",
+      "label": "correlate_to_compose",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "65134e00-fe06-4802-9e51-2eb15767e5c7",
+      "id": "1bf829b6-1d16-44f9-9a26-9e5847e00af0",
+      "source_id": "6161395b-6162-426f-a632-7d12699d62b3",
+      "label": "compose_to_discord",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    }
+  ],
+  "visual_branches": null,
+  "triggers": [
+    {
+      "app_name": "",
+      "description": "",
+      "long_description": "",
+      "status": "stopped",
+      "app_version": "",
+      "errors": null,
+      "id": "5449194c-2d21-423c-9611-0b550ecc5552",
+      "is_valid": false,
+      "isStartNode": false,
+      "label": "schedule_nightly",
+      "small_image": "",
+      "large_image": "",
+      "environment": "Shuffle",
+      "trigger_type": "SCHEDULE",
+      "name": "",
+      "tags": null,
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "cron",
+          "example": "",
+          "value": "0 2 * * *",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "execution_argument",
+          "example": "",
+          "value": "{\"type\":\"scheduled_cross_correlator\"}",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "position": {
+        "x": 100,
+        "y": 50
+      },
+      "priority": 0,
+      "source_workflow": "",
+      "execution_delay": 0,
+      "app_association": {
+        "name": "",
+        "app_version": "",
+        "id": "",
+        "link": "",
+        "is_valid": false,
+        "generated": false,
+        "downloaded": false,
+        "sharing": false,
+        "verified": false,
+        "invalid": false,
+        "activated": false,
+        "tested": false,
+        "hash": "",
+        "private_id": "",
+        "environment": "",
+        "small_image": "",
+        "large_image": "",
+        "contact_info": {
+          "name": "",
+          "url": ""
+        },
+        "folder_mount": {
+          "folder_mount": false,
+          "source_folder": "",
+          "destination_folder": ""
+        },
+        "authentication": {
+          "type": "",
+          "required": false,
+          "parameters": null,
+          "redirect_uri": "",
+          "token_uri": "",
+          "refresh_uri": "",
+          "scope": null,
+          "client_id": "",
+          "client_secret": "",
+          "grant_type": ""
+        },
+        "actions": null,
+        "tags": null,
+        "categories": null,
+        "created": 0,
+        "edited": 0,
+        "last_runtime": 0,
+        "versions": null,
+        "loop_versions": null,
+        "owner": "",
+        "sharing_config": "",
+        "public": false,
+        "published_id": "",
+        "child_ids": null,
+        "reference_org": "",
+        "reference_url": "",
+        "action_file_path": "",
+        "template": false,
+        "documentation": "",
+        "description": "",
+        "documentation_download_url": "",
+        "primary_usecases": null,
+        "skipped_build": false,
+        "reference_info": {
+          "onprem_backup": false,
+          "is_partner": false,
+          "partner_contacts": "",
+          "documentation_url": "",
+          "github_url": "",
+          "triggers": null
+        },
+        "blogpost": "",
+        "video": "",
+        "company_url": "",
+        "contributors": null,
+        "revision_id": "",
+        "collection": ""
+      },
+      "parent_controlled": false,
+      "replacement_for_trigger": ""
+    }
+  ],
+  "comments": [],
+  "configuration": {
+    "exit_on_error": false,
+    "start_from_top": false,
+    "skip_notifications": false
+  },
+  "created": 1776024484,
+  "edited": 1776024484,
+  "last_runtime": 0,
+  "due_date": 0,
+  "errors": [
+    "Trigger  needs to be started"
+  ],
+  "tags": [
+    "phase14",
+    "cross-correlator",
+    "haccp",
+    "wazuh"
+  ],
+  "id": "c94fd866-0c53-486b-ba4f-92f4330e6dd6",
+  "is_valid": true,
+  "name": "WF-HACCP-3: Nightly Wazuh Cross-Correlator",
+  "description": "Nightly workflow that queries brisket Wazuh alerts and haccp tier1 TI matches from the same 24h window, joins on IP intersection, and posts dual-hit indicators to #soc-alerts. Zero Ollama calls, zero TheHive cases.",
+  "start": "1d7ed962-d56d-4bdc-9d59-d0a5bcfa8813",
+  "owner": "",
+  "sharing": "private",
+  "execution_org": {
+    "name": "default",
+    "id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+    "users": [],
+    "role": "admin",
+    "child_orgs": null,
+    "region_url": "",
+    "is_partner": false,
+    "image": "",
+    "creator_org": "",
+    "branding": {
+      "enable_chat": false,
+      "home_url": "",
+      "theme": "",
+      "documentation_link": "",
+      "global_user": false,
+      "support_email": "",
+      "logout_url": "",
+      "brand_color": "",
+      "brand_name": ""
+    }
+  },
+  "org_id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+  "workflow_variables": [
+    {
+      "description": "brisket Wazuh OpenSearch URL",
+      "id": "284a70ce-26a5-465d-9ca1-e57f6eb0bf66",
+      "name": "opensearch_url",
+      "value": "https://10.10.20.30:9200"
+    },
+    {
+      "description": "brisket OpenSearch username",
+      "id": "b1f830fa-d906-4b52-8724-3a227412fcfa",
+      "name": "opensearch_user",
+      "value": "REDACTED"
+    },
+    {
+      "description": "brisket OpenSearch password",
+      "id": "9626561a-2066-495e-9a77-a2f391eef920",
+      "name": "opensearch_pass",
+      "value": "REDACTED"
+    },
+    {
+      "description": "haccp Elasticsearch URL",
+      "id": "189fa7fa-3f11-4242-960c-e3101b0ef62c",
+      "name": "elk_url",
+      "value": "https://10.10.30.25:9200"
+    },
+    {
+      "description": "haccp ES username",
+      "id": "ccb3297b-1e15-48a6-ad82-36059fa1df2a",
+      "name": "elk_user",
+      "value": "REDACTED"
+    },
+    {
+      "description": "haccp ES password",
+      "id": "7b41edf1-9d8a-4e01-b15e-8f0e553ab266",
+      "name": "elk_pass",
+      "value": "REDACTED"
+    },
+    {
+      "description": "Discord webhook for #soc-alerts",
+      "id": "c6d32642-a0df-4dd6-baa2-77ca2246e5c3",
+      "name": "discord_webhook",
+      "value": "REDACTED"
+    },
+    {
+      "description": "Minimum Wazuh rule.level to include (default 7)",
+      "id": "0f0571e8-b666-421f-b8c8-aa1bddbe1e51",
+      "name": "min_alert_level",
+      "value": "7"
+    }
+  ],
+  "execution_environment": "",
+  "previously_saved": true,
+  "categories": {
+    "siem": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "communication": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "assets": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "cases": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "network": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "intel": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "edr": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "iam": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "ai": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "email": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "other": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    }
+  },
+  "example_argument": "",
+  "public": false,
+  "default_return_value": "",
+  "contact_info": {
+    "name": "",
+    "url": ""
+  },
+  "published_id": "",
+  "revision_id": "",
+  "usecase_ids": null,
+  "input_questions": null,
+  "form_control": {
+    "input_markdown": "",
+    "output_yields": null,
+    "cleanup_actions": null,
+    "form_width": 0
+  },
+  "blogpost": "",
+  "video": "",
+  "status": "test",
+  "workflow_type": "",
+  "generated": false,
+  "hidden": false,
+  "background_processing": false,
+  "updated_by": "admin",
+  "validated": false,
+  "validation": {
+    "valid": true,
+    "changed_at": 1776031261000,
+    "last_valid": 1776031261000,
+    "validation_ran": true,
+    "notifications_created": 0,
+    "environment": "Shuffle",
+    "workflow_id": "",
+    "execution_id": "4c68328a-96d4-4961-b5a6-48fab018a656",
+    "node_id": "",
+    "total_problems": 0,
+    "errors": [],
+    "subflow_apps": []
+  },
+  "parentorg_workflow": "",
+  "childorg_workflow_ids": null,
+  "suborg_distribution": [],
+  "backup_config": {
+    "onprem_backup": false,
+    "upload_repo": "",
+    "upload_branch": "",
+    "upload_username": "",
+    "upload_token": "",
+    "tokens_encrypted": false
+  },
+  "auth_groups": null
+}
