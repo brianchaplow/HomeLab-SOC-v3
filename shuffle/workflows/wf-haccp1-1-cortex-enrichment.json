@@ -1,0 +1,796 @@
+{
+  "workflow_as_code": false,
+  "actions": [
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "145ab5fc-641e-4b68-81d8-19eb11c8527f",
+      "is_valid": true,
+      "isStartNode": true,
+      "sharing": true,
+      "label": "query_new_cases",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, time\n\nctx = ssl._create_unverified_context()\nheaders = {\n    \"Content-Type\": \"application/json\",\n    \"Authorization\": \"Bearer $thehive_api_key\"\n}\n\ndef thehive_post(path, body):\n    req = urllib.request.Request(\n        f\"$thehive_url{path}\",\n        data=json.dumps(body).encode(),\n        headers=headers,\n        method=\"POST\"\n    )\n    resp = urllib.request.urlopen(req, context=ctx, timeout=15)\n    return json.loads(resp.read().decode())\n\nerrors = []\ncases = []\n\ntry:\n    ten_min_ago_ms = int((time.time() - 600) * 1000)\n\n    # Query cases created in last 10 min with tier1_ti_match tag\n    query_body = {\n        \"query\": [\n            {\"_name\": \"listCase\"},\n            {\"_name\": \"filter\", \"_and\": [\n                {\"_gte\": {\"_field\": \"_createdAt\", \"_value\": ten_min_ago_ms}},\n                {\"_in\": {\"_field\": \"tags\", \"_values\": [\"tier1_ti_match\"]}}\n            ]},\n            {\"_name\": \"sort\", \"_fields\": [{\"_createdAt\": \"desc\"}]},\n            {\"_name\": \"page\", \"from\": 0, \"to\": 50}\n        ]\n    }\n\n    result = thehive_post(\"/api/v1/query\", query_body)\n    if not isinstance(result, list):\n        result = []\n\n    for case in result:\n        case_id = case.get(\"_id\", \"\")\n        title = case.get(\"title\", \"\")\n        tags = case.get(\"tags\", [])\n\n        # Check if case already has observables (skip if enriched)\n        try:\n            obs_query = {\n                \"query\": [\n                    {\"_name\": \"getCase\", \"idOrName\": case_id},\n                    {\"_name\": \"observables\"},\n                    {\"_name\": \"page\", \"from\": 0, \"to\": 1}\n                ]\n            }\n            obs_result = thehive_post(\"/api/v1/query\", obs_query)\n            has_observables = len(obs_result) > 0 if isinstance(obs_result, list) else False\n        except:\n            has_observables = False\n\n        if not has_observables:\n            cases.append({\n                \"case_id\": case_id,\n                \"title\": str(title).replace('\"', \"'\").replace(\"\\\\\", \"\")[:300],\n                \"tags\": tags if isinstance(tags, list) else []\n            })\n\nexcept Exception as e:\n    errors.append(str(e)[:200])\n\nprint(json.dumps({\n    \"cases\": cases,\n    \"case_count\": len(cases),\n    \"errors\": errors\n}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 100.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "f3013c65-39ff-49f8-b4de-50e77c3f6632",
+      "is_valid": true,
+      "sharing": true,
+      "label": "filter_and_extract",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, re\n\nupstream = json.loads('''$query_new_cases.message''')\nif isinstance(upstream, str):\n    try:\n        upstream = json.loads(upstream)\n    except:\n        upstream = {}\n\ncases = upstream.get(\"cases\", [])\nerrors = upstream.get(\"errors\", [])\n\n# Match field to observable type mapping\nFIELD_TO_TYPE = {\n    \"id_resp_h\": \"ip\",\n    \"server_name\": \"fqdn\",\n    \"query\": \"domain\",\n    \"host\": \"domain\",\n    \"sha256\": \"hash\"\n}\n\n# Per-type analyzer routing (OpenCTI removed, incompatible with v7)\nTYPE_TO_ANALYZERS = {\n    \"ip\": [\"AbuseIPDB_1_1\", \"Shodan_Host_1_0\"],\n    \"domain\": [\"Abuse_Finder_3_0\", \"GoogleDNS_resolve_1_0_0\"],\n    \"fqdn\": [\"Abuse_Finder_3_0\", \"GoogleDNS_resolve_1_0_0\"],\n    \"hash\": [\"VirusTotal_GetReport_3_1\"]\n}\n\n# Title format from WF-HACCP-1: [haccp tier1] {match_field}={matched_value} ({provider})\nTITLE_RE = re.compile(r\"\\[haccp tier1\\]\\s+(\\w+)=(.+?)\\s+\\(([^)]+)\\)\")\n\nenrichments = []\n\nfor case in cases:\n    case_id = case.get(\"case_id\", \"\")\n    title = case.get(\"title\", \"\")\n    tags = case.get(\"tags\", [])\n\n    match_field = \"\"\n    matched_value = \"\"\n    provider = \"\"\n\n    # Try regex on title first\n    m = TITLE_RE.search(title)\n    if m:\n        match_field = m.group(1)\n        matched_value = m.group(2).strip()\n        provider = m.group(3).strip()\n    else:\n        # Fallback: extract match_field from tags (e.g., \"match_field:id_resp_h\")\n        for tag in tags:\n            if tag.startswith(\"match_field:\"):\n                match_field = tag.split(\":\", 1)[1]\n                break\n        # Try to extract value from title after = sign\n        eq_idx = title.find(\"=\")\n        if eq_idx > 0:\n            rest = title[eq_idx+1:].strip()\n            paren_idx = rest.rfind(\"(\")\n            if paren_idx > 0:\n                matched_value = rest[:paren_idx].strip()\n                provider = rest[paren_idx+1:].rstrip(\")\")\n            else:\n                matched_value = rest[:200]\n\n    if not match_field or not matched_value:\n        errors.append(f\"Could not parse title for case {case_id}: {title[:100]}\")\n        continue\n\n    obs_type = FIELD_TO_TYPE.get(match_field, \"\")\n    if not obs_type:\n        errors.append(f\"Unknown match_field {match_field} for case {case_id}\")\n        continue\n\n    analyzers = TYPE_TO_ANALYZERS.get(obs_type, [])\n\n    enrichments.append({\n        \"case_id\": case_id,\n        \"title\": title[:200],\n        \"match_field\": match_field,\n        \"matched_value\": matched_value[:500],\n        \"observable_type\": obs_type,\n        \"observable_value\": matched_value[:500],\n        \"analyzers\": analyzers,\n        \"provider\": provider\n    })\n\nhas_cases = \"true\" if enrichments else \"false\"\n\nprint(json.dumps({\n    \"has_cases\": has_cases,\n    \"enrichments\": enrichments,\n    \"enrichment_count\": len(enrichments),\n    \"errors\": errors\n}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 400.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "2b33011b-c7e1-43bf-af73-68dc344d3565",
+      "is_valid": true,
+      "sharing": true,
+      "label": "create_observables",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl\n\nupstream = json.loads('''$filter_and_extract.message''')\nif isinstance(upstream, str):\n    try:\n        upstream = json.loads(upstream)\n    except:\n        upstream = {}\n\nenrichments = upstream.get(\"enrichments\", [])\n\nctx = ssl._create_unverified_context()\nheaders = {\n    \"Content-Type\": \"application/json\",\n    \"Authorization\": \"Bearer $thehive_api_key\"\n}\n\nresults = []\nerrors = []\n\nfor enr in enrichments:\n    case_id = enr.get(\"case_id\", \"\")\n    obs_type = enr.get(\"observable_type\", \"\")\n    obs_value = enr.get(\"observable_value\", \"\")\n    analyzers = enr.get(\"analyzers\", [])\n\n    artifact_body = {\n        \"dataType\": obs_type,\n        \"data\": obs_value,\n        \"message\": f\"Auto-created by WF-HACCP-1.1 for Cortex enrichment ({obs_type})\",\n        \"tlp\": 2,\n        \"tags\": [\"wf-haccp-1.1\", \"auto-enrichment\"]\n    }\n\n    try:\n        req = urllib.request.Request(\n            f\"$thehive_url/api/case/{case_id}/artifact\",\n            data=json.dumps(artifact_body).encode(),\n            headers=headers,\n            method=\"POST\"\n        )\n        resp = urllib.request.urlopen(req, context=ctx, timeout=15)\n        created = json.loads(resp.read().decode())\n\n        # TheHive 4 returns list for artifact creation\n        if isinstance(created, list) and len(created) > 0:\n            artifact_id = created[0].get(\"_id\") or created[0].get(\"id\", \"\")\n        elif isinstance(created, dict):\n            artifact_id = created.get(\"_id\") or created.get(\"id\", \"\")\n        else:\n            artifact_id = \"\"\n\n        results.append({\n            \"case_id\": case_id,\n            \"artifact_id\": artifact_id,\n            \"observable_type\": obs_type,\n            \"observable_value\": obs_value,\n            \"analyzers\": analyzers,\n            \"status\": \"created\"\n        })\n    except Exception as e:\n        errors.append({\n            \"case_id\": case_id,\n            \"observable_value\": obs_value,\n            \"error\": str(e)[:200]\n        })\n\nprint(json.dumps({\n    \"observables\": results,\n    \"observable_count\": len(results),\n    \"errors\": errors\n}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 700.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "65abfd3a-c95b-4748-98be-e8dce1013cc9",
+      "is_valid": true,
+      "sharing": true,
+      "label": "run_analyzers",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl\n\nupstream = json.loads('''$create_observables.message''')\nif isinstance(upstream, str):\n    try:\n        upstream = json.loads(upstream)\n    except:\n        upstream = {}\n\nobservables = upstream.get(\"observables\", [])\n\nctx = ssl._create_unverified_context()\nthehive_headers = {\n    \"Content-Type\": \"application/json\",\n    \"Authorization\": \"Bearer $thehive_api_key\"\n}\n\njobs = []\nerrors = []\n\nfor obs in observables:\n    artifact_id = obs.get(\"artifact_id\", \"\")\n    analyzers = obs.get(\"analyzers\", [])\n    case_id = obs.get(\"case_id\", \"\")\n    obs_type = obs.get(\"observable_type\", \"\")\n    obs_value = obs.get(\"observable_value\", \"\")\n\n    if not artifact_id:\n        errors.append({\"case_id\": case_id, \"error\": \"no artifact_id, skipping analyzers\"})\n        continue\n\n    for analyzer_name in analyzers:\n        # Try TheHive Cortex connector first (preferred path)\n        job_body = {\n            \"cortexId\": \"local\",\n            \"artifactId\": artifact_id,\n            \"analyzerId\": analyzer_name\n        }\n        try:\n            req = urllib.request.Request(\n                \"$thehive_url/api/connector/cortex/job\",\n                data=json.dumps(job_body).encode(),\n                headers=thehive_headers,\n                method=\"POST\"\n            )\n            resp = urllib.request.urlopen(req, context=ctx, timeout=15)\n            result = json.loads(resp.read().decode())\n            job_id = result.get(\"_id\") or result.get(\"id\", \"\")\n            jobs.append({\n                \"case_id\": case_id,\n                \"artifact_id\": artifact_id,\n                \"analyzer\": analyzer_name,\n                \"job_id\": job_id,\n                \"method\": \"thehive_connector\",\n                \"status\": \"submitted\"\n            })\n        except Exception as e:\n            # Fallback: direct Cortex API\n            cortex_headers = {\n                \"Content-Type\": \"application/json\",\n                \"Authorization\": \"Bearer $cortex_api_key\"\n            }\n            cortex_body = {\n                \"data\": obs_value,\n                \"dataType\": obs_type,\n                \"tlp\": 2,\n                \"parameters\": {}\n            }\n            try:\n                fb_req = urllib.request.Request(\n                    f\"$cortex_url/api/analyzer/{analyzer_name}/run\",\n                    data=json.dumps(cortex_body).encode(),\n                    headers=cortex_headers,\n                    method=\"POST\"\n                )\n                fb_resp = urllib.request.urlopen(fb_req, context=ctx, timeout=15)\n                fb_result = json.loads(fb_resp.read().decode())\n                fb_job_id = fb_result.get(\"_id\") or fb_result.get(\"id\", \"\")\n                jobs.append({\n                    \"case_id\": case_id,\n                    \"artifact_id\": artifact_id,\n                    \"analyzer\": analyzer_name,\n                    \"job_id\": fb_job_id,\n                    \"method\": \"cortex_direct\",\n                    \"status\": \"submitted\"\n                })\n            except Exception as e2:\n                errors.append({\n                    \"case_id\": case_id,\n                    \"analyzer\": analyzer_name,\n                    \"thehive_error\": str(e)[:150],\n                    \"cortex_error\": str(e2)[:150]\n                })\n\nprint(json.dumps({\n    \"jobs\": jobs,\n    \"job_count\": len(jobs),\n    \"errors\": errors\n}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 1000.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "description": "",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "errors": [],
+      "id": "b36459f5-7cf9-4a7d-8036-666e660de210",
+      "is_valid": true,
+      "sharing": true,
+      "label": "log_result",
+      "public": true,
+      "generated": false,
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json\n\nupstream = json.loads('''$run_analyzers.message''')\nif isinstance(upstream, str):\n    try:\n        upstream = json.loads(upstream)\n    except:\n        upstream = {}\n\njobs = upstream.get(\"jobs\", [])\njob_count = upstream.get(\"job_count\", 0)\nerrors = upstream.get(\"errors\", [])\n\nthehive_count = sum(1 for j in jobs if j.get(\"method\") == \"thehive_connector\")\ncortex_count = sum(1 for j in jobs if j.get(\"method\") == \"cortex_direct\")\ncases_touched = list(set(j.get(\"case_id\", \"\") for j in jobs if j.get(\"case_id\")))\n\nsummary = (\n    f\"WF-HACCP-1.1 complete: {job_count} analyzer job(s) submitted \"\n    f\"({thehive_count} via TheHive connector, {cortex_count} via Cortex direct) \"\n    f\"across {len(cases_touched)} case(s). \"\n    f\"{len(errors)} error(s).\"\n)\n\nprint(json.dumps({\n    \"summary\": summary,\n    \"job_count\": job_count,\n    \"thehive_connector_count\": thehive_count,\n    \"cortex_direct_count\": cortex_count,\n    \"cases_touched\": cases_touched,\n    \"errors\": errors\n}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "execution_variable": {
+        "description": "",
+        "id": "",
+        "name": "",
+        "value": ""
+      },
+      "position": {
+        "x": 1300.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    }
+  ],
+  "branches": [
+    {
+      "destination_id": "f3013c65-39ff-49f8-b4de-50e77c3f6632",
+      "id": "cfb74473-ed78-44c4-a984-64f39322d2b9",
+      "source_id": "145ab5fc-641e-4b68-81d8-19eb11c8527f",
+      "label": "query_to_filter",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "2b33011b-c7e1-43bf-af73-68dc344d3565",
+      "id": "a93c4320-52fd-4916-b5d0-49fcf91e9f4b",
+      "source_id": "f3013c65-39ff-49f8-b4de-50e77c3f6632",
+      "label": "filter_to_create",
+      "has_errors": false,
+      "conditions": [
+        {
+          "source": {
+            "description": "",
+            "id": "",
+            "name": "",
+            "example": "",
+            "value": "$filter_and_extract.message.has_cases",
+            "multiline": false,
+            "multiselect": false,
+            "options": null,
+            "action_field": "",
+            "variant": "",
+            "required": false,
+            "configuration": false,
+            "tags": null,
+            "schema": {
+              "type": ""
+            },
+            "skip_multicheck": false,
+            "value_replace": null,
+            "unique_toggled": false,
+            "error": "",
+            "hidden": false
+          },
+          "condition": {
+            "description": "",
+            "id": "",
+            "name": "",
+            "example": "",
+            "value": "equals",
+            "multiline": false,
+            "multiselect": false,
+            "options": null,
+            "action_field": "",
+            "variant": "",
+            "required": false,
+            "configuration": false,
+            "tags": null,
+            "schema": {
+              "type": ""
+            },
+            "skip_multicheck": false,
+            "value_replace": null,
+            "unique_toggled": false,
+            "error": "",
+            "hidden": false
+          },
+          "destination": {
+            "description": "",
+            "id": "",
+            "name": "",
+            "example": "",
+            "value": "true",
+            "multiline": false,
+            "multiselect": false,
+            "options": null,
+            "action_field": "",
+            "variant": "",
+            "required": false,
+            "configuration": false,
+            "tags": null,
+            "schema": {
+              "type": ""
+            },
+            "skip_multicheck": false,
+            "value_replace": null,
+            "unique_toggled": false,
+            "error": "",
+            "hidden": false
+          }
+        }
+      ],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "65abfd3a-c95b-4748-98be-e8dce1013cc9",
+      "id": "f85a5a89-4d82-4a80-bdd6-beff827b48a7",
+      "source_id": "2b33011b-c7e1-43bf-af73-68dc344d3565",
+      "label": "create_to_analyze",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    },
+    {
+      "destination_id": "b36459f5-7cf9-4a7d-8036-666e660de210",
+      "id": "96e63aa6-d1f3-4486-abc4-3e24284fe266",
+      "source_id": "65abfd3a-c95b-4748-98be-e8dce1013cc9",
+      "label": "analyze_to_log",
+      "has_errors": false,
+      "conditions": [],
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    }
+  ],
+  "visual_branches": null,
+  "triggers": [
+    {
+      "app_name": "",
+      "description": "",
+      "long_description": "",
+      "status": "stopped",
+      "app_version": "",
+      "errors": null,
+      "id": "89d0317d-4571-43d6-8da0-9275be9f4fd6",
+      "is_valid": false,
+      "isStartNode": false,
+      "label": "schedule_5min_offset2",
+      "small_image": "",
+      "large_image": "",
+      "environment": "Shuffle",
+      "trigger_type": "SCHEDULE",
+      "name": "",
+      "tags": null,
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "cron",
+          "example": "",
+          "value": "2-57/5 * * * *",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "execution_argument",
+          "example": "",
+          "value": "{\"type\":\"scheduled_cortex_enrichment\"}",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "position": {
+        "x": 100,
+        "y": 50
+      },
+      "priority": 0,
+      "source_workflow": "",
+      "execution_delay": 0,
+      "app_association": {
+        "name": "",
+        "app_version": "",
+        "id": "",
+        "link": "",
+        "is_valid": false,
+        "generated": false,
+        "downloaded": false,
+        "sharing": false,
+        "verified": false,
+        "invalid": false,
+        "activated": false,
+        "tested": false,
+        "hash": "",
+        "private_id": "",
+        "environment": "",
+        "small_image": "",
+        "large_image": "",
+        "contact_info": {
+          "name": "",
+          "url": ""
+        },
+        "folder_mount": {
+          "folder_mount": false,
+          "source_folder": "",
+          "destination_folder": ""
+        },
+        "authentication": {
+          "type": "",
+          "required": false,
+          "parameters": null,
+          "redirect_uri": "",
+          "token_uri": "",
+          "refresh_uri": "",
+          "scope": null,
+          "client_id": "",
+          "client_secret": "",
+          "grant_type": ""
+        },
+        "actions": null,
+        "tags": null,
+        "categories": null,
+        "created": 0,
+        "edited": 0,
+        "last_runtime": 0,
+        "versions": null,
+        "loop_versions": null,
+        "owner": "",
+        "sharing_config": "",
+        "public": false,
+        "published_id": "",
+        "child_ids": null,
+        "reference_org": "",
+        "reference_url": "",
+        "action_file_path": "",
+        "template": false,
+        "documentation": "",
+        "description": "",
+        "documentation_download_url": "",
+        "primary_usecases": null,
+        "skipped_build": false,
+        "reference_info": {
+          "onprem_backup": false,
+          "is_partner": false,
+          "partner_contacts": "",
+          "documentation_url": "",
+          "github_url": "",
+          "triggers": null
+        },
+        "blogpost": "",
+        "video": "",
+        "company_url": "",
+        "contributors": null,
+        "revision_id": "",
+        "collection": ""
+      },
+      "parent_controlled": false,
+      "replacement_for_trigger": ""
+    }
+  ],
+  "comments": [],
+  "configuration": {
+    "exit_on_error": false,
+    "start_from_top": false,
+    "skip_notifications": false
+  },
+  "created": 1776092385,
+  "edited": 1776092385,
+  "last_runtime": 0,
+  "due_date": 0,
+  "errors": [
+    "Trigger  needs to be started"
+  ],
+  "tags": [
+    "phase14",
+    "cortex",
+    "enrichment",
+    "haccp"
+  ],
+  "id": "4d5153f1-ee3a-48a1-bb5c-8a6159cc262c",
+  "is_valid": true,
+  "name": "WF-HACCP-1.1: Cortex Enrichment on Tier1 Cases",
+  "description": "Cron-triggered (every 5min, offset 2min from WF-HACCP-1). Queries TheHive for new tier1 cases without observables, parses title to extract indicator type+value, creates observables, submits Cortex analyzer jobs via TheHive connector (fire and forget). Per-type routing: AbuseIPDB+Shodan for IPs, Abuse_Finder+GoogleDNS for domains, VirusTotal for hashes. No Ollama, no Discord.",
+  "start": "145ab5fc-641e-4b68-81d8-19eb11c8527f",
+  "owner": "",
+  "sharing": "private",
+  "execution_org": {
+    "name": "default",
+    "id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+    "users": [],
+    "role": "admin",
+    "child_orgs": null,
+    "region_url": "",
+    "is_partner": false,
+    "image": "",
+    "creator_org": "",
+    "branding": {
+      "enable_chat": false,
+      "home_url": "",
+      "theme": "",
+      "documentation_link": "",
+      "global_user": false,
+      "support_email": "",
+      "logout_url": "",
+      "brand_color": "",
+      "brand_name": ""
+    }
+  },
+  "org_id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
+  "workflow_variables": [
+    {
+      "description": "TheHive base URL",
+      "id": "9b917462-5a53-4d06-8595-2550cde701ef",
+      "name": "thehive_url",
+      "value": "http://10.10.30.22:9000"
+    },
+    {
+      "description": "TheHive API key",
+      "id": "7a193852-3918-4c57-9583-b9dea3039999",
+      "name": "thehive_api_key",
+      "value": "REDACTED"
+    },
+    {
+      "description": "Cortex base URL (fallback only)",
+      "id": "c8432098-3432-491e-a1f2-bc785725430c",
+      "name": "cortex_url",
+      "value": "http://10.10.30.22:9001"
+    },
+    {
+      "description": "Cortex API key (fallback only)",
+      "id": "d88e8614-31ae-4387-a3c4-866951f4e8f7",
+      "name": "cortex_api_key",
+      "value": "REDACTED"
+    }
+  ],
+  "execution_environment": "",
+  "previously_saved": true,
+  "categories": {
+    "siem": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "communication": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "assets": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "cases": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "network": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "intel": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "edr": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "iam": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "ai": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "email": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    },
+    "other": {
+      "name": "",
+      "count": 0,
+      "id": "",
+      "description": "",
+      "large_image": ""
+    }
+  },
+  "example_argument": "",
+  "public": false,
+  "default_return_value": "",
+  "contact_info": {
+    "name": "",
+    "url": ""
+  },
+  "published_id": "",
+  "revision_id": "",
+  "usecase_ids": null,
+  "input_questions": null,
+  "form_control": {
+    "input_markdown": "",
+    "output_yields": null,
+    "cleanup_actions": null,
+    "form_width": 0
+  },
+  "blogpost": "",
+  "video": "",
+  "status": "test",
+  "workflow_type": "",
+  "generated": false,
+  "hidden": false,
+  "background_processing": false,
+  "updated_by": "admin",
+  "validated": false,
+  "validation": {
+    "valid": true,
+    "changed_at": 1776093433000,
+    "last_valid": 1776093433000,
+    "validation_ran": true,
+    "notifications_created": 0,
+    "environment": "Shuffle",
+    "workflow_id": "",
+    "execution_id": "743be39b-1933-47e0-9322-26937f5b93eb",
+    "node_id": "",
+    "total_problems": 0,
+    "errors": [],
+    "subflow_apps": []
+  },
+  "parentorg_workflow": "",
+  "childorg_workflow_ids": null,
+  "suborg_distribution": [],
+  "backup_config": {
+    "onprem_backup": false,
+    "upload_repo": "",
+    "upload_branch": "",
+    "upload_username": "",
+    "upload_token": "",
+    "tokens_encrypted": false
+  },
+  "auth_groups": null
+}
