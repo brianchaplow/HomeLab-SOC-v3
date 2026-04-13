@@ -27,7 +27,7 @@ Four Fleet agent policies manage endpoint telemetry collection across the SOC. F
 | Policy | Purpose |
 |--------|---------|
 | SOC Endpoints | Core SOC infrastructure (brisket, sear) |
-| Windows Endpoints | Active Directory lab machines (DC01, WS01) |
+| Windows Endpoints | Active Directory lab machines (DC01, WS01, WS02) |
 | Sensors | Network sensors (smokehouse) |
 | Fleet Server | Self-monitoring policy for the Fleet Server |
 

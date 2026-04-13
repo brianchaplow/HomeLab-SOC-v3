@@ -32,7 +32,7 @@ Proxmox host running Caldera v5.3.0 and multiple target containers on VLAN 40 vi
 
 ### pitcrew (10.10.30.20) -- Proxmox & Threat Intel
 
-Proxmox host running AD lab VMs (DC01, WS01) and TheHive LXC 200. Also hosts **OpenCTI LXC 202** (10.10.30.26) for threat intelligence platform integration with Shuffle WF1 and Wazuh IOC CDB lists.
+Proxmox host running AD lab VMs (DC01, WS01, WS02) and TheHive LXC 200. WS01 is a Windows 10 Eval (EOL, unpatched attack surface), WS02 is a Windows 11 Enterprise LTSC Eval (current, patchable attack surface), providing cross-OS lifecycle management and diverse attack vectors. Also hosts **OpenCTI LXC 202** (10.10.30.26) for threat intelligence platform integration with Shuffle WF1 and Wazuh IOC CDB lists.
 
 ## Monitoring
 

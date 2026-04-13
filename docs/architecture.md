@@ -29,7 +29,7 @@ The lab uses BBQ-themed naming -- a nod to the intersection of low-and-slow cook
 | **sear** | ASUS ROG Strix G512LI | Intel i5-10300H (4C/8T) | 32 GB DDR4 | 512 GB NVMe | Kali attack box, ML model training (GTX 1650 Ti) |
 | **pitcrew** | Lenovo ThinkStation P340 Tiny | Intel i7-10700T (8C/16T) | 32 GB DDR4 | 512 GB NVMe | Proxmox VE -- AD lab, TheHive, OpenCTI |
 | **smoker** | Lenovo ThinkStation P340 Tiny | Intel i7-10700T (8C/16T) | 32 GB DDR4 | 512 GB NVMe | Proxmox VE -- Caldera, attack targets, PBS |
-| **haccp** | Lenovo ThinkStation P340 Tiny | Intel i7-10700T (8C/16T) | 32 GB DDR4 | 2 TB + 1 TB NVMe | Detection & PCAP -- ELK 8.17, Arkime v6.0.1 |
+| **haccp** | Lenovo ThinkStation P340 Tiny | Intel i7-10700T (8C/16T) | 32 GB DDR4 | 2 TB + 2 TB NVMe | Detection & PCAP -- ELK 8.17, Arkime v6.0.1, Quadro P1000 4GB |
 | **PITBOSS** | ASUS TUF Dash F15 | Intel i7-12650H (10C/16T) | 64 GB DDR5 | 2 TB NVMe | Primary workstation (Windows 11) |
 | **OPNsense** | Protectli VP2420 | Intel J6412 (4C/4T) | 8 GB DDR4 | 128 GB eMMC | Firewall / router -- inter-VLAN routing, NAT |
 | **MokerLink** | 10G08410GSM | -- | -- | -- | L3 managed switch (8x 10GbE + 4x SFP+), SPAN, ACL |
@@ -38,7 +38,7 @@ The lab uses BBQ-themed naming -- a nod to the intersection of low-and-slow cook
 **GPU acceleration:**
 - **brisket** -- NVIDIA RTX A1000 (8 GB GDDR6) for ML inference (ml-scorer) and LLM inference (Ollama qwen3:8b)
 - **sear** -- NVIDIA GTX 1650 Ti (4 GB GDDR6) for ML model training (XGBoost, LightGBM, IsolationForest)
-- **haccp** -- No GPU (detection and PCAP workloads are CPU/IO-bound)
+- **haccp** -- NVIDIA Quadro P1000 (4 GB GDDR5) available for compute (driver 535, added during rack build 2026-04-07)
 
 ---
 
@@ -126,7 +126,7 @@ The primary SOC server runs 12 Docker containers plus Ollama as a host service. 
 
 | Service | Container | Port(s) | Purpose |
 |---------|-----------|---------|---------|
-| Wazuh Manager | wazuh.manager | 1514, 1515, 514/UDP, 55000 | SIEM -- 12 agents + OPNsense syslog |
+| Wazuh Manager | wazuh.manager | 1514, 1515, 514/UDP, 55000 | SIEM -- 16 agents + OPNsense syslog |
 | Wazuh Indexer | wazuh.indexer | 9200 | OpenSearch backend (wazuh-alerts + zeek indices) |
 | Wazuh Dashboard | wazuh.dashboard | 5601 | SIEM web interface |
 | Shuffle Frontend | shuffle-frontend | 3443 | SOAR web interface |
@@ -438,7 +438,7 @@ flowchart LR
     SUR -->|eve.json| WA1[Wazuh Agent<br/>smokehouse]
     ZK --> FB[Fluent Bit] -->|7 zeek-* indices| WI[Wazuh Indexer<br/>OpenSearch]
 
-    EP[Endpoints<br/>12 Agents] -->|TCP 1514| WM[Wazuh Manager]
+    EP[Endpoints<br/>16 Agents] -->|TCP 1514| WM[Wazuh Manager]
     OPN[OPNsense] -->|UDP 514 syslog| WM
     WA1 --> WM
 

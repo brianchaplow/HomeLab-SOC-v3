@@ -73,7 +73,8 @@ The network is segmented into five 802.1Q VLANs plus two family network subnets,
 | **haccp** | **10.10.30.25** | **ThinkStation P340 Tiny (i7-10700T, 32GB, 2TB+1TB NVMe)** | **Detection & PCAP -- ELK 8.17, Arkime v6.0.1** |
 | OpenCTI LXC 202 | 10.10.30.26 | LXC on pitcrew (4 vCPU, 10GB) | OpenCTI v7 threat intelligence platform (6 connectors) |
 | DC01 | 10.10.30.40 | VM on pitcrew (2 vCPU, 4GB) | Active Directory Domain Controller (Win Server 2022) |
-| WS01 | 10.10.30.41 | VM on pitcrew (4 vCPU, 4GB) | AD Workstation (Windows 10) |
+| WS01 | 10.10.30.41 | VM on pitcrew (4 vCPU, 4GB) | AD Workstation (Windows 10 Eval, EOL Oct 2025) |
+| WS02 | 10.10.30.42 | VM on pitcrew (4 vCPU, 4GB, 60GB) | AD Workstation (Windows 11 Enterprise LTSC Eval) |
 
 ### VLAN 40 -- Targets (Isolated)
 
