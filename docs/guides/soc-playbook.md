@@ -227,7 +227,7 @@ Expected: All 12 agents show `status: active`. If any show `disconnected`, check
 sudo systemctl restart wazuh-agent
 ```
 
-**On a disconnected Windows host, open an admin PowerShell on that machine (RDP to DC01/WS01/WS02 or run locally on PITBOSS):**
+**On a disconnected Windows host, open an admin PowerShell on that machine (RDP to DC01/WS01 or run locally on PITBOSS):**
 
 ```powershell
 # On the disconnected host (Windows, from admin PowerShell)
@@ -323,7 +323,7 @@ docker restart ml-scorer
 
 ### Step 8: Verify Velociraptor Client Count
 
-**Open in browser from PITBOSS:** Navigate to https://10.10.20.30:8889 (login: admin / <PLATFORM_PASSWORD>). Go to the client search page. Verify clients are enrolled and showing recent check-in times (<15 minutes). Clients: brisket, smokehouse, sear, DC01, WS01, WS02, DVWA, GCP VM. (WS01 and WS02 need re-enrollment after 2026-04-13 reimage/creation.)
+**Open in browser from PITBOSS:** Navigate to https://10.10.20.30:8889 (login: admin / <PLATFORM_PASSWORD>). Go to the client search page. Verify clients are enrolled and showing recent check-in times (<15 minutes). Clients: brisket, smokehouse, sear, DC01, WS01, DVWA, GCP VM. (WS01 needs re-enrollment after 2026-04-13 reimage.)
 
 ---
 
@@ -2428,9 +2428,9 @@ The `run_attack.sh` wrapper ensures ground-truth logging for every attack. It re
 | C2 Simulation | http_beacon, dns_beacon, http_exfiltration, dns_exfiltration | Metasploitable (10.10.40.20) |
 | API | crapi_bola, crapi_bfla, crapi_mass_assign, crapi_ssrf | crAPI (10.10.40.31) |
 | Metasploit | vsftpd_234, distcc_exec, ms17_010, tomcat_upload, java_rmi | Metasploitable (10.10.40.20/21) |
-| AD (restricted) | ldap_enum, kerberoast, password_spray, bloodhound, asreproast | DC01 (10.10.30.40), WS01 (10.10.30.41), WS02 (10.10.30.42) |
+| AD (restricted) | ldap_enum, kerberoast, password_spray, bloodhound, asreproast | DC01 (10.10.30.40), WS01 (10.10.30.41) |
 
-**AD attack safety:** AD attacks target VLAN 30 (10.10.30.40/41/42). The script requires typing `CONFIRM-AD` before execution.
+**AD attack safety:** AD attacks target VLAN 30 (10.10.30.40/41). The script requires typing `CONFIRM-AD` before execution.
 
 ### 9.2 Ground-Truth Logging
 
@@ -2769,7 +2769,7 @@ curl -X POST http://10.10.30.22:9000/api/case \
 
 ### RB-03: Lateral Movement (AD Environment)
 
-**Trigger:** Alerts from DC01 (agent 007, 10.10.30.40), WS01 (agent 018, 10.10.30.41), or WS02 (agent 019, 10.10.30.42) with MITRE techniques T1021 (Remote Services), T1047 (WMI), T1059 (Command/Scripting Interpreter), T1003 (Credential Dumping), or T1550 (Use Alternate Authentication Material).
+**Trigger:** Alerts from DC01 (agent 007, 10.10.30.40) or WS01 (agent 018, 10.10.30.41) with MITRE techniques T1021 (Remote Services), T1047 (WMI), T1059 (Command/Scripting Interpreter), T1003 (Credential Dumping), or T1550 (Use Alternate Authentication Material).
 
 **Verify:**
 
@@ -2784,7 +2784,7 @@ curl -k -u admin:'PASSWORD' -X GET \
   "query": {
     "bool": {
       "must": [
-        {"terms": {"agent.name": ["DC01", "WS01", "WS02"]}},
+        {"terms": {"agent.name": ["DC01", "WS01"]}},
         {"range": {"@timestamp": {"gte": "now-2h"}}},
         {"terms": {"rule.mitre.id": ["T1021", "T1021.002", "T1047", "T1059", "T1059.001", "T1003", "T1003.001", "T1550"]}}
       ]
@@ -2842,7 +2842,7 @@ curl -X POST http://10.10.30.22:9000/api/case \
   -H "Content-Type: application/json" \
   -d '{
     "title": "[RB-03] Lateral Movement in AD Environment",
-    "description": "Lateral movement indicators detected on DC01/WS01/WS02.\nTechniques: T1021, T1059\nSource: [IP/host]\nAffected accounts: [list]\nCaldera campaign: [yes/no, operation ID if applicable]",
+    "description": "Lateral movement indicators detected on DC01/WS01.\nTechniques: T1021, T1059\nSource: [IP/host]\nAffected accounts: [list]\nCaldera campaign: [yes/no, operation ID if applicable]",
     "severity": 3,
     "tlp": 3,
     "pap": 2,
@@ -3252,7 +3252,7 @@ curl -k -u admin:'PASSWORD' -X GET \
       "must": [
         {"term": {"rule.mitre.id": "TXXXX"}},
         {"range": {"@timestamp": {"gte": "CAMPAIGN_START", "lte": "CAMPAIGN_END"}}},
-        {"terms": {"agent.name": ["DC01", "WS01", "WS02", "DVWA"]}}
+        {"terms": {"agent.name": ["DC01", "WS01", "DVWA"]}}
       ]
     }
   }

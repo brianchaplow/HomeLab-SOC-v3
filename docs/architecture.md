@@ -126,7 +126,7 @@ The primary SOC server runs 12 Docker containers plus Ollama as a host service. 
 
 | Service | Container | Port(s) | Purpose |
 |---------|-----------|---------|---------|
-| Wazuh Manager | wazuh.manager | 1514, 1515, 514/UDP, 55000 | SIEM -- 16 agents + OPNsense syslog |
+| Wazuh Manager | wazuh.manager | 1514, 1515, 514/UDP, 55000 | SIEM -- 15 agents + OPNsense syslog |
 | Wazuh Indexer | wazuh.indexer | 9200 | OpenSearch backend (wazuh-alerts + zeek indices) |
 | Wazuh Dashboard | wazuh.dashboard | 5601 | SIEM web interface |
 | Shuffle Frontend | shuffle-frontend | 3443 | SOAR web interface |
@@ -438,7 +438,7 @@ flowchart LR
     SUR -->|eve.json| WA1[Wazuh Agent<br/>smokehouse]
     ZK --> FB[Fluent Bit] -->|7 zeek-* indices| WI[Wazuh Indexer<br/>OpenSearch]
 
-    EP[Endpoints<br/>16 Agents] -->|TCP 1514| WM[Wazuh Manager]
+    EP[Endpoints<br/>15 Agents] -->|TCP 1514| WM[Wazuh Manager]
     OPN[OPNsense] -->|UDP 514 syslog| WM
     WA1 --> WM
 
