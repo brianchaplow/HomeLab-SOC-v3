@@ -17,3 +17,64 @@
   </rule>
 
 </group>
+
+<!-- Suppress noisy AppArmor denials from Docker target containers -->
+<group name="local,syslog,apparmor,">
+
+  <!-- exim4 SMTP target container (VLAN 40) fires hundreds of socket denials daily -->
+  <rule id="100002" level="0">
+    <if_sid>52002</if_sid>
+    <match>comm="exim4"</match>
+    <description>AppArmor exim4 container noise - suppressed.</description>
+  </rule>
+
+</group>
+
+<!-- OpenCTI threat intelligence matching -->
+<group name="threat_intel,">
+
+  <rule id="100200" level="12">
+    <if_sid>5700,5710</if_sid>
+    <list field="srcip" lookup="match_key">etc/lists/opencti-threat-ips</list>
+    <description>Connection from OpenCTI threat intelligence IP: $(srcip)</description>
+    <group>threat_intel,</group>
+  </rule>
+
+</group>
+
+<!-- Suricata noise suppression (2026-04-14) -->
+<!-- Top-5 signatures driving ~300k alerts/day on SPAN port; all decoder/informational. -->
+<!-- Field path is alert.signature_id (NOT data.alert.signature_id); data. prefix is added at ES indexing, not rule eval. -->
+<group name="local,suricata,suricata_noise,">
+
+  <rule id="100300" level="0">
+    <if_sid>86601</if_sid>
+    <field name="alert.signature_id">2200121</field>
+    <description>Suricata: Ethertype unknown - suppressed (SPAN decoder noise).</description>
+  </rule>
+
+  <rule id="100301" level="0">
+    <if_sid>86601</if_sid>
+    <field name="alert.signature_id">2016149</field>
+    <description>Suricata: STUN Binding Request - suppressed (WebRTC/voice).</description>
+  </rule>
+
+  <rule id="100302" level="0">
+    <if_sid>86601</if_sid>
+    <field name="alert.signature_id">2016150</field>
+    <description>Suricata: STUN Binding Response - suppressed (WebRTC/voice).</description>
+  </rule>
+
+  <rule id="100303" level="0">
+    <if_sid>86601</if_sid>
+    <field name="alert.signature_id">2210045</field>
+    <description>Suricata: STREAM Packet with invalid ack - suppressed (SPAN stream decoder).</description>
+  </rule>
+
+  <rule id="100304" level="0">
+    <if_sid>86601</if_sid>
+    <field name="alert.signature_id">2210046</field>
+    <description>Suricata: STREAM SHUTDOWN RST invalid ack - suppressed (SPAN stream decoder).</description>
+  </rule>
+
+</group>
