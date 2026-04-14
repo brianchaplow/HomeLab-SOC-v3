@@ -323,7 +323,7 @@ docker restart ml-scorer
 
 ### Step 8: Verify Velociraptor Client Count
 
-**Open in browser from PITBOSS:** Navigate to https://10.10.20.30:8889 (login: admin / <PLATFORM_PASSWORD>). Go to the client search page. Verify clients are enrolled and showing recent check-in times (<15 minutes). Clients: brisket, smokehouse, sear, DC01, WS01, DVWA, GCP VM. (WS01 needs re-enrollment after 2026-04-13 reimage.)
+**Open in browser from PITBOSS:** Navigate to https://10.10.20.30:8889 (login: admin / <PLATFORM_PASSWORD>). Go to the client search page. Verify clients are enrolled and showing recent check-in times (<15 minutes). Clients: brisket, smokehouse, sear, DC01, WS01, DVWA, GCP VM.
 
 ---
 
@@ -2769,7 +2769,7 @@ curl -X POST http://10.10.30.22:9000/api/case \
 
 ### RB-03: Lateral Movement (AD Environment)
 
-**Trigger:** Alerts from DC01 (agent 007, 10.10.30.40) or WS01 (agent 018, 10.10.30.41) with MITRE techniques T1021 (Remote Services), T1047 (WMI), T1059 (Command/Scripting Interpreter), T1003 (Credential Dumping), or T1550 (Use Alternate Authentication Material).
+**Trigger:** Alerts from DC01 (agent 007, 10.10.30.40) or WS01 (agent 021, 10.10.30.41) with MITRE techniques T1021 (Remote Services), T1047 (WMI), T1059 (Command/Scripting Interpreter), T1003 (Credential Dumping), or T1550 (Use Alternate Authentication Material).
 
 **Verify:**
 
