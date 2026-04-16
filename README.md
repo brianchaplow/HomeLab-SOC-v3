@@ -1,6 +1,6 @@
 # HomeLab SOC
 
-> Enterprise-grade Security Operations Center built on commodity hardware -- SIEM, SOAR, DFIR, ML threat detection, and LLM-augmented automation.
+> Enterprise-grade Security Operations Center built on commodity hardware: SIEM, SOAR, DFIR, ML threat detection, LLM-augmented automation, full-packet capture, and FedRAMP Low ConMon program.
 
 ![Wazuh](https://img.shields.io/badge/Wazuh_4.14-3C3C6E?style=for-the-badge&logoColor=white) ![Elasticsearch](https://img.shields.io/badge/Elastic_8.17-005571?style=for-the-badge&logo=elasticsearch&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white) ![Proxmox](https://img.shields.io/badge/Proxmox-E57000?style=for-the-badge&logo=proxmox&logoColor=white) ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white) ![XGBoost](https://img.shields.io/badge/XGBoost-FF6600?style=for-the-badge&logoColor=white) ![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white) ![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white) ![Kali Linux](https://img.shields.io/badge/Kali_Linux-268BEE?style=for-the-badge&logo=kalilinux&logoColor=white) ![Cloudflare](https://img.shields.io/badge/Cloudflare-F38020?style=for-the-badge&logo=cloudflare&logoColor=white) ![Tailscale](https://img.shields.io/badge/Tailscale-000000?style=for-the-badge&logo=tailscale&logoColor=white) ![NVIDIA](https://img.shields.io/badge/NVIDIA-76B900?style=for-the-badge&logo=nvidia&logoColor=white) ![OpenCTI](https://img.shields.io/badge/OpenCTI_v7-001bda?style=for-the-badge&logo=opencti&logoColor=white) ![Arkime](https://img.shields.io/badge/Arkime_6.0-6B3FA0?style=for-the-badge&logoColor=white) ![TheHive](https://img.shields.io/badge/TheHive_4-FFBF00?style=for-the-badge&logoColor=black)
 
@@ -41,16 +41,16 @@ flowchart LR
 
 | Metric | Value |
 |--------|-------|
-| Wazuh agents | **12** across 5 VLANs + GCP cloud |
-| SOAR workflows | **9** with LLM augmentation (Ollama qwen3:8b) |
+| Wazuh agents | **15** across 5 VLANs + GCP cloud |
+| SOAR workflows | **14** with LLM augmentation (Ollama qwen3:8b) |
 | Elastic detection rules | **1,345** on haccp bare metal |
 | ML threat scorer | **PR-AUC 0.9998** (XGBoost binary classifier) |
 | Velociraptor DFIR clients | **7** endpoints |
 | Docker containers (brisket) | **12+** services |
 | MITRE ATT&CK adversary profiles | **29** (Caldera) |
 | Cortex analyzers | **5** (AbuseIPDB, VirusTotal, Shodan, Abuse Finder, GoogleDNS) |
-| Threat intel connectors | **6** (OpenCTI -- MITRE ATT&CK, CVE, AbuseIPDB, CISA KEV, Malpedia, AlienVault OTX) |
-| Elastic ML anomaly jobs | **1** (auth anomaly detection on Windows Security events) |
+| Threat intel connectors | **9** (OpenCTI: MITRE ATT&CK, CVE, AbuseIPDB, CISA KEV, Malpedia, AlienVault OTX, Abuse.ch URLhaus, Abuse.ch ThreatFox, Abuse.ch SSL Blacklist) |
+| Elastic ML anomaly jobs | **1** (auth anomaly detection on Windows Security events; Elastic ML trial expired 2026-04-16, switched to basic license; job preserved as historical record) |
 | Total cluster RAM | **208 GB** across 7 hosts |
 | Build duration | **4 days** initial + **3 days** redesign |
 
@@ -58,12 +58,12 @@ flowchart LR
 
 ## Migration Phases
 
-Phases 1-11 completed February 10-13, 2026. Phase 12 (infrastructure redesign) completed March 14-16, 2026. Full engineering narrative with key decisions, challenges, and outcomes in [docs/phases.md](docs/phases.md).
+Phases 1-11 completed February 10-13, 2026. Phase 12 (infrastructure redesign) completed March 2026. Phases 13-14 (Arkime PCAP + haccp data foundation) completed March-April 2026. Phase 15 (FedRAMP Low ConMon) completed April 10, 2026. Full engineering narrative with key decisions, challenges, and outcomes in [docs/phases.md](docs/phases.md).
 
 | Phase | Name | Summary |
 |:-----:|------|---------|
 | :white_check_mark: 1 | **brisket Online** | Ubuntu 24.04, Docker, NVIDIA RTX A1000, Ollama, Prometheus + Grafana |
-| :white_check_mark: 2 | **Wazuh SIEM** | 12 agents, Zeek pipeline (7 indices), MokerLink ACL micro-segmentation |
+| :white_check_mark: 2 | **Wazuh SIEM** | 15 agents, Zeek pipeline (7 indices), MokerLink ACL micro-segmentation |
 | :white_check_mark: 3 | **Hard Cutover** | smokehouse converted to sensor-only, 38 GB backed up |
 | :white_check_mark: 4 | **Case Management** | TheHive 4 + Cortex 3 on Proxmox LXC, 5 analyzers |
 | :white_check_mark: 5 | **Shuffle SOAR** | WF1 (enrichment + auto-block), WF2 (watch digest) |
@@ -74,6 +74,9 @@ Phases 1-11 completed February 10-13, 2026. Phase 12 (infrastructure redesign) c
 | :white_check_mark: 10 | **ELK Stack (Dual-SIEM)** | Elasticsearch 8.17, 1,345 detection rules, migrated to haccp bare metal |
 | :white_check_mark: 11 | **Proxmox Backup Server** | NFS to smokehouse 17 TB, daily + weekly backup jobs |
 | :white_check_mark: 12 | **Infrastructure Redesign** | haccp bare metal (ELK + Arkime), OpenCTI threat intel, v2 metrics decommission |
+| :white_check_mark: 13 | **Arkime Packet Capture** | Full-packet capture on haccp bare metal (span0 SPAN port, 2 TB PCAP storage) |
+| :white_check_mark: 14 | **haccp Data Foundation** | Zeek on span0 (JA3/JA4/community-id), Logstash enrichment (OpenCTI + Ollama LLM), PCAP archival to smokehouse, nightly briefing |
+| :white_check_mark: 15 | **FedRAMP Low ConMon** | 156-control SSP, OSCAL pipelines, 4 ConMon plans complete, DefectDojo + RegScale integration, public portfolio at github.com/brianchaplow/homelab-fedramp-low |
 
 ---
 
@@ -145,18 +148,25 @@ Total cluster: **208 GB RAM** across **7 hosts**, **12 GB GPU VRAM** (RTX A1000 
 
 ## SOAR Workflows
 
-Nine Shuffle SOAR workflows automate enrichment, triage, response, and intelligence reporting. Seven use Ollama (qwen3:8b) for natural language analysis. All credentials are centralized as workflow variables -- no hardcoded secrets in exported JSON.
+Fourteen Shuffle SOAR workflows automate enrichment, triage, response, and intelligence reporting. Seven use Ollama (qwen3:8b) for natural language analysis. All credentials are centralized as workflow variables: no hardcoded secrets in exported JSON.
 
 | ID | Workflow | Trigger | Description |
 |----|----------|---------|-------------|
-| WF1 | **Threat Enrichment and Auto-Block** | Wazuh webhook (level 8+) | AbuseIPDB + ML scorer + Ollama triage -- TheHive case + Discord alert |
+| WF1 | **Threat Enrichment and Auto-Block** | Wazuh webhook (level 8+) | AbuseIPDB + ML scorer + Ollama triage: TheHive case + Discord alert |
 | WF2 | **Watch Turnover Digest** | Cron (06:05 / 18:05 EST) | Navy-style shift handoff digest with LLM narrative |
-| WF3 | **Detection Gap Analyzer** | Webhook (on demand) | Caldera campaign coverage vs. Wazuh detections -- MITRE ATT&CK gap report |
-| WF5 | **Daily Alert Cluster Triage** | Cron (06:00 EST) | Cluster + LLM classify (CAMPAIGN / ROUTINE / INVESTIGATE) -- TheHive alerts |
-| WF6 | **Model Drift Detector** | Cron (09:00 EST) | Feature distribution monitoring -- alerts on score drift |
+| WF3 | **Detection Gap Analyzer** | Webhook (on demand) | Caldera campaign coverage vs. Wazuh detections: MITRE ATT&CK gap report |
+| WF5 | **Daily Alert Cluster Triage** | Cron (06:00 EST) | Cluster + LLM classify (CAMPAIGN / ROUTINE / INVESTIGATE): TheHive alerts |
+| WF6 | **Model Drift Detector** | Cron (09:00 EST) | Feature distribution monitoring: alerts on score drift |
 | WF7 | **Honeypot Intel Report** | Cron (Sun 12:00 EST) | ~~Weekly honeypot analysis~~ (decommissioned 2026-03-12) |
-| WF8 | **LLM Log Anomaly Finder** | Cron (15:00 EST) | Rare alert pattern classification -- catches rule-blind anomalies |
+| WF8 | **LLM Log Anomaly Finder** | Cron (15:00 EST) | Rare alert pattern classification: catches rule-blind anomalies |
 | WF9 | **Stalker Visit Alert** | Cron (every 5 min) | Visitor fingerprint monitoring and alerting |
+| WF10 | **Morning Briefing** | Cron (05:30 EST) | Nightly haccp pipeline summary delivered to #morning-briefing |
+| WF11 | **Evening Briefing** | Cron (17:30 EST) | End-of-day SOC summary with LLM narrative |
+| WF-HACCP-1 | **Tier1/2 Alert Loop** | Cron (every 5 min) | Polls ELK for tier1 TI matches and tier2 LLM-classified events: Discord + TheHive |
+| WF-HACCP-1.1 | **Cortex Enrichment** | Cron (every 5 min, offset 2) | Enriches open TheHive cases via Cortex analyzers |
+| WF-HACCP-2 | **Tier2 Novel Entity Digest** | Cron (07:30 EST) | Daily digest of novel entities detected by Zeek pipeline: #tier2-digest |
+| WF-HACCP-3 | **Entity Cache Health** | Cron (02:00 EST) | novel_entity.rb in-memory cache health check and warmup validation |
+| WF-PROJECTS | **Deployment Status** | Cron (08:00 EST) | Homelab project deployment status summary: #project-status |
 | CS1 | **Capitol Signals Collector** | Cron (21:00 EST) | Congressional trade data collection and enrichment |
 
 Full workflow documentation and JSON exports in [`shuffle/`](shuffle/).
