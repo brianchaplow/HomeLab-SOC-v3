@@ -763,7 +763,7 @@
       "description": "SSH private key for shuffle-wf10 to read briefing from haccp",
       "id": "b4a7273b-286d-474b-ba90-fca250cfda4b",
       "name": "haccp_ssh_key",
-      "value": "***REDACTED-OPENSSH-PRIVATE-KEY (scrubbed 2026-06-15)***"
+      "value": "REDACTED"
     }
   ],
   "execution_environment": "Shuffle",
