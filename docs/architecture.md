@@ -417,8 +417,8 @@ The target network is designed to be attacked. Its isolation ensures that compro
 
 A Tailscale mesh connects external and internal lab resources without exposing any services to the public internet:
 
-- **GCP VM** (100.125.40.97) -- web hosting, Wazuh agent (honeypot decommissioned)
-- **haccp** (100.74.16.82) -- ELK Stack (GCP Fluent Bit repointed here from former LXC 201)
+- **GCP VM** -- web hosting, Wazuh agent (honeypot decommissioned)
+- **haccp** -- ELK Stack (GCP Fluent Bit repointed here from former LXC 201)
 - No subnet routes advertised -- only point-to-point peer access
 - Lab internal IPs (10.10.x.x) are not routable from GCP
 

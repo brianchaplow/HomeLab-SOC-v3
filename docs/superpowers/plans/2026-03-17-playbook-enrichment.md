@@ -605,9 +605,9 @@ Full 6-point entry. Cover:
 Full 6-point entry. Cover:
 - Google Cloud Platform virtual machine hosting external-facing services
 - Runs brianchaplow.com and bytesbourbonbbq.com (Astro 5 sites behind Cloudflare)
-- Wazuh agent 009 reports to brisket. Connected to tailnet (100.125.40.97).
+- Wazuh agent 009 reports to brisket. Connected to tailnet.
 - Previously hosted honeypot research (WordPress + Apache, campaign ended 2026-03-12). Historical data preserved in ELK.
-- Key Commands: SSH via Tailscale (`ssh bchaplow@100.125.40.97`), check Wazuh agent status
+- Key Commands: SSH via Tailscale (`ssh bchaplow@<gcp-tailscale-ip>`), check Wazuh agent status
 - Key Concepts: Instance (GCP term for a VM), Tailscale connector (how GCP VM reaches the lab network), Wazuh agent (ships GCP logs to the SOC for monitoring)
 
 - [ ] **Step 6: Write 3.22 — Cloudflare**

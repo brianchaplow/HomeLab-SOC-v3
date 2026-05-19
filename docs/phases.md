@@ -372,7 +372,7 @@ A dedicated bare metal detection host (haccp) was deployed, the ELK Stack was mi
 
 **OpenCTI LXC 202** was deployed on pitcrew at 10.10.30.26 (4 vCPU, 10GB RAM, 60GB disk), running OpenCTI v7 with six external threat intelligence connectors: MITRE ATT&CK (framework structure), CVE/NVD (vulnerability feed), AbuseIPDB (IP reputation), CISA KEV (known exploited vulnerabilities), and Malpedia (malware families and YARA rules). OpenCTI integrates downstream in two ways: IOC CDB list sync pushes indicators to Wazuh for rule-based detection, and Shuffle WF1 queries OpenCTI during alert enrichment for contextual threat intelligence.
 
-The ELK migration moved all data, detection rules, Fleet agent configurations, and dashboards from pitcrew LXC 201 (10.10.30.23) to haccp bare metal. The four Fleet agents (smokehouse, DC01, WS01, sear) were repointed to haccp, and the GCP VM's Fluent Bit output was redirected to haccp's Tailscale IP (100.74.16.82). Detection rules grew from 214 to 1345 during the month of tuning between the initial deployment and this migration. LXC 201 was shut down but not yet destroyed -- it serves as a rollback option.
+The ELK migration moved all data, detection rules, Fleet agent configurations, and dashboards from pitcrew LXC 201 (10.10.30.23) to haccp bare metal. The four Fleet agents (smokehouse, DC01, WS01, sear) were repointed to haccp, and the GCP VM's Fluent Bit output was redirected to haccp's Tailscale endpoint. Detection rules grew from 214 to 1345 during the month of tuning between the initial deployment and this migration. LXC 201 was shut down but not yet destroyed -- it serves as a rollback option.
 
 ### Key Decisions
 
@@ -394,7 +394,7 @@ The ELK migration moved all data, detection rules, Fleet agent configurations, a
 
 ### Outcome
 
-- **haccp** online at 10.10.30.25 (MokerLink TE8, VLAN 30, Tailscale 100.74.16.82)
+- **haccp** online at 10.10.30.25 (MokerLink TE8, VLAN 30, Tailscale connected)
 - ELK Stack migrated: ES 12GB heap (was 4GB), 1345 detection rules, 4 Fleet agents repointed
 - Arkime v6.0.1 installed (capture pending SFP+ transceiver for TE11 SPAN)
 - OpenCTI v7 operational with 6 external connectors, integrated with Wazuh (CDB) and Shuffle (WF1)

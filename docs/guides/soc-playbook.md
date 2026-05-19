@@ -160,10 +160,10 @@ ssh bchaplow@10.10.30.25            # haccp
 **From PITBOSS (Tailscale -- remote/travel):**
 
 ```bash
-ssh bchaplow@100.124.139.56         # brisket
-ssh butcher@100.86.67.91            # sear
-ssh -p 2222 bchaplow@100.110.112.98 # smokehouse QNAP
-ssh bchaplow@100.74.16.82           # haccp
+ssh bchaplow@<brisket-tailscale-ip>     # brisket
+ssh butcher@<sear-tailscale-ip>         # sear
+ssh -p 2222 bchaplow@<qnap-tailscale-ip> # smokehouse QNAP
+ssh bchaplow@<haccp-tailscale-ip>       # haccp
 ```
 
 ### 1.6 VLAN Map
@@ -186,7 +186,7 @@ ssh bchaplow@100.74.16.82           # haccp
 | 005 | PITBOSS | 10.10.10.100 | 10 | Windows 11 |
 | 006 | smokehouse | 10.10.20.10 | 20 | QTS (QNAP) |
 | 007 | DC01 | 10.10.30.40 | 30 | Windows Server 2022 |
-| 009 | GCP VM | 100.125.40.97 | -- | Ubuntu (GCP) |
+| 009 | GCP VM | `<tailscale>` | -- | Ubuntu (GCP) |
 | 010 | thehive | 10.10.30.22 | 30 | TheHive LXC 200 |
 | 012 | WS01 | 10.10.30.41 | 30 | Windows 10 |
 | 013 | pbs | 10.10.30.24 | 30 | PBS LXC 300 |

@@ -825,7 +825,7 @@ Same process as DC01 on WS01 (10.10.30.41).
 - [ ] **Step 5: Re-enroll GCP VM Fleet Agent**
 
 ```bash
-ssh to GCP VM via Tailscale (100.125.40.97) or gcloud:
+ssh to GCP VM via Tailscale or gcloud:
 gcloud compute ssh wordpress-1-vm --zone=us-east4-a
 
 sudo elastic-agent enroll --url=https://10.10.30.25:8220 --enrollment-token=<NEW_TOKEN> --insecure
@@ -844,13 +844,13 @@ In Kibana → Fleet → Agents, verify 4 agents show `Healthy` status:
 
 ### Task 16: Repoint GCP Fluent Bit
 
-**Context:** Fluent Bit on GCP VM ships `apache-parsed-v2` access logs to ELK. Currently points to LXC 201 Tailscale IP (100.66.144.59:9200). Repoint to haccp Tailscale IP.
+**Context:** Fluent Bit on GCP VM ships `apache-parsed-v2` access logs to ELK. Currently points to the former LXC 201 Tailscale endpoint. Repoint to haccp's Tailscale endpoint.
 
 - [ ] **Step 1: SSH to GCP VM**
 
 ```bash
 gcloud compute ssh wordpress-1-vm --zone=us-east4-a
-# or: ssh bchaplow@100.125.40.97
+# or: ssh bchaplow@<gcp-tailscale-ip>
 ```
 
 - [ ] **Step 2: Update Fluent Bit output config**
@@ -861,7 +861,7 @@ Find the active Fluent Bit config:
 sudo ls /etc/fluent-bit/ /fluent-bit/etc/ 2>/dev/null
 ```
 
-Edit the Elasticsearch output section — change the `Host` from `100.66.144.59` (LXC 201) to haccp's Tailscale IP:
+Edit the Elasticsearch output section — change the `Host` from the former LXC 201 Tailscale IP to haccp's Tailscale IP:
 
 ```ini
 [OUTPUT]
