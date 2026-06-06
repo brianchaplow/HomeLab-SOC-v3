@@ -1,0 +1,370 @@
+{
+  "workflow_as_code": false,
+  "name": "WF-PHISH-TRIAGE",
+  "description": "Webhook -> gemma4:12b vision phishing/brand-spoof triage of a submitted screenshot -> Discord verdict. Model endpoint injected from .env GEMMA_URL at deploy.",
+  "start": "7eb2a82d-7e99-4036-bbbd-29875ff05e1c",
+  "owner": "",
+  "sharing": "private",
+  "org_id": "",
+  "status": "test",
+  "is_valid": true,
+  "previously_saved": true,
+  "public": false,
+  "generated": false,
+  "hidden": false,
+  "background_processing": false,
+  "updated_by": "admin",
+  "validated": false,
+  "default_return_value": "",
+  "example_argument": "",
+  "execution_environment": "",
+  "workflow_type": "",
+  "id": "",
+  "configuration": {
+    "exit_on_error": false,
+    "start_from_top": false,
+    "skip_notifications": false
+  },
+  "workflow_variables": [
+    {
+      "description": "gemma4:12b vision endpoint on PITBOSS (Tailscale) -- injected from .env GEMMA_URL at deploy",
+      "id": "2a975e29-c144-4ce0-97b3-b960f144fe17",
+      "name": "gemma_url",
+      "value": "DEPLOY_SCRIPT_WILL_INJECT"
+    },
+    {
+      "description": "Discord webhook (SOC alerts)",
+      "id": "46326fe8-7102-42ff-9401-ec064ec327ac",
+      "name": "discord_webhook",
+      "value": "DEPLOY_SCRIPT_WILL_INJECT"
+    }
+  ],
+  "actions": [
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "description": "",
+      "errors": [],
+      "id": "7eb2a82d-7e99-4036-bbbd-29875ff05e1c",
+      "is_valid": true,
+      "isStartNode": true,
+      "sharing": true,
+      "public": true,
+      "generated": false,
+      "label": "triage",
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request\n\nGEMMA = \"$gemma_url/api/generate\"\nMODEL = \"gemma4:12b\"\nPROMPT = (\"You are a SOC phishing analyst examining a screenshot of a web page or email. \"\n          \"Decide whether it is a credential-phishing or brand-impersonation lure. Base the \"\n          \"verdict ONLY on what is visible and cite concrete visual cues. Respond with ONLY this \"\n          \"JSON: {\\\"brand_impersonated\\\":\\\"<brand or none>\\\",\\\"is_phishing\\\":<true|false>,\"\n          \"\\\"confidence\\\":<0.0-1.0>,\\\"red_flags\\\":[\\\"<visible cue>\\\"],\\\"summary\\\":\\\"<one sentence>\\\"}\")\n\nraw = \"\"\nif isinstance(self.full_execution, dict):\n    raw = self.full_execution.get(\"execution_argument\", \"\") or \"\"\ntry:\n    payload = json.loads(raw) if raw else {}\nexcept Exception:\n    payload = {}\n\nimg = payload.get(\"image_b64\") or payload.get(\"image\") or \"\"\nsource = str(payload.get(\"source\", payload.get(\"reporter\", \"manual\")))[:120]\n\ndef san(s):\n    return str(s).replace('\"', \"'\").replace(\"\\\\\", \"\").replace(\"\\n\", \" \").replace(\"\\r\", \" \").strip()\n\nif not img:\n    print(json.dumps({\"combined\": \"**Phishing Triage** | error: no image_b64 in webhook payload\",\n                      \"is_phishing\": \"false\", \"error\": \"no_image\"}))\nelse:\n    body = json.dumps({\"model\": MODEL, \"prompt\": PROMPT, \"images\": [img], \"stream\": False,\n                       \"format\": \"json\",\n                       \"options\": {\"num_predict\": 1024, \"temperature\": 0, \"num_ctx\": 8192}}).encode()\n    try:\n        req = urllib.request.Request(GEMMA, data=body,\n                                     headers={\"Content-Type\": \"application/json\"}, method=\"POST\")\n        resp = urllib.request.urlopen(req, timeout=180)\n        out = json.loads(resp.read().decode())\n        rv = out.get(\"response\", \"\")\n        try:\n            v = json.loads(rv)\n        except Exception:\n            i, j = rv.find(\"{\"), rv.rfind(\"}\")\n            v = json.loads(rv[i:j + 1]) if i >= 0 and j > i else {}\n        is_phish = bool(v.get(\"is_phishing\"))\n        brand = san(v.get(\"brand_impersonated\", \"unknown\"))\n        conf = v.get(\"confidence\", \"\")\n        summary = san(v.get(\"summary\", \"\"))\n        flags = v.get(\"red_flags\", []) or []\n        flag_txt = san(\"; \".join(str(f) for f in flags))[:600]\n        head = \"PHISHING\" if is_phish else \"looks clean\"\n        lines = [\"**Phishing Triage**\",\n                 \"Verdict: \" + head + \" (brand: \" + brand + \", confidence: \" + str(conf) + \")\",\n                 \"Summary: \" + summary,\n                 \"Flags: \" + (flag_txt or \"none\"),\n                 \"Source: \" + san(source)]\n        combined = \"\\\\n\".join(lines)\n        if len(combined) > 1950:\n            combined = combined[:1947] + \"...\"\n        print(json.dumps({\"combined\": combined, \"is_phishing\": str(is_phish).lower(),\n                          \"brand\": brand, \"confidence\": conf}))\n    except Exception as e:\n        print(json.dumps({\"combined\": \"**Phishing Triage** | model error: \" + san(str(e))[:200],\n                          \"is_phishing\": \"false\", \"error\": \"model\"}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "position": {
+        "x": 400.001,
+        "y": 0.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "http",
+      "app_version": "1.4.0",
+      "app_id": "890ad2d2-a7f7-4681-babe-9fcc5af32690",
+      "description": "",
+      "errors": [],
+      "id": "cb1eada4-fe14-4c76-a40c-62850f766be6",
+      "is_valid": true,
+      "sharing": true,
+      "public": true,
+      "generated": false,
+      "label": "post_discord",
+      "environment": "Shuffle",
+      "name": "POST",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "url",
+          "example": "",
+          "value": "$discord_webhook",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "headers",
+          "example": "",
+          "value": "Content-Type: application/json",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "body",
+          "example": "",
+          "value": "{\"content\":\"$triage.message.combined\"}",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "verify",
+          "example": "",
+          "value": "true",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "position": {
+        "x": 400.001,
+        "y": 200.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": "",
+      "isStartNode": false
+    }
+  ],
+  "branches": [
+    {
+      "source_id": "7eb2a82d-7e99-4036-bbbd-29875ff05e1c",
+      "destination_id": "cb1eada4-fe14-4c76-a40c-62850f766be6",
+      "id": "378ad90c-01b5-4106-8ed8-2da100a64327",
+      "label": "",
+      "has_errors": false,
+      "conditions": null,
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    }
+  ],
+  "visual_branches": null,
+  "triggers": [
+    {
+      "app_name": "",
+      "description": "",
+      "long_description": "",
+      "status": "running",
+      "app_version": "",
+      "errors": null,
+      "id": "f85fb1d7-3674-4985-b406-42826d20bcb9",
+      "is_valid": true,
+      "isStartNode": false,
+      "label": "phish_webhook",
+      "small_image": "",
+      "large_image": "",
+      "environment": "Shuffle",
+      "trigger_type": "WEBHOOK",
+      "name": "phish_webhook",
+      "tags": null,
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "url",
+          "example": "",
+          "value": "http://localhost:5001/api/v1/hooks/webhook_f85fb1d7-3674-4985-b406-42826d20bcb9",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "auth",
+          "example": "",
+          "value": "",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "custom_response_body",
+          "example": "",
+          "value": "",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "startnode",
+          "example": "",
+          "value": "7eb2a82d-7e99-4036-bbbd-29875ff05e1c",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "position": {
+        "x": 400,
+        "y": -200
+      },
+      "priority": 0,
+      "source_workflow": "",
+      "execution_delay": 0,
+      "parent_controlled": false,
+      "replacement_for_trigger": ""
+    }
+  ],
+  "comments": [],
+  "created": 0,
+  "edited": 0,
+  "last_runtime": 0,
+  "due_date": 0,
+  "errors": []
+}
