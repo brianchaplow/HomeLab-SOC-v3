@@ -17,7 +17,7 @@ tags = ["tailscale", "privacy"]
 [[rules]]
 id = "multiline-openssh-private-key"
 description = "Multi-line OpenSSH private key block (closes the 2026-04-11 single-line-scrub blind spot that produced a 38-day public leak)"
-regex = '''***REDACTED-OPENSSH-PRIVATE-KEY (scrubbed 2026-06-15)***'''
+regex = '''-----BEGIN OPENSSH PRIVATE KEY-----[\s\S]*?-----END OPENSSH PRIVATE KEY-----'''
 tags = ["ssh", "key"]
 
 [allowlist]
