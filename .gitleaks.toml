@@ -20,6 +20,19 @@ description = "Multi-line OpenSSH private key block (closes the 2026-04-11 singl
 regex = '''-----BEGIN OPENSSH PRIVATE KEY-----[\s\S]*?-----END OPENSSH PRIVATE KEY-----'''
 tags = ["ssh", "key"]
 
+# Added 2026-08-05. Trigger: an outside account forked the three public repos,
+# prompting a full re-scan. Tailscale IPs were already covered by the rule above;
+# MAC addresses were not covered in ANY of the three configs, and that gap had
+# let haccp's real span0 NIC MAC sit public in the sibling homelab-fedramp-low
+# repo. This repo and HomeLab-SOC scanned clean (zero MACs at HEAD and in full
+# history), so this rule is pure prevention here -- no allowlist is needed, and
+# any future hit is a REAL new leak.
+[[rules]]
+id = "mac-address"
+description = "MAC address literal -- host/NIC hardware fingerprint; do not commit to public repos"
+regex = '''\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b'''
+tags = ["network", "privacy"]
+
 [allowlist]
 description = "Inert detection-rule regex patterns + self-reference"
 paths = [
