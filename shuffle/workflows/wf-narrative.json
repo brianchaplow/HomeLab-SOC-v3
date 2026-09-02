@@ -1,0 +1,335 @@
+{
+  "workflow_as_code": false,
+  "name": "WF-NARRATIVE: Escalation Narrative Drafter",
+  "description": "On-demand: drafts an incident ticket narrative for a TheHive case from its logged evidence via local qwen3; posts the draft to Discord for human edit/approve. MSAI515 project. Trigger manually with execution argument {\"case_number\": N}.",
+  "start": "11111111-1111-4111-a111-111111111111",
+  "owner": "",
+  "sharing": "private",
+  "org_id": "",
+  "status": "test",
+  "is_valid": true,
+  "previously_saved": true,
+  "public": false,
+  "generated": false,
+  "hidden": false,
+  "background_processing": false,
+  "updated_by": "admin",
+  "validated": false,
+  "default_return_value": "",
+  "example_argument": "",
+  "execution_environment": "",
+  "workflow_type": "",
+  "id": "",
+  "configuration": {
+    "exit_on_error": false,
+    "start_from_top": false,
+    "skip_notifications": false
+  },
+  "workflow_variables": [
+    {
+      "description": "TheHive URL",
+      "id": "aaaaaaaa-0001-4000-a000-000000000001",
+      "name": "thehive_url",
+      "value": "DEPLOY_SCRIPT_WILL_INJECT"
+    },
+    {
+      "description": "TheHive API key",
+      "id": "aaaaaaaa-0002-4000-a000-000000000002",
+      "name": "thehive_api_key",
+      "value": "DEPLOY_SCRIPT_WILL_INJECT"
+    },
+    {
+      "description": "Ollama LLM inference URL",
+      "id": "aaaaaaaa-0004-4000-a000-000000000004",
+      "name": "ollama_url",
+      "value": "DEPLOY_SCRIPT_WILL_INJECT"
+    },
+    {
+      "description": "Discord webhook URL (SOC alerts channel)",
+      "id": "aaaaaaaa-0005-4000-a000-000000000005",
+      "name": "discord_webhook",
+      "value": "DEPLOY_SCRIPT_WILL_INJECT"
+    }
+  ],
+  "actions": [
+    {
+      "app_name": "Shuffle Tools",
+      "app_version": "1.2.0",
+      "app_id": "1e196862-aaa0-4c1d-b54e-3f68918a5488",
+      "description": "",
+      "errors": [],
+      "id": "11111111-1111-4111-a111-111111111111",
+      "is_valid": true,
+      "isStartNode": true,
+      "sharing": true,
+      "public": true,
+      "generated": false,
+      "label": "draft_narrative",
+      "environment": "Shuffle",
+      "name": "execute_python",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "code",
+          "example": "",
+          "value": "import json, urllib.request, ssl, re\n\nctx = ssl._create_unverified_context()\nHDRS = {\"Content-Type\": \"application/json\", \"Authorization\": \"Bearer $thehive_api_key\"}\n\n# input: {\"case_number\": 42} via execution argument (empty $exec_argument at start nodes)\nraw = self.full_execution.get(\"execution_argument\", \"\") if isinstance(self.full_execution, dict) else \"\"\ncase_number = None\ntry:\n    arg = json.loads(raw) if raw else {}\n    case_number = int(arg.get(\"case_number\"))\nexcept Exception:\n    case_number = None\n\ndef fail(msg):\n    print(json.dumps({\"narrative_msg\": msg.replace('\"', \"'\"), \"found\": \"false\"}))\n\nif case_number is None:\n    fail(\"DRAFT NARRATIVE: no case_number supplied. Trigger with execution argument {'case_number': N}.\")\nelse:\n    case = None\n    try:\n        req = urllib.request.Request(\"$thehive_url/api/case/_search\",\n            data=json.dumps({\"query\": {\"caseId\": case_number}, \"range\": \"0-1\"}).encode(),\n            headers=HDRS, method=\"POST\")\n        hits = json.loads(urllib.request.urlopen(req, context=ctx, timeout=15).read().decode())\n        if isinstance(hits, list) and hits:\n            case = hits[0]\n    except Exception as e:\n        case = None\n    if not case:\n        fail(f\"DRAFT NARRATIVE: case #{case_number} not found in TheHive.\")\n    else:\n        case_id = case.get(\"_id\") or case.get(\"id\", \"\")\n        observables = []\n        try:\n            req = urllib.request.Request(\"$thehive_url/api/case/artifact/_search?range=0-30\",\n                data=json.dumps({\"query\": {\"_parent\": {\"_type\": \"case\", \"_query\": {\"_id\": case_id}}}}).encode(),\n                headers=HDRS, method=\"POST\")\n            arts = json.loads(urllib.request.urlopen(req, context=ctx, timeout=15).read().decode())\n            if isinstance(arts, list):\n                for a in arts:\n                    observables.append(f\"{a.get('dataType','?')}={a.get('data','?')}\" +\n                        (\" (ioc)\" if a.get(\"ioc\") else \"\"))\n        except Exception:\n            observables = []\n\n        cf = case.get(\"customFields\", {}) if isinstance(case.get(\"customFields\", {}), dict) else {}\n        def cf_val(k):\n            v = cf.get(k, {})\n            return v.get(\"string\", \"\") if isinstance(v, dict) else \"\"\n\n        sev_map = {1: \"Low\", 2: \"Medium\", 3: \"High\", 4: \"Critical\"}\n        evidence = {\n            \"case_number\": case_number,\n            \"title\": str(case.get(\"title\", \"\"))[:200],\n            \"severity\": sev_map.get(case.get(\"severity\", 1), \"?\"),\n            \"status\": case.get(\"status\", \"\"),\n            \"tags\": case.get(\"tags\", [])[:10],\n            \"description\": str(case.get(\"description\", \"\"))[:1500],\n            \"community_id\": cf_val(\"community_id\"),\n            \"zeek_uid\": cf_val(\"zeek_uid\"),\n            \"observables\": observables[:20]\n        }\n\n        system = (\"You are a SOC analyst drafting an incident ticket narrative for a small \"\n            \"home lab SOC. Use ONLY the evidence provided - never invent IPs, hostnames, \"\n            \"times, or indicators. Copy any MITRE technique ID character-for-character from the evidence, and only cite IDs that appear there - if unsure, omit the ID. Plain text, no markdown headers. Structure: one summary \"\n            \"sentence; what the evidence shows; observables involved; impact assessment; \"\n            \"recommended next steps. 150-220 words. Where evidence is missing, say so \"\n            \"rather than filling the gap.\")\n        prompt = (\"/no_think Draft the incident narrative from this case evidence. \"\n            \"Return plain text only. Evidence: \" + json.dumps(evidence))\n        payload = json.dumps({\"model\": \"qwen3:8b\", \"prompt\": prompt, \"system\": system,\n            \"stream\": False, \"keep_alive\": \"24h\",\n            \"options\": {\"temperature\": 0.3}}).encode()\n        text = \"\"\n        for _attempt in range(2):\n            try:\n                req = urllib.request.Request(\"$ollama_url/api/generate\", data=payload,\n                    headers={\"Content-Type\": \"application/json\"}, method=\"POST\")\n                text = json.loads(urllib.request.urlopen(req, timeout=120).read().decode()).get(\"response\", \"\")\n                text = re.sub(r\"<think>.*?</think>\", \"\", text, flags=re.DOTALL).strip()\n                if text:\n                    break\n            except Exception:\n                text = \"\"\n        if not text:\n            fail(f\"DRAFT NARRATIVE: LLM unavailable for case #{case_number}. Case data was retrieved OK.\")\n        else:\n            text = text.replace('\"', \"'\").replace(\"\\\\\", \"\")\n            text = text.replace(\"\\r\", \"\").replace(\"\\n\", \"\\\\n\")\n            header = (f\"**DRAFT INCIDENT NARRATIVE - case #{case_number}: {evidence['title'][:80]}**\\\\n\"\n                \"_AI draft from logged evidence. EDIT AND APPROVE before it goes in the ticket._\\\\n\\\\n\")\n            msg = header + text\n            if len(msg) > 1900:\n                msg = msg[:1897] + \"...\"\n            print(json.dumps({\"narrative_msg\": msg, \"found\": \"true\", \"case_id\": case_id,\n                \"observable_count\": len(observables)}))\n",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "position": {
+        "x": 400.001,
+        "y": 0.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    },
+    {
+      "app_name": "http",
+      "app_version": "1.4.0",
+      "app_id": "890ad2d2-a7f7-4681-babe-9fcc5af32690",
+      "description": "",
+      "errors": [],
+      "id": "33333333-3333-4333-a333-333333333333",
+      "is_valid": true,
+      "sharing": true,
+      "public": true,
+      "generated": false,
+      "label": "post_discord",
+      "environment": "Shuffle",
+      "name": "POST",
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "url",
+          "example": "",
+          "value": "$discord_webhook",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "headers",
+          "example": "",
+          "value": "Content-Type: application/json",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "body",
+          "example": "",
+          "value": "{\"content\":\"$draft_narrative.message.narrative_msg\"}",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "verify",
+          "example": "",
+          "value": "true",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "position": {
+        "x": 400.001,
+        "y": 400.001
+      },
+      "authentication_id": "",
+      "category": "",
+      "reference_url": "",
+      "sub_action": false,
+      "run_magic_output": false,
+      "run_magic_input": false,
+      "execution_delay": 0,
+      "category_label": null,
+      "suggestion": false,
+      "parent_controlled": false,
+      "source_workflow": "",
+      "source_execution": ""
+    }
+  ],
+  "branches": [
+    {
+      "source_id": "11111111-1111-4111-a111-111111111111",
+      "destination_id": "33333333-3333-4333-a333-333333333333",
+      "id": "bbbbbbbb-0001-4000-a000-000000000001",
+      "label": "",
+      "has_errors": false,
+      "conditions": null,
+      "decorator": false,
+      "parent_controlled": false,
+      "source_parent": ""
+    }
+  ],
+  "visual_branches": null,
+  "triggers": [
+    {
+      "app_name": "",
+      "description": "",
+      "long_description": "",
+      "status": "stopped",
+      "app_version": "",
+      "errors": null,
+      "id": "cccccccc-0001-4000-a000-000000000001",
+      "is_valid": true,
+      "isStartNode": false,
+      "label": "schedule_placeholder_STOPPED",
+      "small_image": "",
+      "large_image": "",
+      "environment": "Shuffle",
+      "trigger_type": "SCHEDULE",
+      "name": "schedule_placeholder",
+      "tags": null,
+      "parameters": [
+        {
+          "description": "",
+          "id": "",
+          "name": "cron",
+          "example": "",
+          "value": "0 12 * * *",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        },
+        {
+          "description": "",
+          "id": "",
+          "name": "execution_argument",
+          "example": "",
+          "value": "{\"type\":\"scheduled\"}",
+          "multiline": false,
+          "multiselect": false,
+          "options": null,
+          "action_field": "",
+          "variant": "",
+          "required": false,
+          "configuration": false,
+          "tags": null,
+          "schema": {
+            "type": ""
+          },
+          "skip_multicheck": false,
+          "value_replace": null,
+          "unique_toggled": false,
+          "error": "",
+          "hidden": false
+        }
+      ],
+      "position": {
+        "x": 400,
+        "y": -200
+      },
+      "priority": 0,
+      "source_workflow": "",
+      "execution_delay": 0,
+      "parent_controlled": false,
+      "replacement_for_trigger": ""
+    }
+  ],
+  "comments": [],
+  "created": 0,
+  "edited": 0,
+  "last_runtime": 0,
+  "due_date": 0,
+  "errors": []
+}
