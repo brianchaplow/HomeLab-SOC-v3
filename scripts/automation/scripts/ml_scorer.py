@@ -39,6 +39,24 @@ LOOKBACK_MINUTES = 10
 BATCH_SIZE = 1000
 
 
+def _column(df: pd.DataFrame, name: str, default) -> pd.Series:
+    """Return df[name] as a Series, or a Series of ``default`` if the field is absent.
+
+    ``df.get(name, default)`` returns a bare scalar for a missing column, which
+    then breaks ``.fillna``/``.str``/``.dt`` on the whole batch.
+    """
+    if name in df.columns:
+        return df[name]
+    return pd.Series([default] * len(df), index=df.index)
+
+
+def _first_if_list(value):
+    """Suricata EVE JSON emits ``vlan`` as a list (e.g. [20]); use the outer tag."""
+    if isinstance(value, (list, tuple)):
+        return value[0] if value else None
+    return value
+
+
 class MLScorer:
     """Score Suricata alerts using trained XGBoost model."""
     
@@ -84,11 +102,11 @@ class MLScorer:
         features = pd.DataFrame(index=df.index)
         
         # Basic network features
-        features['src_port'] = pd.to_numeric(df.get('src_port', 0), errors='coerce').fillna(0)
-        features['dest_port'] = pd.to_numeric(df.get('dest_port', 0), errors='coerce').fillna(0)
+        features['src_port'] = pd.to_numeric(_column(df, 'src_port', 0), errors='coerce').fillna(0)
+        features['dest_port'] = pd.to_numeric(_column(df, 'dest_port', 0), errors='coerce').fillna(0)
         
         # Flow statistics
-        flow = df.get('flow', {})
+        flow = _column(df, 'flow', {})
         if isinstance(flow, pd.Series):
             features['bytes_toserver'] = flow.apply(lambda x: x.get('bytes_toserver', 0) if isinstance(x, dict) else 0)
             features['bytes_toclient'] = flow.apply(lambda x: x.get('bytes_toclient', 0) if isinstance(x, dict) else 0)
@@ -142,7 +160,7 @@ class MLScorer:
         features['is_large_flow'] = (features['bytes_total'] > 10000).astype(int)
         
         # Protocol encoding
-        proto = df.get('proto', 'TCP').fillna('TCP').str.upper()
+        proto = _column(df, 'proto', 'TCP').fillna('TCP').astype(str).str.upper()
         if 'proto' in self.label_encoders:
             try:
                 features['proto_encoded'] = self.label_encoders['proto'].transform(proto)
@@ -155,7 +173,7 @@ class MLScorer:
         features['proto_is_icmp'] = (proto == 'ICMP').astype(int)
         
         # Direction
-        direction = df.get('direction', 'unknown').fillna('unknown').str.lower()
+        direction = _column(df, 'direction', 'unknown').fillna('unknown').astype(str).str.lower()
         if 'direction' in self.label_encoders:
             try:
                 features['direction_encoded'] = self.label_encoders['direction'].transform(direction)
@@ -165,7 +183,7 @@ class MLScorer:
             features['direction_encoded'] = 0
         
         # VLAN features
-        vlan = pd.to_numeric(df.get('vlan', 0), errors='coerce').fillna(0).astype(int)
+        vlan = pd.to_numeric(_column(df, 'vlan', 0).map(_first_if_list), errors='coerce').fillna(0).astype(int)
         features['vlan'] = vlan
         features['vlan_10'] = (vlan == 10).astype(int)
         features['vlan_20'] = (vlan == 20).astype(int)
@@ -174,8 +192,8 @@ class MLScorer:
         features['vlan_50'] = (vlan == 50).astype(int)
         
         # IP-based features
-        src_ip = df.get('src_ip', '').fillna('')
-        dest_ip = df.get('dest_ip', '').fillna('')
+        src_ip = _column(df, 'src_ip', '').fillna('').astype(str)
+        dest_ip = _column(df, 'dest_ip', '').fillna('').astype(str)
         
         features['is_internal_src'] = src_ip.str.startswith('10.10.').astype(int)
         features['is_internal_dest'] = dest_ip.str.startswith('10.10.').astype(int)
@@ -188,7 +206,7 @@ class MLScorer:
         features['is_multicast'] = dest_ip.str.startswith('224.').astype(int)
         
         # Time features
-        timestamp = pd.to_datetime(df.get('@timestamp', datetime.now()), errors='coerce')
+        timestamp = pd.to_datetime(_column(df, '@timestamp', None), errors='coerce', utc=True)
         features['hour_of_day'] = timestamp.dt.hour.fillna(12)
         features['day_of_week'] = timestamp.dt.dayofweek.fillna(0)
         features['is_weekend'] = (features['day_of_week'] >= 5).astype(int)
@@ -215,8 +233,10 @@ class MLScorer:
             dmatrix = xgb.DMatrix(features)
             scores = self.model.predict(dmatrix)
         except Exception as e:
-            logger.error(f"Scoring failed: {e}")
-            scores = np.zeros(len(alerts))
+            # Don't fall back to zeros: run_scoring would persist ml_score=0
+            # ("benign") and those alerts would never be re-scored.
+            logger.error(f"Scoring failed, leaving {len(alerts)} alerts unscored: {e}")
+            return []
         
         results = []
         for i, (alert, score) in enumerate(zip(alerts, scores)):
@@ -284,6 +304,9 @@ def run_scoring():
     doc_ids = [hit['_id'] for hit in hits]
     
     scored_alerts = scorer.score_alerts(alerts)
+    if not scored_alerts:
+        logger.error("No alerts scored; skipping OpenSearch update")
+        return
     
     # Stats
     high_threat = sum(1 for a in scored_alerts if a['ml_score'] >= SCORE_THRESHOLD_HIGH)
