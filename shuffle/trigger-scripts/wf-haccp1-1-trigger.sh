@@ -1,6 +1,6 @@
 #!/bin/bash
 # Trigger WF-HACCP-1.1 (Cortex Enrichment on Tier1 Cases) via Shuffle API
-# Called by bchaplow crontab every 5 min (offset 2 min from WF-HACCP-1)
+# Called by the service user crontab every 5 min (offset 2 min from WF-HACCP-1)
 # No Ollama calls; queries TheHive for new cases, creates observables, submits Cortex jobs
 
 SHUFFLE_API="http://localhost:5001"

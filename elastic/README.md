@@ -7,7 +7,7 @@ Elasticsearch 8.17, Kibana, Fleet Server, and Logstash deployed as a Docker stac
 The stack runs on haccp bare metal (32 GB RAM, 12 GB ES heap) using Docker Compose at `/opt/elk/docker-compose.yml`. Tailscale provides overlay connectivity for log ingestion from the GCP VM. ELK containers on haccp do not auto-start on reboot and must be brought up manually:
 
 ```bash
-ssh bchaplow@10.10.30.25 'cd /opt/elk && docker compose up -d'
+ssh <user>@10.10.30.25 'cd /opt/elk && docker compose up -d'
 ```
 
 ## Detection Rules

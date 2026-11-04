@@ -49,7 +49,7 @@ Confirm the Discord notification from WF1 includes blocking information (not ski
 - [ ] **Step 1: SSH to brisket and list dead containers**
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@10.10.20.30
 docker ps -a --filter "status=exited" --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
 ```
 
@@ -78,7 +78,7 @@ Expected: All remaining containers show `Up` status. No exited containers. Activ
 - [ ] **Step 1: SSH to smokehouse and list metrics containers**
 
 ```bash
-ssh -p 2222 bchaplow@10.10.20.10
+ssh -p 2222 <user>@10.10.20.10
 /share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(influx|grafana|telegraf)"
 ```
 
@@ -107,7 +107,7 @@ Expected: Only `elastic-agent`, `fluent-bit-zeek`, `wazuh-agent`, `zeek`, `suric
 - [ ] **Step 5: Verify brisket Prometheus still scrapes smokehouse node-exporter**
 
 ```bash
-ssh bchaplow@10.10.20.30 "curl -s http://localhost:9090/api/v1/targets | python3 -c \"import sys,json; targets=json.load(sys.stdin)['data']['activeTargets']; [print(t['scrapeUrl'], t['health']) for t in targets]\""
+ssh <user>@10.10.20.30 "curl -s http://localhost:9090/api/v1/targets | python3 -c \"import sys,json; targets=json.load(sys.stdin)['data']['activeTargets']; [print(t['scrapeUrl'], t['health']) for t in targets]\""
 ```
 
 Expected: All targets show `up`, including smokehouse (if it has a node-exporter). The decommissioned services should NOT affect Prometheus scraping.
@@ -206,7 +206,7 @@ Expected: No errors. No InfluxData repo references.
 - [ ] **Step 1: Boot from USB installer**
 
 - Hostname: `haccp`
-- User: `bchaplow`
+- User: `<user>` (non-root admin account)
 - During partitioning: install on the **2TB WD SN720** as `/`, ext4, full disk, no LVM
 - Do NOT partition the 1TB Vansuny during install
 - Install OpenSSH server
@@ -302,7 +302,7 @@ sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list
 sudo apt update && sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-sudo usermod -aG docker bchaplow
+sudo usermod -aG docker "$USER"
 ```
 
 Log out and back in for group change.
@@ -567,7 +567,7 @@ sudo systemctl start wazuh-agent
 Verify on brisket:
 
 ```bash
-ssh bchaplow@10.10.20.30 "sudo /var/ossec/bin/agent_control -l" | grep haccp
+ssh <user>@10.10.20.30 "sudo /var/ossec/bin/agent_control -l" | grep haccp
 ```
 
 - [ ] **Step 2: Install Velociraptor client**
@@ -577,7 +577,7 @@ Download the client package from brisket. The Velociraptor server stores client 
 ```bash
 # Option 1: Copy the client config from an existing enrolled Linux host (e.g., pitcrew)
 ssh root@10.10.30.20 "cat /etc/velociraptor/client.config.yaml" > /tmp/client.config.yaml
-scp /tmp/client.config.yaml bchaplow@10.10.30.25:/tmp/
+scp /tmp/client.config.yaml <user>@10.10.30.25:/tmp/
 
 # On haccp — install the Velociraptor client package
 # Download the matching version from GitHub releases (check brisket version: v0.75.3)
@@ -625,7 +625,7 @@ curl -s http://localhost:9100/metrics | head -5
 SSH to brisket and edit the Prometheus config:
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@10.10.20.30
 # Find Prometheus config — likely in a Docker volume or bind mount
 docker inspect prometheus --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}'
 ```
@@ -688,7 +688,7 @@ sudo apt install -y zstd
 sudo apt install -y nfs-common
 sudo mkdir -p /mnt/smokehouse-nfs
 # Verify actual NFS export path on smokehouse first:
-# ssh -p 2222 bchaplow@10.10.20.10 "showmount -e localhost" or check QNAP Shared Folders
+# ssh -p 2222 <user>@10.10.20.10 "showmount -e localhost" or check QNAP Shared Folders
 echo "10.10.20.10:/share/SOC /mnt/smokehouse-nfs nfs defaults,noatime 0 0" | sudo tee -a /etc/fstab
 sudo mount -a
 ls /mnt/smokehouse-nfs/
@@ -762,8 +762,8 @@ ssh root@10.10.30.20 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_P
 - [ ] **Step 1: Import Kibana saved objects**
 
 ```bash
-scp /tmp/kibana-export.ndjson bchaplow@10.10.30.25:/tmp/
-ssh bchaplow@10.10.30.25 "curl -s -k -u elastic:<PLATFORM_PASSWORD> -X POST https://localhost:5601/api/saved_objects/_import?overwrite=true -H 'kbn-xsrf: true' -F file=@/tmp/kibana-export.ndjson"
+scp /tmp/kibana-export.ndjson <user>@10.10.30.25:/tmp/
+ssh <user>@10.10.30.25 "curl -s -k -u elastic:<PLATFORM_PASSWORD> -X POST https://localhost:5601/api/saved_objects/_import?overwrite=true -H 'kbn-xsrf: true' -F file=@/tmp/kibana-export.ndjson"
 ```
 
 Expected: JSON response with `success: true` and count of imported objects.
@@ -771,8 +771,8 @@ Expected: JSON response with `success: true` and count of imported objects.
 - [ ] **Step 2: Import detection rules**
 
 ```bash
-scp /tmp/detection-rules.ndjson bchaplow@10.10.30.25:/tmp/
-ssh bchaplow@10.10.30.25 "curl -s -k -u elastic:<PLATFORM_PASSWORD> -X POST https://localhost:5601/api/detection_engine/rules/_import -H 'kbn-xsrf: true' -F file=@/tmp/detection-rules.ndjson"
+scp /tmp/detection-rules.ndjson <user>@10.10.30.25:/tmp/
+ssh <user>@10.10.30.25 "curl -s -k -u elastic:<PLATFORM_PASSWORD> -X POST https://localhost:5601/api/detection_engine/rules/_import -H 'kbn-xsrf: true' -F file=@/tmp/detection-rules.ndjson"
 ```
 
 Expected: JSON response showing 214 rules imported.
@@ -799,7 +799,7 @@ Create enrollment token for the agent policy.
 - [ ] **Step 2: Re-enroll smokehouse Elastic Agent**
 
 ```bash
-ssh -p 2222 bchaplow@10.10.20.10
+ssh -p 2222 <user>@10.10.20.10
 # Find the elastic-agent container
 /share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker exec -it elastic-agent bash
 
@@ -850,7 +850,7 @@ In Kibana → Fleet → Agents, verify 4 agents show `Healthy` status:
 
 ```bash
 gcloud compute ssh wordpress-1-vm --zone=us-east4-a
-# or: ssh bchaplow@<gcp-tailscale-ip>
+# or: ssh <user>@<gcp-tailscale-ip>
 ```
 
 - [ ] **Step 2: Update Fluent Bit output config**
@@ -887,7 +887,7 @@ sudo systemctl restart fluent-bit
 - [ ] **Step 4: Verify data flowing to haccp ES**
 
 ```bash
-ssh bchaplow@10.10.30.25 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:9200/apache-parsed-v2/_count'"
+ssh <user>@10.10.30.25 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:9200/apache-parsed-v2/_count'"
 ```
 
 Expected: Document count increasing.
@@ -910,14 +910,14 @@ Manually trigger WF6 (Model Drift Detector) or WF8 (LLM Log Anomaly Finder) — 
 - [ ] **Step 3: Remove honeypot-wazuh-sync cron on brisket**
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@10.10.20.30
 crontab -e
 ```
 
 Remove the commented-out honeypot sync line entirely:
 
 ```
-# DECOMMISSIONED 2026-03-12T23:55:00Z */15 * * * * /usr/bin/python3 /home/bchaplow/honeypot-wazuh-sync.py >> /home/bchaplow/honeypot-wazuh-sync.log 2>&1
+# DECOMMISSIONED 2026-03-12T23:55:00Z */15 * * * * /usr/bin/python3 ~/honeypot-wazuh-sync.py >> ~/honeypot-wazuh-sync.log 2>&1
 ```
 
 Optionally clean up the script and log:
@@ -932,13 +932,13 @@ Check all data paths are working:
 
 ```bash
 # Fleet agents reporting to haccp
-ssh bchaplow@10.10.30.25 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:9200/.fleet-agents/_search?size=10&pretty' | grep 'local_metadata.host.name'"
+ssh <user>@10.10.30.25 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:9200/.fleet-agents/_search?size=10&pretty' | grep 'local_metadata.host.name'"
 
 # Arkime capturing
-ssh bchaplow@10.10.30.25 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:9200/arkime_sessions3-*/_count'"
+ssh <user>@10.10.30.25 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:9200/arkime_sessions3-*/_count'"
 
 # Detection rules running
-ssh bchaplow@10.10.30.25 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:5601/api/detection_engine/rules/_find?per_page=1' -H 'kbn-xsrf: true' | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"total\"])'"
+ssh <user>@10.10.30.25 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:5601/api/detection_engine/rules/_find?per_page=1' -H 'kbn-xsrf: true' | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"total\"])'"
 ```
 
 - [ ] **Step 5: Shut down LXC 201 on pitcrew**
@@ -1279,7 +1279,7 @@ This requires a script or connector that exports IOC indicators from OpenCTI and
 Create a cron script on brisket:
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@10.10.20.30
 cat > ~/opencti-ioc-sync.py << 'PYTHON'
 #!/usr/bin/env python3
 """Sync OpenCTI IOCs to Wazuh CDB lists for automatic alert matching."""
@@ -1346,7 +1346,7 @@ crontab -e
 
 ```
 # OpenCTI IOC sync to Wazuh CDB lists - every 6 hours
-0 */6 * * * /usr/bin/python3 /home/bchaplow/opencti-ioc-sync.py >> /home/bchaplow/opencti-ioc-sync.log 2>&1
+0 */6 * * * /usr/bin/python3 ~/opencti-ioc-sync.py >> ~/opencti-ioc-sync.log 2>&1
 ```
 
 - [ ] **Step 2: Register CDB list in Wazuh manager config**
@@ -1354,7 +1354,7 @@ crontab -e
 SSH to brisket and edit the Wazuh manager ossec.conf (inside the Docker container):
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@10.10.20.30
 docker exec -it single-node-wazuh.manager-1 bash
 
 # Add the CDB list declaration inside the <ruleset> block of ossec.conf

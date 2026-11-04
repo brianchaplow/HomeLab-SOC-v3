@@ -1,6 +1,6 @@
 #!/bin/bash
 # Trigger WF-HACCP-3 (Nightly Wazuh Cross-Correlator) via Shuffle API
-# Called by bchaplow crontab at 0200 ET nightly
+# Called by the service user crontab at 0200 ET nightly
 # No Ollama calls; queries brisket OpenSearch + haccp ES, correlates on IP
 
 SHUFFLE_API="http://localhost:5001"

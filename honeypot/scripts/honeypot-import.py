@@ -22,7 +22,8 @@ import ssl
 from datetime import datetime
 
 # --- Configuration ---
-BRISKET_HOST = "bchaplow@10.10.20.30"
+# SSH target for brisket, e.g. "user@10.10.20.30" (set BRISKET_SSH in the environment)
+BRISKET_HOST = os.environ.get("BRISKET_SSH", "user@10.10.20.30")
 BRISKET_OS_URL = "https://localhost:9200"
 BRISKET_OS_USER = "admin"
 BRISKET_OS_PASS = os.environ.get("OPENSEARCH_PASS", "your_opensearch_password")
@@ -31,7 +32,9 @@ ELK_HOST = "https://10.10.30.25:9200"  # haccp (migrated from LXC 201)
 ELK_USER = "elastic"
 ELK_PASS = os.environ.get("ELK_PASS", "your_elastic_password")
 
-ARCHIVE_DIR = r"C:\Users\bchap\Documents\honeypot-archive"
+ARCHIVE_DIR = os.environ.get(
+    "HONEYPOT_ARCHIVE_DIR", os.path.join(os.path.expanduser("~"), "Documents", "honeypot-archive")
+)
 CREDS_FILE = os.path.join(ARCHIVE_DIR, "honeypot-credentials.json")
 ACCESS_FILE = os.path.join(ARCHIVE_DIR, "honeypot-access.json")
 WAZUH_EXPORT_FILE = os.path.join(ARCHIVE_DIR, "wazuh-gcp-vm-export.ndjson")
@@ -91,6 +94,30 @@ def elk_bulk(ndjson_lines):
 # ==============================================================
 # Step 1: Export Wazuh GCP-VM alerts from brisket via SSH+curl
 # ==============================================================
+def _curl_config_quote(value):
+    """Quote a value for a curl config file (-K): backslash-escape \\ and "."""
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def brisket_search(path, body):
+    """POST a JSON body to brisket's OpenSearch over SSH.
+
+    The request (including credentials) is passed to the remote curl as a
+    config file on stdin, so nothing sensitive is interpolated into a shell
+    command line or visible in the process list on either host.
+    """
+    config = "\n".join([
+        f"user = {_curl_config_quote(f'{BRISKET_OS_USER}:{BRISKET_OS_PASS}')}",
+        f"url = {_curl_config_quote(BRISKET_OS_URL + path)}",
+        'header = "Content-Type: application/json"',
+        f"data-binary = {_curl_config_quote(json.dumps(body))}",
+    ]) + "\n"
+    return subprocess.run(
+        ["ssh", BRISKET_HOST, "curl -sk -K -"],
+        input=config, capture_output=True, text=True,
+    )
+
+
 def export_wazuh():
     """Export all agent.name=gcp-vm docs from brisket Wazuh via scroll API."""
     print("\n=== Step 1: Export Wazuh GCP-VM alerts from brisket ===")
@@ -103,22 +130,15 @@ def export_wazuh():
         return count
 
     # Initial scroll request
-    query = json.dumps({
+    query = {
         "query": {"match": {"agent.name": "gcp-vm"}},
         "size": SCROLL_SIZE
-    }).replace('"', '\\"')
-
-    cmd = (
-        f'ssh {BRISKET_HOST} "curl -sk -u {BRISKET_OS_USER}:{BRISKET_OS_PASS} '
-        f'{BRISKET_OS_URL}/wazuh-alerts-4.x-*/_search?scroll=2m '
-        f'-H \'Content-Type: application/json\' '
-        f'-d \\"{query}\\""'
-    )
+    }
 
     all_docs = []
     print("  Starting scroll export...")
 
-    result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+    result = brisket_search("/wazuh-alerts-4.x-*/_search?scroll=2m", query)
     if result.returncode != 0:
         print(f"  SSH error: {result.stderr}")
         sys.exit(1)
@@ -134,14 +154,7 @@ def export_wazuh():
     # Continue scrolling
     batch = 2
     while len(hits) > 0:
-        scroll_body = json.dumps({"scroll": "2m", "scroll_id": scroll_id}).replace('"', '\\"')
-        cmd = (
-            f'ssh {BRISKET_HOST} "curl -sk -u {BRISKET_OS_USER}:{BRISKET_OS_PASS} '
-            f'{BRISKET_OS_URL}/_search/scroll '
-            f'-H \'Content-Type: application/json\' '
-            f'-d \\"{scroll_body}\\""'
-        )
-        result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+        result = brisket_search("/_search/scroll", {"scroll": "2m", "scroll_id": scroll_id})
         data = json.loads(result.stdout)
         scroll_id = data.get("_scroll_id")
         hits = data["hits"]["hits"]

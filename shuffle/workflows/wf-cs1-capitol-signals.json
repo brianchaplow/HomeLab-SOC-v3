@@ -340,7 +340,7 @@
           "id": "",
           "name": "url",
           "example": "",
-          "value": "http://localhost:3443/api/v1/hooks/webhook_ac71e84f-330f-4ff1-9c28-d09f69e8a1f1",
+          "value": "http://localhost:3443/api/v1/hooks/webhook_YOUR_WEBHOOK_ID",
           "multiline": false,
           "multiselect": false,
           "options": null,

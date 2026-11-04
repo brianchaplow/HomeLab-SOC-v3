@@ -406,7 +406,7 @@ Full 6-point entry. Cover:
 - Runs on smokehouse (10.10.20.10), monitors SPAN port eth4
 - Produces structured JSON logs: conn, http, dns, ssl, files, x509
 - Shipped to brisket Wazuh Indexer AND haccp ELK via Fluent Bit
-- CLI Key Commands: check Zeek is running (`ssh bchaplow@10.10.20.10` then `sudo zeekctl status`), view recent logs
+- CLI Key Commands: check Zeek is running (`ssh <user>@10.10.20.10` then `sudo zeekctl status`), view recent logs
 - Key Concepts: conn.log (connection records), uid (unique connection ID linking logs together), conn_state (see Appendix D), community_id (cross-tool correlation hash)
 
 - [ ] **Step 5: Write 3.4 — Suricata**
@@ -607,7 +607,7 @@ Full 6-point entry. Cover:
 - Runs brianchaplow.com and bytesbourbonbbq.com (Astro 5 sites behind Cloudflare)
 - Wazuh agent 009 reports to brisket. Connected to tailnet.
 - Previously hosted honeypot research (WordPress + Apache, campaign ended 2026-03-12). Historical data preserved in ELK.
-- Key Commands: SSH via Tailscale (`ssh bchaplow@<gcp-tailscale-ip>`), check Wazuh agent status
+- Key Commands: SSH via Tailscale (`ssh <user>@<gcp-tailscale-ip>`), check Wazuh agent status
 - Key Concepts: Instance (GCP term for a VM), Tailscale connector (how GCP VM reaches the lab network), Wazuh agent (ships GCP logs to the SOC for monitoring)
 
 - [ ] **Step 6: Write 3.22 — Cloudflare**
@@ -1183,16 +1183,16 @@ Logon type sub-table:
 Common auth log patterns with what they mean:
 
 ```
-Pattern: "Accepted publickey for bchaplow from 10.10.10.100 port 54321 ssh2"
+Pattern: "Accepted publickey for <user> from 10.10.10.100 port 54321 ssh2"
 Meaning: Successful SSH login with SSH key. Normal for PITBOSS → brisket.
 
 Pattern: "Failed password for root from 203.0.113.50 port 22 ssh2"
 Meaning: Failed SSH password attempt. External IP = brute force attempt.
 
-Pattern: "pam_unix(sudo:session): session opened for user root by bchaplow(uid=1000)"
-Meaning: bchaplow ran a sudo command. Expected for SOC operations.
+Pattern: "pam_unix(sudo:session): session opened for user root by <user>(uid=1000)"
+Meaning: the admin user ran a sudo command. Expected for SOC operations.
 
-Pattern: "FAILED su for root by bchaplow"
+Pattern: "FAILED su for root by <user>"
 Meaning: Failed su (switch user) attempt. May be typo or unauthorized access attempt.
 ```
 
