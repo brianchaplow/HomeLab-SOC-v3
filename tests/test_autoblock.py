@@ -1,4 +1,5 @@
 """End-to-end autoblock decisions with fake OpenSearch / Cloudflare / Discord."""
+import copy
 from unittest import mock
 
 import pytest
@@ -41,7 +42,7 @@ BASE = {"blocking": {"enabled": True, "threshold": 90, "min_reports": 5,
 
 
 def cfg(**whitelist):
-    c = {k: (dict(v) if isinstance(v, dict) else v) for k, v in BASE.items()}
+    c = copy.deepcopy(BASE)  # tests mutate nested keys; never share them
     c["whitelist"] = {"ips": [], **whitelist}
     return c
 
