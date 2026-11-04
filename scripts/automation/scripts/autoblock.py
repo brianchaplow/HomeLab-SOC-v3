@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from utils.opensearch_client import get_client
 from utils.discord_notify import get_notifier
+from utils.ip_whitelist import ip_in_networks, parse_networks
 
 # =============================================================================
 # LOGGING SETUP
@@ -224,21 +225,14 @@ class WhitelistChecker:
         self.ips = set(whitelist.get('ips', []))
         self.fingerprints = set(whitelist.get('fingerprints', []))
         
-        self.ip_prefixes = []
-        for ip in self.ips:
-            if '/' in ip:
-                base = ip.split('/')[0]
-                parts = base.split('.')
-                bits = int(ip.split('/')[1])
-                prefix_parts = bits // 8
-                self.ip_prefixes.append('.'.join(parts[:prefix_parts]) + '.')
+        # Single IPs and CIDR ranges (IPv4 + IPv6)
+        self.networks = parse_networks(self.ips)
     
     def is_whitelisted(self, ip: str, fingerprint: str = None) -> bool:
         if ip in self.ips:
             return True
-        for prefix in self.ip_prefixes:
-            if ip.startswith(prefix):
-                return True
+        if ip_in_networks(ip, self.networks):
+            return True
         if fingerprint and fingerprint in self.fingerprints:
             return True
         return False
