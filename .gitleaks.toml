@@ -43,6 +43,9 @@ regexes = [
     '''<[A-Z][A-Z0-9_]*>''',
     # ...or the literal word, e.g. curl -u admin:'PASSWORD'
     '''(^|:)'?PASSWORD'?$''',
+    # The CGNAT network base itself (100.64.0.0/10), e.g. in range definitions;
+    # real Tailscale host addresses are still flagged.
+    '''^100\.64\.0\.0$''',
 ]
 paths = [
     '''\.gitleaks\.toml$''',
