@@ -62,7 +62,8 @@ def test_honeypot_curl_config_is_accepted_by_curl(honeypot_import, tmp_path):
     target = tmp_path / "out.json"
     target.write_text("{}")
     q = honeypot_import._curl_config_quote
-    cfg.write_text(f"url = {q(target.as_uri())}\nuser = {q('a:p\"q')}\n")
+    creds = q('a:p"q')
+    cfg.write_text(f"url = {q(target.as_uri())}\nuser = {creds}\n")
     out = subprocess.run(["curl", "-s", "-K", str(cfg)], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     assert out.stdout == "{}"
