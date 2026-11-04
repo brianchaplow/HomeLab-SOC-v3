@@ -104,3 +104,17 @@ def test_cloudflare_unconfigured():
     cf = autoblock.CloudflareClient()
     assert cf.block_ip("203.0.113.66")["success"] is False
     assert cf.list_blocked_ips() == []
+
+
+def test_ip_already_blocked_at_cloudflare_is_recorded(env, monkeypatch):
+    """If Cloudflare reports the rule already exists, the IP must still be
+    marked in OpenSearch and the local log; otherwise it is retried every run."""
+    run, os_client, notifier = env
+    dup = mock.Mock()
+    dup.return_value.json.return_value = {"success": False, "errors": [{"message": "already exists"}]}
+    monkeypatch.setattr(autoblock.requests, "post", dup)
+    run([threat("203.0.113.66")], cfg())
+    os_client.mark_ip_blocked.assert_called_once()
+    log = autoblock.load_blocked_log()
+    assert [b["ip"] for b in log["blocked"]] == ["203.0.113.66"]
+    notifier.send_block_notification.assert_not_called()  # nothing new was blocked
