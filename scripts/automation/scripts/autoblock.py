@@ -344,6 +344,7 @@ def run_autoblock(dry_run: bool = False):
             continue
         
         # Block at Cloudflare
+        was_already_blocked = False
         if use_cloudflare:
             result = cf_client.block_ip(
                 ip=ip,
@@ -352,10 +353,11 @@ def run_autoblock(dry_run: bool = False):
             )
             
             if result.get('already_blocked'):
+                # Still record it below; skipping here meant it was never
+                # marked and was retried against Cloudflare every run.
                 already_blocked += 1
-                continue
-            
-            if not result.get('success'):
+                was_already_blocked = True
+            elif not result.get('success'):
                 logger.error(f"Failed to block {ip}: {result.get('error')}")
                 continue
         
@@ -376,6 +378,10 @@ def run_autoblock(dry_run: bool = False):
             'blocked_at': datetime.utcnow().isoformat(),
             'reason': reason
         })
+        
+        if was_already_blocked:
+            logger.info(f"Recorded existing Cloudflare block: {ip}")
+            continue
         
         # Send notification
         notifier.send_block_notification(
