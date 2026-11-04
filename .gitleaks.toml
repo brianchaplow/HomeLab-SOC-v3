@@ -34,7 +34,14 @@ regex = '''\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b'''
 tags = ["network", "privacy"]
 
 [allowlist]
-description = "Inert detection-rule regex patterns + self-reference"
+description = "Inert detection-rule regex patterns + self-reference + documentation placeholders"
+# Docs show credentials as angle-bracket placeholders, e.g.
+#   curl -u elastic:'<PLATFORM_PASSWORD>' ...
+# A matched secret containing such a placeholder is not a real credential.
+regexTarget = "secret"
+regexes = [
+    '''<[A-Z][A-Z0-9_]*>''',
+]
 paths = [
     '''\.gitleaks\.toml$''',
     '''\.pre-commit-config\.yaml$''',
