@@ -66,3 +66,29 @@ def test_honeypot_curl_config_is_accepted_by_curl(honeypot_import, tmp_path):
     out = subprocess.run(["curl", "-s", "-K", str(cfg)], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     assert out.stdout == "{}"
+
+
+def test_sync_inventory_puts_every_asset_by_host(monkeypatch, tmp_path):
+    import io
+    import json as _json
+
+    mod = load_module_from_path("sync_inventory", ROOT / "inventory/sync-inventory.py")
+    monkeypatch.setenv("ELK_PASS", "pw")
+    sent = []
+
+    def fake_urlopen(request, context=None, timeout=None):
+        sent.append(request)
+        if request.full_url.endswith("/_search"):
+            body = {"hits": {"total": {"value": len(sent) - 1}}}
+        else:
+            body = {"result": "created"}
+        return io.BytesIO(_json.dumps(body).encode())
+
+    monkeypatch.setattr(mod.urllib.request, "urlopen", fake_urlopen)
+    mod.main()
+    assets = _json.loads((ROOT / "inventory/asset-inventory.json").read_text(encoding="utf-8"))["assets"]
+    puts = [r for r in sent if r.get_method() == "PUT"]
+    assert len(puts) == len(assets)
+    assert puts[0].full_url == f"{mod.ES}/soc-asset-inventory/_doc/{assets[0]['host']}"
+    assert _json.loads(puts[0].data) == assets[0]
+    assert puts[0].headers["Authorization"].startswith("Basic ")
