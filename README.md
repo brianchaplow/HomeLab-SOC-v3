@@ -4,6 +4,8 @@
 
 ![Wazuh](https://img.shields.io/badge/Wazuh_4.14-3C3C6E?style=for-the-badge&logoColor=white) ![Elasticsearch](https://img.shields.io/badge/Elastic_8.17-005571?style=for-the-badge&logo=elasticsearch&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white) ![Proxmox](https://img.shields.io/badge/Proxmox-E57000?style=for-the-badge&logo=proxmox&logoColor=white) ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white) ![XGBoost](https://img.shields.io/badge/XGBoost-FF6600?style=for-the-badge&logoColor=white) ![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white) ![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white) ![Kali Linux](https://img.shields.io/badge/Kali_Linux-268BEE?style=for-the-badge&logo=kalilinux&logoColor=white) ![Cloudflare](https://img.shields.io/badge/Cloudflare-F38020?style=for-the-badge&logo=cloudflare&logoColor=white) ![Tailscale](https://img.shields.io/badge/Tailscale-000000?style=for-the-badge&logo=tailscale&logoColor=white) ![NVIDIA](https://img.shields.io/badge/NVIDIA-76B900?style=for-the-badge&logo=nvidia&logoColor=white) ![OpenCTI](https://img.shields.io/badge/OpenCTI_v7-001bda?style=for-the-badge&logo=opencti&logoColor=white) ![Arkime](https://img.shields.io/badge/Arkime_6.0-6B3FA0?style=for-the-badge&logoColor=white) ![TheHive](https://img.shields.io/badge/TheHive_4-FFBF00?style=for-the-badge&logoColor=black)
 
+**What this repository is:** the sanitized configuration, automation code and engineering write-ups for a working home-lab SOC. Network sensors (Suricata, Zeek, Arkime) and endpoint agents (Wazuh, Elastic Defend, Velociraptor) feed two SIEMs (Wazuh and Elastic); Shuffle SOAR workflows enrich alerts with threat intel (OpenCTI, AbuseIPDB, Cortex), an XGBoost scorer and a local LLM (Ollama), then open TheHive cases, post to Discord and can block at Cloudflare. Caldera adversary emulation is used to validate detections. Credentials, account names and per-install IDs are replaced with placeholders (see [Reproducing it](#reproducing-it)).
+
 ---
 
 ## Architecture
@@ -42,8 +44,8 @@ flowchart LR
 | Metric | Value |
 |--------|-------|
 | Wazuh agents | **15** across 5 VLANs + GCP cloud |
-| SOAR workflows | **14** with LLM augmentation (Ollama qwen3:8b) |
-| Elastic detection rules | **1,345** on haccp bare metal |
+| SOAR workflows | **18** exported (17 active, 1 decommissioned); **12** call a local LLM via Ollama |
+| Elastic detection rules | **1,419** in the exported rule set ([`elastic/detection-rules/`](elastic/detection-rules/)), 214 enabled in the export |
 | ML threat scorer | **PR-AUC 0.9998** (XGBoost binary classifier) |
 | Velociraptor DFIR clients | **7** endpoints |
 | Docker containers (brisket) | **12+** services |
@@ -58,7 +60,7 @@ flowchart LR
 
 ## Migration Phases
 
-Phases 1-11 completed February 10-13, 2026. Phase 12 (infrastructure redesign) completed March 2026. Phases 13-14 (Arkime PCAP + haccp data foundation) completed March-April 2026. Phase 15 (FedRAMP Low ConMon) completed April 10, 2026. Full engineering narrative with key decisions, challenges, and outcomes in [docs/phases.md](docs/phases.md).
+Phases 1-11 completed February 10-13, 2026. Phase 12 (infrastructure redesign) completed March 2026. Phases 13-14 (Arkime PCAP + haccp data foundation) completed March-April 2026. Phase 15 (FedRAMP Low ConMon) completed April 10, 2026. Full engineering narrative with key decisions, challenges, and outcomes for phases 1-12 is in [docs/phases.md](docs/phases.md); phases 13-15 are summarized in the table below.
 
 | Phase | Name | Summary |
 |:-----:|------|---------|
@@ -90,6 +92,8 @@ Phases 1-11 completed February 10-13, 2026. Phase 12 (infrastructure redesign) c
 - [ML Pipeline](#ml-pipeline)
 - [Honeypot Research (Historical)](#honeypot-research-historical)
 - [Getting Started](#getting-started)
+- [Reproducing it](#reproducing-it)
+- [Tests](#tests)
 - [Lessons Learned](#lessons-learned)
 
 **Component Documentation:**
@@ -106,7 +110,9 @@ Phases 1-11 completed February 10-13, 2026. Phase 12 (infrastructure redesign) c
 | [`incident-response/`](incident-response/) | Velociraptor DFIR -- deployment configs |
 | [`adversary-simulation/`](adversary-simulation/) | Caldera -- adversary profiles, attack scripts |
 | [`infrastructure/`](infrastructure/) | Docker Compose files, deployment configs |
-| [`scripts/`](scripts/) | Operational automation scripts |
+| [`scripts/`](scripts/) | Operational automation scripts (incl. the v2 Python automation suite) |
+| [`inventory/`](inventory/) | Asset inventory (criticality + normal role) used to ground LLM triage |
+| [`tests/`](tests/) | pytest suite for the automation code and config validation |
 
 ---
 
@@ -148,7 +154,7 @@ Total cluster: **208 GB RAM** across **7 hosts**, **12 GB GPU VRAM** (RTX A1000 
 
 ## SOAR Workflows
 
-Fourteen Shuffle SOAR workflows automate enrichment, triage, response, and intelligence reporting. Seven use Ollama (qwen3:8b) for natural language analysis. All credentials are centralized as workflow variables: no hardcoded secrets in exported JSON.
+Eighteen Shuffle SOAR workflow exports (17 active, WF7 decommissioned) automate enrichment, triage, response, and intelligence reporting. Twelve call a local LLM through Ollama (mostly qwen3:8b; WF-PHISH-TRIAGE uses a Gemma vision model). All credentials are centralized as workflow variables: no hardcoded secrets in exported JSON.
 
 | ID | Workflow | Trigger | Description |
 |----|----------|---------|-------------|
@@ -165,9 +171,11 @@ Fourteen Shuffle SOAR workflows automate enrichment, triage, response, and intel
 | WF-HACCP-1 | **Tier1/2 Alert Loop** | Cron (every 5 min) | Polls ELK for tier1 TI matches and tier2 LLM-classified events: Discord + TheHive |
 | WF-HACCP-1.1 | **Cortex Enrichment** | Cron (every 5 min, offset 2) | Enriches open TheHive cases via Cortex analyzers |
 | WF-HACCP-2 | **Tier2 Novel Entity Digest** | Cron (07:30 EST) | Daily digest of novel entities detected by Zeek pipeline: #tier2-digest |
-| WF-HACCP-3 | **Entity Cache Health** | Cron (02:00 EST) | novel_entity.rb in-memory cache health check and warmup validation |
+| WF-HACCP-3 | **Nightly Wazuh Cross-Correlator** | Cron (02:00 EST) | Correlates brisket Wazuh (OpenSearch) alerts with haccp Elastic data on IP |
 | WF-PROJECTS | **Deployment Status** | Cron (08:00 EST) | Homelab project deployment status summary: #project-status |
 | CS1 | **Capitol Signals Collector** | Cron (21:00 EST) | Congressional trade data collection and enrichment |
+| WF-NARRATIVE | **Escalation Narrative Drafter** | Manual (per TheHive case) | Drafts an incident-ticket narrative from a case's evidence with the local LLM; posted to Discord for human edit/approval |
+| WF-PHISH-TRIAGE | **Phishing Triage** | Webhook | Vision-model triage of a screenshot or rendered URL (SSRF-guarded); verdict to Discord |
 
 Full workflow documentation and JSON exports in [`shuffle/`](shuffle/).
 
@@ -228,8 +236,8 @@ The SOC platform (brisket) needs at least 32 GB RAM and an NVIDIA GPU for ML/LLM
 
 ```bash
 # Clone the repository
-git clone https://github.com/brianchaplow/homelab-soc-portfolio.git
-cd homelab-soc-portfolio
+git clone https://github.com/brianchaplow/HomeLab-SOC-v3.git
+cd HomeLab-SOC-v3
 
 # Copy the environment template
 cp .env.example .env
@@ -239,6 +247,43 @@ cp .env.example .env
 ```
 
 Component deployment is documented in each folder's README. Start with [docs/architecture.md](docs/architecture.md) for the full picture, then follow the [migration phases](docs/phases.md) for the build sequence.
+
+### Reproducing it
+
+This is a record of a specific lab, not a one-command installer. To rebuild it on your own hardware:
+
+1. **Network:** recreate the five VLANs and firewall policy from [docs/network-topology.md](docs/network-topology.md). The `10.10.x.0/24` addressing used throughout is the lab's internal plan; substitute your own.
+2. **Core services:** bring up the Docker Compose stacks in [`infrastructure/docker/`](infrastructure/docker/) (Wazuh, Shuffle, Velociraptor, monitoring, ML scorer) and the ELK stack described in [`elastic/`](elastic/).
+3. **Detections:** load [`wazuh/rules/`](wazuh/rules/) and [`wazuh/decoders/`](wazuh/decoders/) into the Wazuh manager, [`infrastructure/configs/suricata/local.rules`](infrastructure/configs/suricata/local.rules) into Suricata, and import [`elastic/detection-rules/all-rules.ndjson`](elastic/detection-rules/all-rules.ndjson) via Kibana.
+4. **SOAR:** import the JSON files in [`shuffle/workflows/`](shuffle/workflows/), define the workflow variables they reference (`$opensearch_url`, `$elk_user`, `$haccp_ssh_user`, `$haccp_ssh_key`, Discord webhooks, API keys, ...), then install the cron entries that call [`shuffle/trigger-scripts/`](shuffle/trigger-scripts/).
+
+**Placeholders to fill in.** Values that are specific to one installation are not committed:
+
+| Placeholder | Where | Set it to |
+|-------------|-------|-----------|
+| `.env` (from [`.env.example`](.env.example)) | repo root | Service URLs, API keys and passwords |
+| `YOUR_SHUFFLE_API_KEY` | `shuffle/trigger-scripts/*.sh` | Your Shuffle API key (or edit scripts to read it from the environment) |
+| `WF9_WEBHOOK_URL`, `WF_CS1_WEBHOOK_URL` | env for `wf9-trigger.sh`, `wf-cs1-trigger.sh` | The webhook URL Shuffle shows for that workflow's trigger |
+| `webhook_YOUR_WEBHOOK_ID` | URLs inside `shuffle/workflows/*.json` | The webhook ID of the target workflow after import |
+| `$haccp_ssh_user` | Shuffle workflow variable (WF10) | SSH account on the ELK host |
+| `<user>` | SSH examples in the docs | Your admin account on each host |
+| `SOC_SSH_USER` | env for `scripts/collection/Collect-SOC.ps1` | SSH account on the sensor host |
+| `BRISKET_SSH`, `HONEYPOT_ARCHIVE_DIR` | env for `honeypot/scripts/honeypot-import.py` | SSH target and local archive folder |
+| `SOC_INVENTORY_ES`, `SOC_ENV_FILE` | env for `inventory/sync-inventory.py` | OpenSearch URL and `.env` location |
+
+---
+
+## Tests
+
+The repository has a pytest suite that runs without any lab infrastructure (all HTTP, OpenSearch and Discord calls are mocked):
+
+```bash
+python -m venv .venv && . .venv/bin/activate
+pip install -r tests/requirements-dev.txt
+pytest
+```
+
+It covers the v2 automation logic (IP whitelist matching, AbuseIPDB enrichment, Cloudflare auto-block decisions, ML feature engineering, digests, Discord notifications), the helper scripts, and validation of every YAML/JSON/NDJSON config, the Wazuh rule XML, Suricata local rules, Elastic rule export and Shuffle workflow exports. CI runs it on every pull request ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)); [gitleaks](.github/workflows/gitleaks.yml) scans for committed secrets.
 
 ---
 
