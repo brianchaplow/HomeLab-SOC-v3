@@ -59,3 +59,6 @@ docs/guides/build-playbook.py
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Real network values for tools/render_local_values.py (never commit)
+network.local.json
