@@ -14,6 +14,12 @@ description = "Tailscale CGNAT IP literal (100.64.0.0/10) -- admin-tier; do not 
 regex = '''\b100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.\d+\.\d+\b'''
 tags = ["tailscale", "privacy"]
 
+# The CGNAT network base itself (100.64.0.0/10) appears in range definitions,
+# e.g. the public-exposure test; real Tailscale host addresses are still flagged.
+[[rules.allowlists]]
+regexTarget = "match"
+regexes = ['''^100\.64\.0\.0$''']
+
 [[rules]]
 id = "multiline-openssh-private-key"
 description = "Multi-line OpenSSH private key block (closes the 2026-04-11 single-line-scrub blind spot that produced a 38-day public leak)"
@@ -43,9 +49,6 @@ regexes = [
     '''<[A-Z][A-Z0-9_]*>''',
     # ...or the literal word, e.g. curl -u admin:'PASSWORD'
     '''(^|:)'?PASSWORD'?$''',
-    # The CGNAT network base itself (100.64.0.0/10), e.g. in range definitions;
-    # real Tailscale host addresses are still flagged.
-    '''^100\.64\.0\.0$''',
 ]
 paths = [
     '''\.gitleaks\.toml$''',
