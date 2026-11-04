@@ -5,7 +5,7 @@
 
 A comprehensive walkthrough of a production-grade Security Operations Center built on commodity hardware, open-source tooling, and machine learning. This document is written for hiring managers, interviewers, and peers evaluating hands-on SOC engineering skills. It explains not just what was built, but why each design decision was made and how the components work together as a unified detection-and-response platform.
 
-The HomeLab SOC v3 is the result of 11 migration phases completed in 4 days (February 10--13, 2026). It replaces the v2 architecture with a centralized platform on brisket, a purpose-built SOC server with GPU acceleration for both machine learning inference and LLM-powered automation. Every component described here is live, tested against real attack traffic, and continuously monitored.
+The HomeLab SOC v3 is the result of 11 migration phases completed in 4 days (February 10--13, 2026). It replaces the v2 architecture with a centralized platform on soc-01, a purpose-built SOC server with GPU acceleration for both machine learning inference and LLM-powered automation. Every component described here is live, tested against real attack traffic, and continuously monitored.
 
 ---
 
@@ -36,14 +36,14 @@ The platform handles the complete security operations lifecycle: network traffic
 | Metric | Value |
 |--------|-------|
 | Wazuh SIEM agents | 12 (spanning all 5 VLANs + external GCP VM) |
-| Elastic detection rules (enabled) | 1,345 on haccp bare metal |
+| Elastic detection rules (enabled) | 1,345 on elk-01 bare metal |
 | ML threat scorer PR-AUC | 0.9998 (XGBoost binary classifier) |
 | Velociraptor DFIR clients | 7 enrolled endpoints |
 | SOAR workflows | 9 active (WF1--WF3, WF5--WF6, WF8--WF9, CS1), 1 planned (WF4) |
 | Workflows using LLM | 5 of 9 (WF1, WF2, WF6, WF8, WF9) |
 | Threat intelligence connectors | 6 (OpenCTI -- MITRE ATT&CK, CVE, AbuseIPDB, CISA KEV, Malpedia, AlienVault OTX) |
 | MITRE ATT&CK adversary profiles | 29 (Caldera) |
-| Docker containers on brisket | 12 + Ollama as host service |
+| Docker containers on soc-01 | 12 + Ollama as host service |
 | Suricata IDS rules | 47,487 ET Open + 10 custom SIDs |
 | Zeek NSM indices | 7 (conn, dns, http, ssl, ssh, files, notice) |
 | Honeypot research records | ~9,802 across 3 indices |
@@ -60,7 +60,7 @@ The platform handles the complete security operations lifecycle: network traffic
 | Analyzer framework | Cortex | 3 (5 configured analyzers) |
 | DFIR | Velociraptor | 0.75.3 (Docker, 7 clients) |
 | Threat intelligence | OpenCTI | 6 connectors (MITRE ATT&CK, CVE, AbuseIPDB, CISA KEV, Malpedia, AlienVault OTX) |
-| Packet capture | Arkime | Full PCAP indexing on haccp |
+| Packet capture | Arkime | Full PCAP indexing on elk-01 |
 | Adversary emulation | MITRE Caldera | 5.3.0 (4 Sandcat agents) |
 | ML threat scoring | XGBoost + IsolationForest | Hybrid scorer, FastAPI on Docker |
 | LLM inference | Ollama | qwen3:8b (8B parameters) |
@@ -68,7 +68,7 @@ The platform handles the complete security operations lifecycle: network traffic
 | Network monitor | Zeek | JSON logging on SPAN port |
 | Firewall | OPNsense | Protectli VP2420 appliance |
 | Metrics | Prometheus + Grafana | 6 scrape targets, SOC v3 Overview dashboard |
-| Backup | Proxmox Backup Server | NFS to smokehouse 17 TB RAID |
+| Backup | Proxmox Backup Server | NFS to sensor-01 17 TB RAID |
 
 ### Hardware
 
@@ -76,25 +76,25 @@ The lab runs on 7 physical hosts (plus network appliances) with a combined 208 G
 
 | Host | Hardware | CPU | RAM | GPU | Primary Role |
 |------|----------|-----|-----|-----|-------------|
-| brisket | Lenovo ThinkStation P3 Tiny Gen 2 | Intel Ultra 9 285 (24C/24T) | 64 GB DDR5 | RTX A1000 (8 GB) | SOC platform -- SIEM, SOAR, DFIR, ML, LLM |
-| PITBOSS | ASUS TUF Dash F15 | i7-12650H (10C/16T) | 64 GB DDR5 | -- | Admin workstation (Windows 11) |
-| pitcrew | Lenovo ThinkStation P340 Tiny | i7-10700T (8C/16T) | 32 GB DDR4 | -- | Proxmox VE -- AD lab, TheHive, OpenCTI |
-| haccp | Lenovo ThinkStation P340 Tiny | i7-10700T (8C/16T) | 32 GB DDR4 | -- | Detection & PCAP -- ELK 8.17 + Arkime |
-| smoker | Lenovo ThinkStation P340 Tiny | i7-10700T (8C/16T) | 32 GB DDR4 | -- | Proxmox VE -- Caldera, targets, backup |
-| sear | ASUS ROG Strix G512LI | i5-10300H (4C/8T) | 32 GB DDR4 | GTX 1650 Ti (4 GB) | Kali attack box, ML training |
-| smokehouse | QNAP TVS-871 NAS | i7-4790S (4C/8T) | 16 GB DDR3 | -- | Suricata + Zeek sensor, 32 TB RAID |
+| soc-01 | Lenovo ThinkStation P3 Tiny Gen 2 | Intel Ultra 9 285 (24C/24T) | 64 GB DDR5 | RTX A1000 (8 GB) | SOC platform -- SIEM, SOAR, DFIR, ML, LLM |
+| ADMIN-WS | ASUS TUF Dash F15 | i7-12650H (10C/16T) | 64 GB DDR5 | -- | Admin workstation (Windows 11) |
+| pve-01 | Lenovo ThinkStation P340 Tiny | i7-10700T (8C/16T) | 32 GB DDR4 | -- | Proxmox VE -- AD lab, TheHive, OpenCTI |
+| elk-01 | Lenovo ThinkStation P340 Tiny | i7-10700T (8C/16T) | 32 GB DDR4 | -- | Detection & PCAP -- ELK 8.17 + Arkime |
+| pve-02 | Lenovo ThinkStation P340 Tiny | i7-10700T (8C/16T) | 32 GB DDR4 | -- | Proxmox VE -- Caldera, targets, backup |
+| attack-01 | ASUS ROG Strix G512LI | i5-10300H (4C/8T) | 32 GB DDR4 | GTX 1650 Ti (4 GB) | Kali attack box, ML training |
+| sensor-01 | QNAP TVS-871 NAS | i7-4790S (4C/8T) | 16 GB DDR3 | -- | Suricata + Zeek sensor, 32 TB RAID |
 | OPNsense | Protectli VP2420 | J6412 (4C/4T) | 8 GB DDR4 | -- | Firewall, inter-VLAN routing |
 | MokerLink | 10G08410GSM | -- | -- | -- | L3 switch (8x10GbE + 4xSFP+), SPAN, ACL |
 
-**GPU allocation:** The RTX A1000 on brisket handles both ML inference (ml-scorer container) and LLM inference (Ollama qwen3:8b). The GTX 1650 Ti on sear is dedicated to offline ML model training (XGBoost, LightGBM, IsolationForest). This separation ensures training workloads never compete with production inference.
+**GPU allocation:** The RTX A1000 on soc-01 handles both ML inference (ml-scorer container) and LLM inference (Ollama qwen3:8b). The GTX 1650 Ti on attack-01 is dedicated to offline ML model training (XGBoost, LightGBM, IsolationForest). This separation ensures training workloads never compete with production inference.
 
 ### High-Level Data Flow
 
 Data flows through the SOC in five interconnected pipelines:
 
-1. **Collection.** Twelve Wazuh agents across all VLANs ship security events to the Wazuh Manager on brisket. OPNsense forwards firewall syslog. smokehouse runs Suricata and Zeek against SPAN-mirrored traffic from every switch port. Fluent Bit ships Zeek metadata directly to OpenSearch.
+1. **Collection.** Twelve Wazuh agents across all VLANs ship security events to the Wazuh Manager on soc-01. OPNsense forwards firewall syslog. sensor-01 runs Suricata and Zeek against SPAN-mirrored traffic from every switch port. Fluent Bit ships Zeek metadata directly to OpenSearch.
 
-2. **Detection.** Wazuh correlates events against its ruleset and generates alerts stored in OpenSearch. Independently, the ELK stack on haccp runs 1,345 Elastic Security detection rules against Fleet agent data. Suricata fires on 47,487+ IDS signatures. These three detection engines provide overlapping coverage with different strengths.
+2. **Detection.** Wazuh correlates events against its ruleset and generates alerts stored in OpenSearch. Independently, the ELK stack on elk-01 runs 1,345 Elastic Security detection rules against Fleet agent data. Suricata fires on 47,487+ IDS signatures. These three detection engines provide overlapping coverage with different strengths.
 
 3. **Enrichment and Scoring.** When Wazuh generates a high-severity alert (level 8+), it triggers Shuffle WF1, which enriches the alert with AbuseIPDB reputation data, XGBoost ML threat probability, and an LLM-generated triage summary. The combined score determines automated response actions.
 
@@ -110,11 +110,11 @@ This section traces a single alert from initial network activity through to case
 
 ### Stage 1: Detection
 
-An attacker scans or exploits a target on VLAN 40. The traffic crosses the MokerLink switch, where the SPAN port (TE10) mirrors it to smokehouse. Two sensors process it simultaneously:
+An attacker scans or exploits a target on VLAN 400. The traffic crosses the MokerLink switch, where the SPAN port (TE10) mirrors it to sensor-01. Two sensors process it simultaneously:
 
-- **Suricata** inspects the packet payload against 47,487 ET Open rules plus custom SIDs (9000001--9000021). If a signature matches, Suricata writes an alert to `eve.json`. The Wazuh agent on smokehouse ships this event to the Wazuh Manager on brisket, where it is normalized, enriched with decoder fields, and indexed into `wazuh-alerts-4.x-*` in OpenSearch.
+- **Suricata** inspects the packet payload against 47,487 ET Open rules plus custom SIDs (9000001--9000021). If a signature matches, Suricata writes an alert to `eve.json`. The Wazuh agent on sensor-01 ships this event to the Wazuh Manager on soc-01, where it is normalized, enriched with decoder fields, and indexed into `wazuh-alerts-4.x-*` in OpenSearch.
 
-- **Zeek** extracts connection metadata -- source/destination IPs, ports, protocol, duration, bytes transferred, connection state, and service identification. Fluent Bit ships Zeek's JSON logs to seven dedicated indices on brisket's OpenSearch (`zeek-conn`, `zeek-dns`, `zeek-http`, `zeek-ssl`, `zeek-ssh`, `zeek-files`, `zeek-notice`).
+- **Zeek** extracts connection metadata -- source/destination IPs, ports, protocol, duration, bytes transferred, connection state, and service identification. Fluent Bit ships Zeek's JSON logs to seven dedicated indices on soc-01's OpenSearch (`zeek-conn`, `zeek-dns`, `zeek-http`, `zeek-ssl`, `zeek-ssh`, `zeek-files`, `zeek-notice`).
 
 If the Wazuh alert reaches severity level 8 or higher, the Wazuh Manager fires a webhook to Shuffle.
 
@@ -124,7 +124,7 @@ The webhook lands on Shuffle WF1 (Threat Enrichment and Auto-Block), which immed
 
 - **AbuseIPDB lookup** -- queries the source IP against the AbuseIPDB reputation database, returning a confidence score (0--100) and the number of abuse reports filed by other organizations.
 
-- **ML Scorer** -- sends the alert's feature vector to the XGBoost threat scoring API on brisket:5002. The model evaluates 31 behavioral features (temporal patterns, Zeek connection metadata, alert context) and returns a threat probability between 0.0 and 1.0. The model was trained on 1.28 million alerts labeled via 13 Caldera campaigns and achieves PR-AUC 0.9998.
+- **ML Scorer** -- sends the alert's feature vector to the XGBoost threat scoring API on soc-01:5002. The model evaluates 31 behavioral features (temporal patterns, Zeek connection metadata, alert context) and returns a threat probability between 0.0 and 1.0. The model was trained on 1.28 million alerts labeled via 13 Caldera campaigns and achieves PR-AUC 0.9998.
 
 - **Ollama LLM** -- sends the alert context to qwen3:8b with a structured prompt (prefixed with `/no_think` to suppress reasoning tokens, temperature 0.3 for deterministic output). The LLM generates a natural-language triage summary explaining what the alert likely means, its potential impact, and recommended next steps.
 
@@ -144,7 +144,7 @@ Note: Auto-blocking was previously disabled for honeypot research (branch condit
 
 ### Stage 4: Case Creation
 
-If the combined score exceeds the case-creation threshold, WF1 creates a new case in TheHive (10.10.30.22:9000) via its REST API. The case includes:
+If the combined score exceeds the case-creation threshold, WF1 creates a new case in TheHive (172.20.3.13:9000) via its REST API. The case includes:
 
 - The original Wazuh alert data (rule ID, severity, source/destination, timestamps)
 - AbuseIPDB reputation results
@@ -164,7 +164,7 @@ The analyst (or the next scheduled workflow) picks up the case in TheHive and co
 
 - **Zeek correlation** -- the seven Zeek indices in OpenSearch provide connection-level context that Wazuh alerts alone may lack. An analyst can pivot from an alert's source IP to its full connection history: DNS lookups, HTTP requests, SSL certificate details, SSH sessions, and file transfers.
 
-- **ELK detection rules** -- the 1,345 enabled Elastic Security rules on haccp may have independently flagged related activity on Fleet-monitored endpoints, providing additional detection context.
+- **ELK detection rules** -- the 1,345 enabled Elastic Security rules on elk-01 may have independently flagged related activity on Fleet-monitored endpoints, providing additional detection context.
 
 ### Stage 6: Response
 
@@ -194,7 +194,7 @@ The alert lifecycle does not end at case closure. Multiple scheduled workflows f
 - **WF9 (Stalker Visit Alert)** -- runs every 5 minutes, monitoring portfolio site access logs for anomalous visitor patterns and delivering alerts to Discord
 - **CS1 (Capitol Signals)** -- runs daily at 21:00 EST, collecting congressional trade disclosures and correlating against market data
 
-This feedback loop ensures that each alert contributes to improving detection coverage, model accuracy, and analyst situational awareness. **OpenCTI** (on pitcrew) aggregates threat intelligence from 6 connectors (MITRE ATT&CK, CVE, AbuseIPDB, CISA KEV, Malpedia, AlienVault OTX), providing structured CTI that enriches detection context and case investigations.
+This feedback loop ensures that each alert contributes to improving detection coverage, model accuracy, and analyst situational awareness. **OpenCTI** (on pve-01) aggregates threat intelligence from 6 connectors (MITRE ATT&CK, CVE, AbuseIPDB, CISA KEV, Malpedia, AlienVault OTX), providing structured CTI that enriches detection context and case investigations.
 
 ---
 
@@ -206,30 +206,30 @@ The SOC runs two independent SIEM platforms: Wazuh (primary) and Elastic Securit
 
 **Wazuh** excels at agent-based endpoint monitoring. It provides file integrity monitoring (FIM), security configuration assessment (SCA), vulnerability detection, and real-time log analysis with custom rules and decoders. Its OpenSearch-based indexer stores both Wazuh alerts and Zeek network metadata, making it the central data lake for ML training and SOAR enrichment.
 
-**Elastic Security** excels at detection-as-code with pre-built MITRE ATT&CK rule coverage. The Elastic detection engine on haccp evaluates 1,345 enabled rules against Fleet agent data, covering tactics and techniques that Wazuh's rule format handles less naturally (complex multi-event correlations, ML-based anomaly jobs, threshold-based detections). Arkime on haccp provides full packet capture and indexed PCAP search for deep forensic analysis. ELK also served as the honeypot research platform during the INST 570 campaign (ended March 2026), housing three honeypot indices and a 15-panel Kibana dashboard.
+**Elastic Security** excels at detection-as-code with pre-built MITRE ATT&CK rule coverage. The Elastic detection engine on elk-01 evaluates 1,345 enabled rules against Fleet agent data, covering tactics and techniques that Wazuh's rule format handles less naturally (complex multi-event correlations, ML-based anomaly jobs, threshold-based detections). Arkime on elk-01 provides full packet capture and indexed PCAP search for deep forensic analysis. ELK also served as the honeypot research platform during the INST 570 campaign (ended March 2026), housing three honeypot indices and a 15-panel Kibana dashboard.
 
 Together, they provide overlapping coverage: Wazuh catches what its agent-based model sees best, Elastic catches what its detection rule engine handles best, and the analyst benefits from both perspectives without a single point of detection failure.
 
 ### Wazuh SIEM
 
-**Deployment:** Docker stack on brisket (Manager, Indexer, Dashboard). Ports 1514 (agent transport), 1515 (enrollment), 514/UDP (syslog), 55000 (REST API with JWT authentication).
+**Deployment:** Docker stack on soc-01 (Manager, Indexer, Dashboard). Ports 1514 (agent transport), 1515 (enrollment), 514/UDP (syslog), 55000 (REST API with JWT authentication).
 
 **Agent coverage:** 12 agents spanning every network zone:
 
 | Agent | Host | VLAN | OS |
 |-------|------|------|----|
-| 001 | brisket | 20 (SOC) | Ubuntu 24.04 |
-| 002 | smokehouse | 20 (SOC) | QTS (QNAP) |
-| 003 | sear | 20 (SOC) | Kali Linux |
-| 004 | PITBOSS | 10 (Mgmt) | Windows 11 |
+| 001 | soc-01 | 20 (SOC) | Ubuntu 24.04 |
+| 002 | sensor-01 | 20 (SOC) | QTS (QNAP) |
+| 003 | attack-01 | 20 (SOC) | Kali Linux |
+| 004 | ADMIN-WS | 10 (Mgmt) | Windows 11 |
 | 005 | DC01 | 30 (Lab) | Windows Server 2022 |
 | 007 | DVWA | 40 (Targets) | Debian |
-| 008 | smoker | 30 (Lab) | Proxmox VE |
+| 008 | pve-02 | 30 (Lab) | Proxmox VE |
 | 009 | GCP VM | External | Ubuntu (GCP) |
 | 010 | TheHive | 30 (Lab) | Debian (LXC 200) |
 | 012 | WS01 | 30 (Lab) | Windows 10 |
 | 013 | PBS | 30 (Lab) | Debian (LXC 300) |
-| 014 | haccp | 30 (Lab) | Ubuntu 24.04 |
+| 014 | elk-01 | 30 (Lab) | Ubuntu 24.04 |
 | -- | OPNsense | 10 (Mgmt) | Syslog (514/UDP) |
 
 **Custom rules and decoders:** The `local_rules.xml` file layers custom detection rules on top of Wazuh's default ruleset. Custom decoders in `local_decoder.xml` handle non-standard log formats. Detection examples with worked write-ups (including SQL injection detection via Wazuh + Zeek correlation) are documented in the repository.
@@ -238,12 +238,12 @@ Together, they provide overlapping coverage: Wazuh catches what its agent-based 
 
 ### Network Detection: Suricata and Zeek
 
-smokehouse connects to the MokerLink switch via two SFP+ uplinks: TE9 for data (VLAN 20) and TE10 for SPAN capture (all switch ports mirrored, no IP assigned). Every packet crossing the switch is mirrored to TE10, giving the sensors full network visibility.
+sensor-01 connects to the MokerLink switch via two SFP+ uplinks: TE9 for data (VLAN 200) and TE10 for SPAN capture (all switch ports mirrored, no IP assigned). Every packet crossing the switch is mirrored to TE10, giving the sensors full network visibility.
 
-**Suricata IDS** runs on smokehouse's eth4 (SPAN interface) with:
+**Suricata IDS** runs on sensor-01's eth4 (SPAN interface) with:
 - 47,487 ET Open community rules providing broad signature coverage
 - 10 custom rules (SIDs 9000001--9000021) targeting lab-specific attack patterns
-- Alerts written to `eve.json` and shipped to Wazuh via the smokehouse Wazuh agent
+- Alerts written to `eve.json` and shipped to Wazuh via the sensor-01 Wazuh agent
 
 **Zeek NSM** runs on the same SPAN interface, extracting protocol-level metadata rather than signature-matching. Zeek produces structured JSON logs covering seven data types:
 
@@ -257,20 +257,20 @@ smokehouse connects to the MokerLink switch via two SFP+ uplinks: TE9 for data (
 | `zeek-files` | File transfers (type, size, hash) | Malware delivery detection |
 | `zeek-notice` | Zeek-generated notices (anomalies, policy violations) | Unusual protocol behavior |
 
-Fluent Bit on smokehouse ships all seven Zeek log types directly to brisket's OpenSearch (Wazuh Indexer) on port 9200. These indices are critical for the ML pipeline's feature engineering stage, providing 31 network-level behavioral features that the XGBoost model uses for threat scoring.
+Fluent Bit on sensor-01 ships all seven Zeek log types directly to soc-01's OpenSearch (Wazuh Indexer) on port 9200. These indices are critical for the ML pipeline's feature engineering stage, providing 31 network-level behavioral features that the XGBoost model uses for threat scoring.
 
 ### Elastic Security Detection Rules
 
-haccp (10.10.30.25) runs the ELK stack (Elasticsearch 8.17, Kibana, Fleet Server, Logstash) and Arkime on dedicated bare metal (i7-10700T, 32 GB RAM, ES 12 GB heap). Migrated from pitcrew LXC 201 in March 2026 for improved performance and PCAP storage capacity. Four Fleet agent policies collect endpoint telemetry:
+elk-01 (172.20.3.16) runs the ELK stack (Elasticsearch 8.17, Kibana, Fleet Server, Logstash) and Arkime on dedicated bare metal (i7-10700T, 32 GB RAM, ES 12 GB heap). Migrated from pve-01 LXC 201 in March 2026 for improved performance and PCAP storage capacity. Four Fleet agent policies collect endpoint telemetry:
 
 | Policy | Endpoints |
 |--------|-----------|
-| SOC Endpoints | brisket, sear |
+| SOC Endpoints | soc-01, attack-01 |
 | Windows Endpoints | DC01, WS01 |
-| Sensors | smokehouse |
+| Sensors | sensor-01 |
 | Fleet Server | Self-monitoring |
 
-**1,345 Elastic Security detection rules** are actively enabled on haccp, covering the lab's full attack surface and endpoint mix. The enabled rules map to MITRE ATT&CK tactics with the following distribution:
+**1,345 Elastic Security detection rules** are actively enabled on elk-01, covering the lab's full attack surface and endpoint mix. The enabled rules map to MITRE ATT&CK tactics with the following distribution:
 
 | Tactic | Enabled Rules | Why This Coverage |
 |--------|--------------|-------------------|
@@ -285,7 +285,7 @@ Additional rules cover Initial Access, Discovery, and Command and Control. The f
 
 ### OPNsense Syslog
 
-The OPNsense firewall (Protectli VP2420) forwards syslog events to the Wazuh Manager on brisket via UDP 514. This provides visibility into firewall rule matches, blocked connection attempts, NAT translations, and inter-VLAN routing decisions. Firewall logs are particularly valuable for detecting VLAN 40 breakout attempts (which should never succeed) and anomalous east-west traffic patterns.
+The OPNsense firewall (Protectli VP2420) forwards syslog events to the Wazuh Manager on soc-01 via UDP 514. This provides visibility into firewall rule matches, blocked connection attempts, NAT translations, and inter-VLAN routing decisions. Firewall logs are particularly valuable for detecting VLAN 400 breakout attempts (which should never succeed) and anomalous east-west traffic patterns.
 
 ---
 
@@ -293,7 +293,7 @@ The OPNsense firewall (Protectli VP2420) forwards syslog events to the Wazuh Man
 
 ### Shuffle Architecture
 
-Shuffle SOAR runs as four Docker containers on brisket:
+Shuffle SOAR runs as four Docker containers on soc-01:
 
 | Component | Port | Function |
 |-----------|------|----------|
@@ -302,7 +302,7 @@ Shuffle SOAR runs as four Docker containers on brisket:
 | Shuffle Orborus | -- | Worker container orchestrator (spawns execution containers) |
 | Shuffle OpenSearch | 9202 | Internal state store for workflow data and execution history |
 
-The backend receives webhook triggers from Wazuh and cron-initiated HTTP POST requests from system cron on brisket. It orchestrates workflow execution by spawning ephemeral containers via Orborus for each action node in a workflow.
+The backend receives webhook triggers from Wazuh and cron-initiated HTTP POST requests from system cron on soc-01. It orchestrates workflow execution by spawning ephemeral containers via Orborus for each action node in a workflow.
 
 ### Workflow Inventory
 
@@ -322,9 +322,9 @@ WF4 (Velociraptor Triage) is planned but not yet implemented. It will automate a
 
 ### Scheduling Architecture
 
-Shuffle's on-premises scheduler is interval-based, not cron-based. The `frequency` field in schedule documents must be an integer representing seconds; cron strings fail at parse time. To achieve precise wall-clock execution times, all scheduled workflows use **system cron on brisket** that triggers workflows via `curl POST` to the Shuffle API.
+Shuffle's on-premises scheduler is interval-based, not cron-based. The `frequency` field in schedule documents must be an integer representing seconds; cron strings fail at parse time. To achieve precise wall-clock execution times, all scheduled workflows use **system cron on soc-01** that triggers workflows via `curl POST` to the Shuffle API.
 
-Trigger scripts are maintained in the `shuffle/trigger-scripts/` directory and registered in brisket's crontab. This approach provides:
+Trigger scripts are maintained in the `shuffle/trigger-scripts/` directory and registered in soc-01's crontab. This approach provides:
 
 - Exact time-anchored execution (not interval drift)
 - Standard cron logging and monitoring via systemd journal
@@ -332,7 +332,7 @@ Trigger scripts are maintained in the `shuffle/trigger-scripts/` directory and r
 
 ### GPU Scheduling
 
-Five workflows use Ollama for LLM inference, which requires the RTX A1000 GPU on brisket. To prevent GPU memory contention (qwen3:8b requires approximately 5 GB VRAM), workflow schedules are staggered at least 3 hours apart:
+Five workflows use Ollama for LLM inference, which requires the RTX A1000 GPU on soc-01. To prevent GPU memory contention (qwen3:8b requires approximately 5 GB VRAM), workflow schedules are staggered at least 3 hours apart:
 
 | Time (EST) | Workflow | GPU Use |
 |------------|----------|---------|
@@ -357,7 +357,7 @@ Key variables include `$discord_webhook`, `$abuseipdb_key`, `$cf_api_token`, `$t
 
 ### LLM Integration Details
 
-Five workflows use the Ollama API (brisket:11434) with the `qwen3:8b` model (8 billion parameters): WF1, WF2, WF6, WF8, and WF9. Implementation details that matter for reliability:
+Five workflows use the Ollama API (soc-01:11434) with the `qwen3:8b` model (8 billion parameters): WF1, WF2, WF6, WF8, and WF9. Implementation details that matter for reliability:
 
 **Prompt engineering:**
 - All prompts are prefixed with `/no_think` to suppress qwen3's internal chain-of-thought reasoning tokens. Without this prefix, the model emits `<think>...</think>` blocks that consume the token budget without contributing to the output.
@@ -400,7 +400,7 @@ The pipeline computes **31 behavioral features** across three categories. IP add
 | Zeek connection | conn_state distribution, history flags, service DPI, duration, byte/packet ratios, connection overhead | Unusual conn_state patterns (S0, REJ) suggest scanning; abnormal byte ratios suggest exfiltration |
 | Alert context | Rule severity patterns, agent diversity, rule group distributions | Alerts spanning multiple agents suggest lateral movement; clustered severity suggests campaign |
 
-The full pipeline (data extraction, Zeek enrichment, ground truth labeling, feature engineering, model training) is implemented in the separate [soc-ml repository](https://github.com/brianchaplow/soc-ml) and runs on sear using the GTX 1650 Ti GPU.
+The full pipeline (data extraction, Zeek enrichment, ground truth labeling, feature engineering, model training) is implemented in the separate [soc-ml repository](https://github.com/brianchaplow/soc-ml) and runs on attack-01 using the GTX 1650 Ti GPU.
 
 ### Why PR-AUC?
 
@@ -416,7 +416,7 @@ Data is split by time, never randomly. This prevents future information from lea
 
 ### Deployment
 
-The trained XGBoost model is deployed as a FastAPI service inside a Docker container on brisket (port 5002). The `ml-scorer` container:
+The trained XGBoost model is deployed as a FastAPI service inside a Docker container on soc-01 (port 5002). The `ml-scorer` container:
 
 - Accepts alert feature vectors via POST request
 - Returns threat probability scores (0.0 to 1.0)
@@ -448,7 +448,7 @@ XGBoost consistently outperforms the alternatives on PR-AUC, which is why it ser
 
 ### TheHive 4 -- Case Management
 
-TheHive runs on pitcrew LXC 200 (10.10.30.22, 4 vCPU, 8 GB RAM) and serves as the central case management platform for the SOC. It follows the **NIST 800-61 Computer Security Incident Handling Guide** lifecycle:
+TheHive runs on pve-01 LXC 200 (172.20.3.13, 4 vCPU, 8 GB RAM) and serves as the central case management platform for the SOC. It follows the **NIST 800-61 Computer Security Incident Handling Guide** lifecycle:
 
 1. **Preparation** -- case templates with pre-defined task checklists
 2. **Detection and Analysis** -- automated case creation from Shuffle WF1 with enrichment data pre-populated
@@ -479,18 +479,18 @@ Analysts can trigger analyzers directly from TheHive's observable panel. When in
 
 ### Velociraptor v0.75.3 -- DFIR
 
-Velociraptor provides endpoint visibility and forensic artifact collection across the SOC. The server runs as a Docker container on brisket (port 8889 for GUI, 8000/8001 for client communication).
+Velociraptor provides endpoint visibility and forensic artifact collection across the SOC. The server runs as a Docker container on soc-01 (port 8889 for GUI, 8000/8001 for client communication).
 
 **Enrolled clients:**
 
 | Client | Host | OS | VLAN |
 |--------|------|----|------|
-| 1 | brisket | Ubuntu 24.04 | 20 |
-| 2 | smokehouse | QTS (QNAP) | 20 |
-| 3 | sear | Kali Linux | 20 |
-| 4 | DC01 | Windows Server 2022 | 30 |
-| 5 | WS01 | Windows 10 | 30 |
-| 6 | DVWA | Debian | 40 |
+| 1 | soc-01 | Ubuntu 24.04 | 200 |
+| 2 | sensor-01 | QTS (QNAP) | 200 |
+| 3 | attack-01 | Kali Linux | 200 |
+| 4 | DC01 | Windows Server 2022 | 300 |
+| 5 | WS01 | Windows 10 | 300 |
+| 6 | DVWA | Debian | 400 |
 | 7 | GCP VM | Ubuntu (GCP) | External |
 
 **Capabilities:**
@@ -517,14 +517,14 @@ Every significant incident follows NIST 800-61 Section 3.4 (Post-Incident Activi
 
 ### MITRE Caldera v5.3.0
 
-Caldera runs on smoker (10.10.30.21:8888) and provides automated adversary emulation using MITRE ATT&CK techniques. It manages four Sandcat agents deployed to targets:
+Caldera runs on pve-02 (172.20.3.12:8888) and provides automated adversary emulation using MITRE ATT&CK techniques. It manages four Sandcat agents deployed to targets:
 
 | Agent | Host | VLAN | OS |
 |-------|------|------|----|
-| Sandcat | DC01 | 30 | Windows Server 2022 |
-| Sandcat | WS01 | 30 | Windows 10 |
-| Sandcat | DVWA | 40 | Debian |
-| Sandcat | Metasploitable | 40 | Ubuntu |
+| Sandcat | DC01 | 300 | Windows Server 2022 |
+| Sandcat | WS01 | 300 | Windows 10 |
+| Sandcat | DVWA | 400 | Debian |
+| Sandcat | Metasploitable | 400 | Ubuntu |
 
 **29 MITRE ATT&CK adversary profiles** are configured, mapping to real-world threat actor TTPs. These profiles serve three purposes:
 
@@ -546,7 +546,7 @@ All manual attacks (those not executed via Caldera) use the `run_attack.sh` wrap
 ./run_attack.sh <attack_type> <target_ip> [additional_args]
 ```
 
-The script supports **200+ attack types** covering network scanning, web application attacks, credential attacks, exploitation, and post-exploitation techniques. All attacks MUST target VLAN 40 (10.10.40.0/24) exclusively -- this is enforced by convention and verified during review.
+The script supports **200+ attack types** covering network scanning, web application attacks, credential attacks, exploitation, and post-exploitation techniques. All attacks MUST target VLAN 400 (172.20.4.0/24) exclusively -- this is enforced by convention and verified during review.
 
 The CSV ground-truth log feeds the ML pipeline's `GroundTruthExtractor`, which temporally joins attack records against Wazuh alerts to produce training labels. This creates a closed loop: attacks generate labeled data, labeled data trains the model, the model scores future alerts.
 
@@ -560,11 +560,11 @@ Execute --> Detect --> Measure --> Improve --> Retrain
    +---------------------------------------------+
 ```
 
-1. **Execute** -- run Caldera campaigns or manual attacks via `run_attack.sh` against VLAN 40 targets
+1. **Execute** -- run Caldera campaigns or manual attacks via `run_attack.sh` against VLAN 400 targets
 2. **Detect** -- verify that Wazuh alerts and/or Elastic detection rules fire for each technique executed
 3. **Measure** -- Shuffle WF3 correlates Caldera campaign telemetry with Wazuh alert data to calculate detection coverage percentage per technique and per tactic
 4. **Improve** -- write new Wazuh custom rules, tune Suricata signatures, or author new Elastic detection rules to close identified gaps
-5. **Retrain** -- feed the newly labeled attack data into the ML pipeline on sear, producing updated XGBoost models that incorporate the latest attack patterns
+5. **Retrain** -- feed the newly labeled attack data into the ML pipeline on attack-01, producing updated XGBoost models that incorporate the latest attack patterns
 
 This is not a one-time exercise. Each Caldera campaign or manual attack run generates new training data, validates existing detection coverage, and identifies gaps. The cycle repeats continuously.
 
@@ -584,17 +584,17 @@ The GCP VM serves dual purposes:
 
 ### Data Pipeline
 
-Honeypot data flowed from the GCP VM to the ELK stack (originally on pitcrew LXC 201, now on haccp) via two independent pipelines:
+Honeypot data flowed from the GCP VM to the ELK stack (originally on pve-01 LXC 201, now on elk-01) via two independent pipelines:
 
 **Fluent Bit pipeline (real-time):**
 - PHP honeypot writes credential capture events to `/var/log/honeypot/credentials.json`
 - Apache logs honeypot virtual host access to `/var/log/apache2/honeypot-access.log`
-- Fluent Bit on the GCP VM shipped both log streams to Elasticsearch on ELK (now haccp) using the `es` output plugin
+- Fluent Bit on the GCP VM shipped both log streams to Elasticsearch on ELK (now elk-01) using the `es` output plugin
 - Transport runs over the **Tailscale overlay network** (WireGuard mesh), requiring zero inbound port exposure on the home network
 
 **Wazuh sync pipeline (cron-based):**
-- Wazuh agent 009 on the GCP VM ships OS-level security events to brisket's Wazuh Manager
-- A cron job on brisket (`honeypot-wazuh-sync.py`, every 15 minutes) copies agent 009 alerts from Wazuh's OpenSearch to the `honeypot-wazuh` index in ELK
+- Wazuh agent 009 on the GCP VM ships OS-level security events to soc-01's Wazuh Manager
+- A cron job on soc-01 (`honeypot-wazuh-sync.py`, every 15 minutes) copies agent 009 alerts from Wazuh's OpenSearch to the `honeypot-wazuh` index in ELK
 - The sync uses Wazuh document `_id` as the Elasticsearch `_id`, making it idempotent -- re-runs never create duplicate records
 
 ### Research Indices
@@ -627,11 +627,11 @@ The dashboard builder script generates Kibana saved objects programmatically, en
 
 ### Tailscale Overlay Network
 
-The GCP VM has no direct route to the home network's RFC 1918 address space (10.10.x.x). Tailscale provides a WireGuard-based mesh VPN that:
+The GCP VM has no direct route to the home network's RFC 1918 address space (172.20.x.x). Tailscale provides a WireGuard-based mesh VPN that:
 
 - Assigns each node a stable 100.x.x.x address with automatic NAT traversal
 - Requires no port forwarding or public exposure of ELK services
-- Advertises no subnet routes -- only point-to-point peer connections between the GCP VM and haccp (ELK)
+- Advertises no subnet routes -- only point-to-point peer connections between the GCP VM and elk-01 (ELK)
 - Encrypts all data in transit with WireGuard (ChaCha20-Poly1305)
 
 This design ensures that the honeypot research pipeline operates without exposing any internal lab services to the internet.
@@ -646,13 +646,13 @@ The network is divided into five 802.1Q VLANs, each serving a distinct security 
 
 | VLAN | Subnet | Purpose | Security Posture |
 |------|--------|---------|-----------------|
-| 10 | 10.10.10.0/24 | Management | Firewall, switch, admin workstation -- restricted access from other VLANs |
-| 20 | 10.10.20.0/24 | SOC Infrastructure | SIEM, SOAR, sensors, ML, LLM -- the operational core |
-| 30 | 10.10.30.0/24 | Lab / Proxmox / AD | Hypervisors, AD domain, TheHive, OpenCTI, ELK (haccp), backup -- service tier |
-| 40 | 10.10.40.0/24 | Targets (ISOLATED) | Attack surfaces only -- fully isolated, deny-all outbound |
-| 50 | 10.10.50.0/24 | IoT | Internet-only access, no lateral movement to any internal VLAN |
+| 100 | 172.20.1.0/24 | Management | Firewall, switch, admin workstation -- restricted access from other VLANs |
+| 200 | 172.20.2.0/24 | SOC Infrastructure | SIEM, SOAR, sensors, ML, LLM -- the operational core |
+| 300 | 172.20.3.0/24 | Lab / Proxmox / AD | Hypervisors, AD domain, TheHive, OpenCTI, ELK (elk-01), backup -- service tier |
+| 400 | 172.20.4.0/24 | Targets (ISOLATED) | Attack surfaces only -- fully isolated, deny-all outbound |
+| 500 | 172.20.5.0/24 | IoT | Internet-only access, no lateral movement to any internal VLAN |
 
-An additional family network (192.168.100.0/24 DMZ + 192.168.50.0/24 LAN) connects via a dedicated OPNsense physical interface (igc3) to an ASUS consumer router. This creates a hard physical and logical boundary between SOC operations and family internet usage.
+An additional family network (172.21.1.0/24 DMZ + 172.21.2.0/24 LAN) connects via a dedicated OPNsense physical interface (igc3) to an ASUS consumer router. This creates a hard physical and logical boundary between SOC operations and family internet usage.
 
 ### OPNsense Firewall
 
@@ -662,42 +662,42 @@ OPNsense runs on a Protectli VP2420 appliance (Intel J6412, 8 GB RAM, 128 GB eMM
 |-----|----------|-----------|
 | igc0 | 802.1Q trunk (all 5 VLANs) | MokerLink switch |
 | igc1 | WAN (DHCP from ISP) | Verizon uplink |
-| igc3 | Family network handoff | ASUS router (192.168.100.1/24) |
+| igc3 | Family network handoff | ASUS router (172.21.1.1/24) |
 
 **Key firewall policies:**
 
-- **VLAN 40 deny-all outbound** -- the cornerstone of the security architecture. Target hosts cannot initiate connections to any other VLAN or the internet. Only established/related return traffic (responses to inbound attack connections from VLAN 20 or VLAN 30) is permitted. This ensures that compromised targets cannot pivot to production infrastructure or exfiltrate data.
+- **VLAN 400 deny-all outbound** -- the cornerstone of the security architecture. Target hosts cannot initiate connections to any other VLAN or the internet. Only established/related return traffic (responses to inbound attack connections from VLAN 200 or VLAN 300) is permitted. This ensures that compromised targets cannot pivot to production infrastructure or exfiltrate data.
 
-- **VLAN 50 internet-only** -- IoT devices can reach the internet for firmware updates and cloud services, but have zero visibility or access to any internal VLAN. No lateral movement is possible.
+- **VLAN 500 internet-only** -- IoT devices can reach the internet for firmware updates and cloud services, but have zero visibility or access to any internal VLAN. No lateral movement is possible.
 
-- **VLAN 20 to VLAN 30 bidirectional** -- SOC tools on VLAN 20 (brisket) need to communicate with lab services on VLAN 30 (TheHive, OpenCTI, ELK on haccp, Caldera, Proxmox management). The reverse path allows TheHive and ELK to report back to Wazuh and Shuffle.
+- **VLAN 200 to VLAN 300 bidirectional** -- SOC tools on VLAN 200 (soc-01) need to communicate with lab services on VLAN 300 (TheHive, OpenCTI, ELK on elk-01, Caldera, Proxmox management). The reverse path allows TheHive and ELK to report back to Wazuh and Shuffle.
 
-- **VLAN 20 and VLAN 30 to VLAN 40** -- both the SOC and lab VLANs can initiate connections to targets for attacks and management, but targets can never initiate back.
+- **VLAN 200 and VLAN 300 to VLAN 400** -- both the SOC and lab VLANs can initiate connections to targets for attacks and management, but targets can never initiate back.
 
 - **OPNsense syslog** -- firewall events are forwarded to Wazuh via UDP 514, providing visibility into inter-VLAN routing decisions, blocked connections, and NAT translations.
 
 ### MokerLink ACL Micro-Segmentation
 
-**The problem:** sear (10.10.20.20, Kali attack box) and brisket (10.10.20.30, SOC platform) are both on VLAN 20. Intra-VLAN traffic is Layer 2 switched -- it never routes through OPNsense, so firewall rules do not apply. Without additional controls, a compromised sear could access every service on brisket (Shuffle SOAR, Grafana, Wazuh Dashboard, Velociraptor, and more).
+**The problem:** attack-01 (172.20.2.12, Kali attack box) and soc-01 (172.20.2.14, SOC platform) are both on VLAN 200. Intra-VLAN traffic is Layer 2 switched -- it never routes through OPNsense, so firewall rules do not apply. Without additional controls, a compromised attack-01 could access every service on soc-01 (Shuffle SOAR, Grafana, Wazuh Dashboard, Velociraptor, and more).
 
-**The solution:** The MokerLink 10G08410GSM L3 managed switch supports IPv4 ACLs bound to physical ports. A 9-rule stateless ACL (`sear-brisket`) is bound to TE4 (sear's physical switch port), filtering all traffic between the two hosts at the switch level.
+**The solution:** The MokerLink 10G08410GSM L3 managed switch supports IPv4 ACLs bound to physical ports. A 9-rule stateless ACL (`attack-01-soc-01`) is bound to TE4 (attack-01's physical switch port), filtering all traffic between the two hosts at the switch level.
 
-**Permitted flows (sear to brisket):**
+**Permitted flows (attack-01 to soc-01):**
 | Port | Purpose |
 |------|---------|
 | TCP 1514 | Wazuh agent event transport |
 | TCP 1515 | Wazuh agent enrollment |
 | TCP 9200 | OpenSearch queries (ML pipeline data extraction) |
 
-**Permitted flows (brisket to sear):**
+**Permitted flows (soc-01 to attack-01):**
 | Port | Purpose |
 |------|---------|
 | TCP 9100 | Prometheus node_exporter scrape |
 | TCP 22 | SSH management |
 
-**Everything else is denied.** sear cannot reach Shuffle (3443), Grafana (3000), Wazuh Dashboard (5601), Velociraptor (8889), the ML Scorer (5002), or Ollama (11434) on brisket.
+**Everything else is denied.** attack-01 cannot reach Shuffle (3443), Grafana (3000), Wazuh Dashboard (5601), Velociraptor (8889), the ML Scorer (5002), or Ollama (11434) on soc-01.
 
-**Stateless ACL nuance:** Unlike OPNsense's stateful firewall, switch ACLs do not track TCP connections. A SYN and its SYN-ACK are evaluated independently. This means every brisket-initiated connection to sear requires two rules: one for the outbound request (matching destination port) and one for the inbound return (matching source port). Without the return-path rule, the SYN-ACK from sear hits the deny-all before reaching the catch-all permit.
+**Stateless ACL nuance:** Unlike OPNsense's stateful firewall, switch ACLs do not track TCP connections. A SYN and its SYN-ACK are evaluated independently. This means every soc-01-initiated connection to attack-01 requires two rules: one for the outbound request (matching destination port) and one for the inbound return (matching source port). Without the return-path rule, the SYN-ACK from attack-01 hits the deny-all before reaching the catch-all permit.
 
 ### Defense-in-Depth Layers
 
@@ -707,34 +707,34 @@ The SOC implements six overlapping security boundaries. An attacker must defeat 
 Stateful firewall on all inter-VLAN traffic. NAT for outbound internet access. Syslog forwarding to Wazuh for firewall event visibility. The first barrier any east-west or north-south traffic encounters.
 
 **Layer 2 -- Network Segmentation (VLANs)**
-Five VLANs isolate functional zones. VLAN 40 is fully isolated. VLAN 50 is internet-only. The family network is physically separated. Each zone has explicit policy governing what it can and cannot reach.
+Five VLANs isolate functional zones. VLAN 400 is fully isolated. VLAN 500 is internet-only. The family network is physically separated. Each zone has explicit policy governing what it can and cannot reach.
 
 **Layer 3 -- Switch ACL Micro-Segmentation (MokerLink)**
-Stateless ACLs on sear's switch port restrict intra-VLAN access to brisket. This layer covers the blind spot where Layer 2 switching bypasses the OPNsense firewall entirely.
+Stateless ACLs on attack-01's switch port restrict intra-VLAN access to soc-01. This layer covers the blind spot where Layer 2 switching bypasses the OPNsense firewall entirely.
 
 **Layer 4 -- Host-Level Controls**
 Wazuh agents on all 12 endpoints provide file integrity monitoring, vulnerability scanning, and security configuration assessment. Suricata inspects all network traffic via SPAN with 47,487+ signatures. Zeek extracts protocol-level metadata for behavioral analysis.
 
 **Layer 5 -- Detection and Response**
-1,345 Elastic Security detection rules on haccp cover MITRE ATT&CK tactics. 9 Shuffle SOAR workflows automate enrichment, triage, and response. TheHive and Cortex manage cases with 5 threat intelligence analyzers. OpenCTI aggregates CTI from 6 connectors. Velociraptor provides endpoint forensics across 7 clients.
+1,345 Elastic Security detection rules on elk-01 cover MITRE ATT&CK tactics. 9 Shuffle SOAR workflows automate enrichment, triage, and response. TheHive and Cortex manage cases with 5 threat intelligence analyzers. OpenCTI aggregates CTI from 6 connectors. Velociraptor provides endpoint forensics across 7 clients.
 
 **Layer 6 -- AI/ML Augmentation**
 XGBoost threat scorer (PR-AUC 0.9998) provides real-time behavioral classification. Ollama LLM (qwen3:8b) generates analyst-facing triage narratives, anomaly classifications, and intelligence reports. WF6 monitors model drift to ensure ML accuracy over time. WF8 catches patterns that rule-based detection misses.
 
-### Docker Targets on VLAN 40
+### Docker Targets on VLAN 400
 
-Six Docker containers on smoker serve as attack targets using **ipvlan L2 networking** on vmbr0v40 (the VLAN 40 bridge). This networking mode places each container directly on the 10.10.40.0/24 subnet with its own routable IP address, while the smoker host itself remains on VLAN 30 (10.10.30.21).
+Six Docker containers on pve-02 serve as attack targets using **ipvlan L2 networking** on vmbr0v40 (the VLAN 400 bridge). This networking mode places each container directly on the 172.20.4.0/24 subnet with its own routable IP address, while the pve-02 host itself remains on VLAN 300 (172.20.3.12).
 
 | Container | IP | Service |
 |-----------|-----|---------|
-| WordPress | 10.10.40.30 | WPScan target |
-| crAPI | 10.10.40.31 | REST API security target |
-| vsftpd | 10.10.40.32 | FTP exploitation target |
-| Honeypot | 10.10.40.33 | WAF evasion target |
-| SMTP relay | 10.10.40.42 | SMTP target |
-| SNMPd | 10.10.40.43 | SNMP target |
+| WordPress | 172.20.4.14 | WPScan target |
+| crAPI | 172.20.4.15 | REST API security target |
+| vsftpd | 172.20.4.16 | FTP exploitation target |
+| Honeypot | 172.20.4.17 | WAF evasion target |
+| SMTP relay | 172.20.4.18 | SMTP target |
+| SNMPd | 172.20.4.19 | SNMP target |
 
-**Why ipvlan L2?** Standard Docker bridge networking would require NAT, placing all containers behind smoker's VLAN 30 IP and breaking the isolation model. ipvlan L2 assigns each container a real VLAN 40 IP that is subject to OPNsense's deny-all outbound rule, maintaining the isolation guarantee. Attackers interact with targets at their real network addresses, producing realistic traffic patterns that Suricata and Zeek capture accurately on the SPAN port.
+**Why ipvlan L2?** Standard Docker bridge networking would require NAT, placing all containers behind pve-02's VLAN 300 IP and breaking the isolation model. ipvlan L2 assigns each container a real VLAN 400 IP that is subject to OPNsense's deny-all outbound rule, maintaining the isolation guarantee. Attackers interact with targets at their real network addresses, producing realistic traffic patterns that Suricata and Zeek capture accurately on the SPAN port.
 
 ---
 

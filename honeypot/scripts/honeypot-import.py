@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
 Honeypot Research Dashboard — Data Import Pipeline
-Exports Wazuh GCP-VM alerts from brisket, transforms all 3 honeypot datasets,
-and bulk-imports into ELK Elasticsearch (10.10.30.25:9200 on haccp).
+Exports Wazuh GCP-VM alerts from soc-01, transforms all 3 honeypot datasets,
+and bulk-imports into ELK Elasticsearch (172.20.3.16:9200 on elk-01).
 
 Three target indices:
   - honeypot-credentials  (~3,140 docs from honeypot-credentials.json)
   - honeypot-access        (~737 docs from honeypot-access.json, parsed Apache logs)
-  - honeypot-wazuh         (~5,900 docs exported from brisket Wazuh)
+  - honeypot-wazuh         (~5,900 docs exported from soc-01 Wazuh)
 
 Usage: python reference/honeypot-import.py
 """
@@ -22,13 +22,13 @@ import ssl
 from datetime import datetime
 
 # --- Configuration ---
-# SSH target for brisket, e.g. "user@10.10.20.30" (set BRISKET_SSH in the environment)
-BRISKET_HOST = os.environ.get("BRISKET_SSH", "user@10.10.20.30")
-BRISKET_OS_URL = "https://localhost:9200"
-BRISKET_OS_USER = "admin"
-BRISKET_OS_PASS = os.environ.get("OPENSEARCH_PASS", "your_opensearch_password")
+# SSH target for soc-01, e.g. "user@172.20.2.14" (set SOC01_SSH in the environment)
+SOC01_HOST = os.environ.get("SOC01_SSH", "user@172.20.2.14")
+SOC01_OS_URL = "https://localhost:9200"
+SOC01_OS_USER = "admin"
+SOC01_OS_PASS = os.environ.get("OPENSEARCH_PASS", "your_opensearch_password")
 
-ELK_HOST = "https://10.10.30.25:9200"  # haccp (migrated from LXC 201)
+ELK_HOST = "https://172.20.3.16:9200"  # elk-01 (migrated from LXC 201)
 ELK_USER = "elastic"
 ELK_PASS = os.environ.get("ELK_PASS", "your_elastic_password")
 
@@ -92,35 +92,35 @@ def elk_bulk(ndjson_lines):
 
 
 # ==============================================================
-# Step 1: Export Wazuh GCP-VM alerts from brisket via SSH+curl
+# Step 1: Export Wazuh GCP-VM alerts from soc-01 via SSH+curl
 # ==============================================================
 def _curl_config_quote(value):
     """Quote a value for a curl config file (-K): backslash-escape \\ and "."""
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def brisket_search(path, body):
-    """POST a JSON body to brisket's OpenSearch over SSH.
+def soc01_search(path, body):
+    """POST a JSON body to soc-01's OpenSearch over SSH.
 
     The request (including credentials) is passed to the remote curl as a
     config file on stdin, so nothing sensitive is interpolated into a shell
     command line or visible in the process list on either host.
     """
     config = "\n".join([
-        f"user = {_curl_config_quote(f'{BRISKET_OS_USER}:{BRISKET_OS_PASS}')}",
-        f"url = {_curl_config_quote(BRISKET_OS_URL + path)}",
+        f"user = {_curl_config_quote(f'{SOC01_OS_USER}:{SOC01_OS_PASS}')}",
+        f"url = {_curl_config_quote(SOC01_OS_URL + path)}",
         'header = "Content-Type: application/json"',
         f"data-binary = {_curl_config_quote(json.dumps(body))}",
     ]) + "\n"
     return subprocess.run(
-        ["ssh", BRISKET_HOST, "curl -sk -K -"],
+        ["ssh", SOC01_HOST, "curl -sk -K -"],
         input=config, capture_output=True, text=True,
     )
 
 
 def export_wazuh():
-    """Export all agent.name=gcp-vm docs from brisket Wazuh via scroll API."""
-    print("\n=== Step 1: Export Wazuh GCP-VM alerts from brisket ===")
+    """Export all agent.name=gcp-vm docs from soc-01 Wazuh via scroll API."""
+    print("\n=== Step 1: Export Wazuh GCP-VM alerts from soc-01 ===")
 
     if os.path.exists(WAZUH_EXPORT_FILE):
         with open(WAZUH_EXPORT_FILE, "r") as f:
@@ -138,7 +138,7 @@ def export_wazuh():
     all_docs = []
     print("  Starting scroll export...")
 
-    result = brisket_search("/wazuh-alerts-4.x-*/_search?scroll=2m", query)
+    result = soc01_search("/wazuh-alerts-4.x-*/_search?scroll=2m", query)
     if result.returncode != 0:
         print(f"  SSH error: {result.stderr}")
         sys.exit(1)
@@ -154,7 +154,7 @@ def export_wazuh():
     # Continue scrolling
     batch = 2
     while len(hits) > 0:
-        result = brisket_search("/_search/scroll", {"scroll": "2m", "scroll_id": scroll_id})
+        result = soc01_search("/_search/scroll", {"scroll": "2m", "scroll_id": scroll_id})
         data = json.loads(result.stdout)
         scroll_id = data.get("_scroll_id")
         hits = data["hits"]["hits"]

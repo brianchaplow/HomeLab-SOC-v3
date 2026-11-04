@@ -1,10 +1,10 @@
-"""Load asset-inventory.json into the soc-asset-inventory index on brisket OpenSearch.
+"""Load asset-inventory.json into the soc-asset-inventory index on soc-01 OpenSearch.
 
 Doc id = host name, so re-running is an idempotent refresh. The Shuffle
 score_and_brief action reads this index at runtime.
 
-Environment overrides (defaults match the original PITBOSS setup):
-  SOC_INVENTORY_ES    OpenSearch base URL          (default https://10.10.20.30:9200)
+Environment overrides (defaults are placeholders; see network.example.json):
+  SOC_INVENTORY_ES    OpenSearch base URL          (default https://172.20.2.14:9200)
   SOC_INVENTORY_USER  OpenSearch user              (default admin)
   SOC_ENV_FILE        .env file holding ELK_PASS   (default C:\\Projects\\.env)
   ELK_PASS            used directly if set, instead of reading SOC_ENV_FILE
@@ -17,13 +17,13 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-ES = os.environ.get("SOC_INVENTORY_ES", "https://10.10.20.30:9200")
+ES = os.environ.get("SOC_INVENTORY_ES", "https://172.20.2.14:9200")
 USER = os.environ.get("SOC_INVENTORY_USER", "admin")
 INDEX = "soc-asset-inventory"
 SRC = Path(__file__).resolve().parent / "asset-inventory.json"
 ENV_FILE = os.environ.get("SOC_ENV_FILE", r"C:\Projects\.env")
 
-# brisket's OpenSearch uses a self-signed certificate.
+# soc-01's OpenSearch uses a self-signed certificate.
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE

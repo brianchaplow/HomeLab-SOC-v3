@@ -1,6 +1,6 @@
 # Honeypot Research
 
-> **Campaign Status: Decommissioned (March 2026).** Historical data preserved in ELK indices on haccp (10.10.30.25).
+> **Campaign Status: Decommissioned (March 2026).** Historical data preserved in ELK indices on elk-01 (172.20.3.16).
 
 WordPress login honeypot deployed on a **GCP VM** for INST 570 cybersecurity research. The honeypot captured credential stuffing attempts and attack patterns, shipping data to the ELK Stack for analysis via Fluent Bit and a Wazuh alert sync pipeline.
 
@@ -11,17 +11,17 @@ Attacker --> GCP VM (public IP)
                |
                +--> PHP wp-login.php honeypot --> /var/log/honeypot/credentials.json
                +--> Apache access logs         --> /var/log/apache2/honeypot-access.log
-               +--> Wazuh Agent 009            --> brisket Wazuh Manager
+               +--> Wazuh Agent 009            --> soc-01 Wazuh Manager
                |
           Fluent Bit (es output)
                |
-               +--> [Tailscale overlay] --> haccp (10.10.30.25)
+               +--> [Tailscale overlay] --> elk-01 (172.20.3.16)
                |                              honeypot-credentials index
                |                              honeypot-access index
                |
-          honeypot-wazuh-sync.py (cron */15 on brisket)
+          honeypot-wazuh-sync.py (cron */15 on soc-01)
                |
-               +--> haccp (10.10.30.25) --> honeypot-wazuh index
+               +--> elk-01 (172.20.3.16) --> honeypot-wazuh index
 ```
 
 The GCP VM is only reachable from the home network via Tailscale (LAN IPs are not routable). Fluent Bit ships directly to Elasticsearch using the `es` output plugin over the Tailscale overlay.

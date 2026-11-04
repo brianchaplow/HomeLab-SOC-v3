@@ -4,16 +4,16 @@ MITRE Caldera v5.3.0 adversary emulation platform and ground-truth attack loggin
 
 ## Caldera Deployment
 
-Caldera runs on **smoker** (10.10.30.21) and manages four Sandcat agents deployed to targets on the isolated VLAN 40 network and the AD lab on VLAN 30.
+Caldera runs on **pve-02** (172.20.3.12) and manages four Sandcat agents deployed to targets on the isolated VLAN 400 network and the AD lab on VLAN 300.
 
 ### Enrolled Agents
 
 | Agent | Host | VLAN | OS |
 |-------|------|------|----|
-| Sandcat | DC01 | 30 | Windows Server 2022 |
-| Sandcat | WS01 | 30 | Windows 10 |
-| Sandcat | DVWA | 40 | Debian |
-| Sandcat | Metasploitable | 40 | Ubuntu |
+| Sandcat | DC01 | 300 | Windows Server 2022 |
+| Sandcat | WS01 | 300 | Windows 10 |
+| Sandcat | DVWA | 400 | Debian |
+| Sandcat | Metasploitable | 400 | Ubuntu |
 
 ### Adversary Profiles
 
@@ -43,7 +43,7 @@ Usage:
 ./run_attack.sh <attack_type> <target_ip> [additional_args]
 ```
 
-All attacks must target VLAN 40 (10.10.40.0/24) exclusively.
+All attacks must target VLAN 400 (172.20.4.0/24) exclusively.
 
 ## Purple Team Validation
 

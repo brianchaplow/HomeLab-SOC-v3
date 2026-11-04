@@ -17,7 +17,7 @@ This directory contains trained ML models for threat detection.
 
 ## Training Location
 
-Models are trained on the Kali system (sear) at:
+Models are trained on the Kali system (attack-01) at:
 - ~/soc-ml/
 
 ## Why Models Aren't in Repo

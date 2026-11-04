@@ -1,7 +1,7 @@
 #!/bin/bash
-# Trigger WF-HACCP-1 (Phase14 Tier1 Investigation) via Shuffle API
+# Trigger WF-ELK-1 (Phase14 Tier1 Investigation) via Shuffle API
 # Called by system cron every 5 min
-# No Ollama calls — reads pre-enriched llm.* fields from haccp ES
+# No Ollama calls — reads pre-enriched llm.* fields from elk-01 ES
 
 SHUFFLE_API="http://localhost:5001"
 API_KEY="YOUR_SHUFFLE_API_KEY"

@@ -7,35 +7,35 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  - job_name: 'brisket-node'
+  - job_name: 'soc-01-node'
     static_configs:
       - targets: ['host.docker.internal:9100']
         labels:
-          host: brisket
+          host: soc-01
 
-  - job_name: 'brisket-nvidia'
+  - job_name: 'soc-01-nvidia'
     static_configs:
       - targets: ['host.docker.internal:9835']
         labels:
-          host: brisket
+          host: soc-01
 
-  - job_name: 'sear-node'
+  - job_name: 'attack-01-node'
     static_configs:
-      - targets: ['10.10.20.20:9100']
+      - targets: ['172.20.2.12:9100']
         labels:
-          host: sear
-          vlan: '20'
+          host: attack-01
+          vlan: '200'
 
-  - job_name: 'smoker-node'
+  - job_name: 'pve-02-node'
     static_configs:
-      - targets: ['10.10.30.21:9100']
+      - targets: ['172.20.3.12:9100']
         labels:
-          host: smoker
-          vlan: '30'
+          host: pve-02
+          vlan: '300'
 
-  - job_name: 'pitcrew-node'
+  - job_name: 'pve-01-node'
     static_configs:
-      - targets: ['10.10.30.20:9100']
+      - targets: ['172.20.3.11:9100']
         labels:
-          host: pitcrew
-          vlan: '30'
+          host: pve-01
+          vlan: '300'

@@ -23,7 +23,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 # --- Configuration ---
-ELK_HOST = "https://10.10.30.25:9200"  # haccp (migrated from LXC 201)
+ELK_HOST = "https://172.20.3.16:9200"  # elk-01 (migrated from LXC 201)
 ELK_USER = "elastic"
 ELK_PASS = os.environ.get("ELK_PASS", "your_elastic_password")
 

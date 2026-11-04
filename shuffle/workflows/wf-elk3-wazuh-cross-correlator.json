@@ -84,7 +84,7 @@
           "id": "",
           "name": "code",
           "example": "",
-          "value": "import json, urllib.request, ssl, base64\n\nctx = ssl.create_default_context()\nctx.check_hostname = False\nctx.verify_mode = ssl.CERT_NONE\n\ncreds = \"$elk_user:$elk_pass\"\nauth = base64.b64encode(creds.encode()).decode()\nheaders = {\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {auth}\"}\nerrors = []\n\ndef is_private(ip):\n    return ip.startswith(\"10.\") or ip.startswith(\"192.168.\") or ip.startswith(\"172.16.\")\n\ndef es_post(path, body):\n    req = urllib.request.Request(\n        f\"$elk_url{path}\",\n        data=json.dumps(body).encode(),\n        headers=headers,\n        method=\"POST\"\n    )\n    resp = urllib.request.urlopen(req, context=ctx, timeout=20)\n    return json.loads(resp.read().decode())\n\ndef run_tier1_agg(ip_field):\n    \"\"\"Aggregate tier1 events by an IP field.\"\"\"\n    query = {\n        \"size\": 0,\n        \"track_total_hits\": True,\n        \"query\": {\n            \"bool\": {\n                \"filter\": [\n                    {\"term\": {\"tags\": \"tier1_ti_match\"}},\n                    {\"range\": {\"@timestamp\": {\"gte\": \"now-24h\"}}}\n                ]\n            }\n        },\n        \"aggs\": {\n            \"by_ip\": {\n                \"terms\": {\"field\": ip_field, \"size\": 200},\n                \"aggs\": {\n                    \"providers\": {\"terms\": {\"field\": \"ti.provider\", \"size\": 3}},\n                    \"types\": {\"terms\": {\"field\": \"ti.type\", \"size\": 3}}\n                }\n            }\n        }\n    }\n    r = es_post(\"/logs-zeek.haccp-default/_search\", query)\n    total = r.get(\"hits\", {}).get(\"total\", {}).get(\"value\", 0)\n    details = {}\n    for b in r.get(\"aggregations\", {}).get(\"by_ip\", {}).get(\"buckets\", []):\n        ip = b[\"key\"]\n        if is_private(ip):\n            continue\n        prov_buckets = b.get(\"providers\", {}).get(\"buckets\", [])\n        type_buckets = b.get(\"types\", {}).get(\"buckets\", [])\n        details[ip] = {\n            \"count\": b[\"doc_count\"],\n            \"ti_providers\": [p[\"key\"] for p in prov_buckets],\n            \"ti_types\": [t[\"key\"] for t in type_buckets]\n        }\n    return details, total\n\ntier1_details = {}\ntier1_total = 0\n\n# Query A: aggregate by id_resp_h (destination IPs matching TI)\ntry:\n    resp_details, resp_total = run_tier1_agg(\"id_resp_h\")\n    tier1_details.update(resp_details)\n    tier1_total = resp_total\nexcept Exception as e:\n    errors.append(f\"id_resp_h: {str(e)[:150]}\")\n\n# Query B: aggregate by id_orig_h (source IPs generating tier1 traffic)\ntry:\n    orig_details, orig_total = run_tier1_agg(\"id_orig_h\")\n    for ip, info in orig_details.items():\n        if ip in tier1_details:\n            existing = tier1_details[ip]\n            existing[\"count\"] += info[\"count\"]\n            for p in info[\"ti_providers\"]:\n                if p not in existing[\"ti_providers\"]:\n                    existing[\"ti_providers\"].append(p)\n            for t in info[\"ti_types\"]:\n                if t not in existing[\"ti_types\"]:\n                    existing[\"ti_types\"].append(t)\n        else:\n            tier1_details[ip] = info\nexcept Exception as e:\n    errors.append(f\"id_orig_h: {str(e)[:150]}\")\n\ntier1_ips = sorted(tier1_details.keys())\n\nprint(json.dumps({\n    \"tier1_ips\": tier1_ips,\n    \"tier1_details\": tier1_details,\n    \"tier1_total\": tier1_total,\n    \"errors\": errors\n}))\n",
+          "value": "import json, urllib.request, ssl, base64\n\nctx = ssl.create_default_context()\nctx.check_hostname = False\nctx.verify_mode = ssl.CERT_NONE\n\ncreds = \"$elk_user:$elk_pass\"\nauth = base64.b64encode(creds.encode()).decode()\nheaders = {\"Content-Type\": \"application/json\", \"Authorization\": f\"Basic {auth}\"}\nerrors = []\n\ndef is_private(ip):\n    return ip.startswith(\"10.\") or ip.startswith(\"192.168.\") or ip.startswith(\"172.16.\")\n\ndef es_post(path, body):\n    req = urllib.request.Request(\n        f\"$elk_url{path}\",\n        data=json.dumps(body).encode(),\n        headers=headers,\n        method=\"POST\"\n    )\n    resp = urllib.request.urlopen(req, context=ctx, timeout=20)\n    return json.loads(resp.read().decode())\n\ndef run_tier1_agg(ip_field):\n    \"\"\"Aggregate tier1 events by an IP field.\"\"\"\n    query = {\n        \"size\": 0,\n        \"track_total_hits\": True,\n        \"query\": {\n            \"bool\": {\n                \"filter\": [\n                    {\"term\": {\"tags\": \"tier1_ti_match\"}},\n                    {\"range\": {\"@timestamp\": {\"gte\": \"now-24h\"}}}\n                ]\n            }\n        },\n        \"aggs\": {\n            \"by_ip\": {\n                \"terms\": {\"field\": ip_field, \"size\": 200},\n                \"aggs\": {\n                    \"providers\": {\"terms\": {\"field\": \"ti.provider\", \"size\": 3}},\n                    \"types\": {\"terms\": {\"field\": \"ti.type\", \"size\": 3}}\n                }\n            }\n        }\n    }\n    r = es_post(\"/logs-zeek.elk01-default/_search\", query)\n    total = r.get(\"hits\", {}).get(\"total\", {}).get(\"value\", 0)\n    details = {}\n    for b in r.get(\"aggregations\", {}).get(\"by_ip\", {}).get(\"buckets\", []):\n        ip = b[\"key\"]\n        if is_private(ip):\n            continue\n        prov_buckets = b.get(\"providers\", {}).get(\"buckets\", [])\n        type_buckets = b.get(\"types\", {}).get(\"buckets\", [])\n        details[ip] = {\n            \"count\": b[\"doc_count\"],\n            \"ti_providers\": [p[\"key\"] for p in prov_buckets],\n            \"ti_types\": [t[\"key\"] for t in type_buckets]\n        }\n    return details, total\n\ntier1_details = {}\ntier1_total = 0\n\n# Query A: aggregate by id_resp_h (destination IPs matching TI)\ntry:\n    resp_details, resp_total = run_tier1_agg(\"id_resp_h\")\n    tier1_details.update(resp_details)\n    tier1_total = resp_total\nexcept Exception as e:\n    errors.append(f\"id_resp_h: {str(e)[:150]}\")\n\n# Query B: aggregate by id_orig_h (source IPs generating tier1 traffic)\ntry:\n    orig_details, orig_total = run_tier1_agg(\"id_orig_h\")\n    for ip, info in orig_details.items():\n        if ip in tier1_details:\n            existing = tier1_details[ip]\n            existing[\"count\"] += info[\"count\"]\n            for p in info[\"ti_providers\"]:\n                if p not in existing[\"ti_providers\"]:\n                    existing[\"ti_providers\"].append(p)\n            for t in info[\"ti_types\"]:\n                if t not in existing[\"ti_types\"]:\n                    existing[\"ti_types\"].append(t)\n        else:\n            tier1_details[ip] = info\nexcept Exception as e:\n    errors.append(f\"id_orig_h: {str(e)[:150]}\")\n\ntier1_ips = sorted(tier1_details.keys())\n\nprint(json.dumps({\n    \"tier1_ips\": tier1_ips,\n    \"tier1_details\": tier1_details,\n    \"tier1_total\": tier1_total,\n    \"errors\": errors\n}))\n",
           "multiline": false,
           "multiselect": false,
           "options": null,
@@ -208,7 +208,7 @@
           "id": "",
           "name": "code",
           "example": "",
-          "value": "import json, datetime\n\ndata = json.loads('''$correlate.message''')\nif isinstance(data, str):\n    try:\n        data = json.loads(data)\n    except:\n        data = {}\n\ndual_hits = data.get(\"dual_hits\", [])\ndual_hit_count = data.get(\"dual_hit_count\", 0)\nwazuh_total = data.get(\"wazuh_total\", 0)\ntier1_total = data.get(\"tier1_total\", 0)\nmin_level = data.get(\"min_level_used\", 7)\nall_errors = data.get(\"all_errors\", [])\n\nKIBANA_URL = \"http://10.10.30.25:5601/app/discover#/?_g=(time:(from:now-24h,to:now))\"\n\ndef sanitize(s):\n    return str(s).replace('\"', \"'\").replace(\"\\\\\", \"\")[:200]\n\nnow = datetime.datetime.utcnow().strftime(\"%Y-%m-%dT%H:%M:%SZ\")\n\nif dual_hit_count > 0:\n    fields = []\n    for hit in dual_hits[:10]:\n        ip = hit[\"ip\"]\n        agents_str = \", \".join(hit.get(\"wazuh_agents\", [])[:3])\n        providers_str = \", \".join(hit.get(\"tier1_providers\", [])[:3])\n        types_str = \", \".join(hit.get(\"tier1_types\", [])[:3])\n        rule_text = sanitize(hit.get(\"wazuh_top_rule\", \"\"))\n        val = (f\"Wazuh: {hit.get('wazuh_count', 0)} alerts, \"\n               f\"max level {hit.get('wazuh_max_level', 0)}, \"\n               f\"'{rule_text}' on {agents_str}\\n\"\n               f\"TI: {hit.get('tier1_count', 0)} matches, \"\n               f\"{providers_str}, {types_str}\")\n        fields.append({\"name\": f\"`{ip}`\", \"value\": val[:1024], \"inline\": False})\n\n    footer_text = (f\"WF-HACCP-3 nightly | \"\n                   f\"Wazuh: {wazuh_total} (lvl>={min_level}) | \"\n                   f\"tier1: {tier1_total} | \"\n                   f\"drill: {KIBANA_URL[:60]}...\")\n    if dual_hit_count > 10:\n        footer_text += f\" | +{dual_hit_count - 10} more (raise min_alert_level or check Kibana)\"\n    if all_errors:\n        footer_text += f\" | {len(all_errors)} query error(s)\"\n\n    embed = {\n        \"title\": f\"WF-HACCP-3: {dual_hit_count} dual-hit IP(s) in last 24h\",\n        \"description\": f\"IPs that triggered both a Wazuh alert (level >= {min_level}) and a haccp tier1 TI match.\",\n        \"color\": 15158332,\n        \"fields\": fields,\n        \"footer\": {\"text\": footer_text[:2048]},\n        \"timestamp\": now\n    }\n    body = json.dumps({\"embeds\": [embed]})\n\n    # Truncate if embed exceeds Discord limit\n    if len(body) > 5500:\n        while len(embed[\"fields\"]) > 1 and len(json.dumps({\"embeds\": [embed]})) > 5500:\n            embed[\"fields\"].pop()\n        embed[\"fields\"].append({\"name\": \"...\", \"value\": f\"+{dual_hit_count - len(embed['fields']) + 1} more, see Kibana\", \"inline\": False})\n        body = json.dumps({\"embeds\": [embed]})\nelse:\n    content = (f\"WF-HACCP-3 nightly cross-correlation: \"\n              f\"0 dual-hits in last 24h. \"\n              f\"Wazuh alerts with IPs: {wazuh_total} (level >= {min_level}), \"\n              f\"tier1 TI matches: {tier1_total}.\")\n    if all_errors:\n        content += f\" ({len(all_errors)} query error(s))\"\n    body = json.dumps({\"content\": content})\n\nprint(json.dumps({\"body\": body}))\n",
+          "value": "import json, datetime\n\ndata = json.loads('''$correlate.message''')\nif isinstance(data, str):\n    try:\n        data = json.loads(data)\n    except:\n        data = {}\n\ndual_hits = data.get(\"dual_hits\", [])\ndual_hit_count = data.get(\"dual_hit_count\", 0)\nwazuh_total = data.get(\"wazuh_total\", 0)\ntier1_total = data.get(\"tier1_total\", 0)\nmin_level = data.get(\"min_level_used\", 7)\nall_errors = data.get(\"all_errors\", [])\n\nKIBANA_URL = \"http://172.20.3.16:5601/app/discover#/?_g=(time:(from:now-24h,to:now))\"\n\ndef sanitize(s):\n    return str(s).replace('\"', \"'\").replace(\"\\\\\", \"\")[:200]\n\nnow = datetime.datetime.utcnow().strftime(\"%Y-%m-%dT%H:%M:%SZ\")\n\nif dual_hit_count > 0:\n    fields = []\n    for hit in dual_hits[:10]:\n        ip = hit[\"ip\"]\n        agents_str = \", \".join(hit.get(\"wazuh_agents\", [])[:3])\n        providers_str = \", \".join(hit.get(\"tier1_providers\", [])[:3])\n        types_str = \", \".join(hit.get(\"tier1_types\", [])[:3])\n        rule_text = sanitize(hit.get(\"wazuh_top_rule\", \"\"))\n        val = (f\"Wazuh: {hit.get('wazuh_count', 0)} alerts, \"\n               f\"max level {hit.get('wazuh_max_level', 0)}, \"\n               f\"'{rule_text}' on {agents_str}\\n\"\n               f\"TI: {hit.get('tier1_count', 0)} matches, \"\n               f\"{providers_str}, {types_str}\")\n        fields.append({\"name\": f\"`{ip}`\", \"value\": val[:1024], \"inline\": False})\n\n    footer_text = (f\"WF-ELK-3 nightly | \"\n                   f\"Wazuh: {wazuh_total} (lvl>={min_level}) | \"\n                   f\"tier1: {tier1_total} | \"\n                   f\"drill: {KIBANA_URL[:60]}...\")\n    if dual_hit_count > 10:\n        footer_text += f\" | +{dual_hit_count - 10} more (raise min_alert_level or check Kibana)\"\n    if all_errors:\n        footer_text += f\" | {len(all_errors)} query error(s)\"\n\n    embed = {\n        \"title\": f\"WF-ELK-3: {dual_hit_count} dual-hit IP(s) in last 24h\",\n        \"description\": f\"IPs that triggered both a Wazuh alert (level >= {min_level}) and a elk-01 tier1 TI match.\",\n        \"color\": 15158332,\n        \"fields\": fields,\n        \"footer\": {\"text\": footer_text[:2048]},\n        \"timestamp\": now\n    }\n    body = json.dumps({\"embeds\": [embed]})\n\n    # Truncate if embed exceeds Discord limit\n    if len(body) > 5500:\n        while len(embed[\"fields\"]) > 1 and len(json.dumps({\"embeds\": [embed]})) > 5500:\n            embed[\"fields\"].pop()\n        embed[\"fields\"].append({\"name\": \"...\", \"value\": f\"+{dual_hit_count - len(embed['fields']) + 1} more, see Kibana\", \"inline\": False})\n        body = json.dumps({\"embeds\": [embed]})\nelse:\n    content = (f\"WF-ELK-3 nightly cross-correlation: \"\n              f\"0 dual-hits in last 24h. \"\n              f\"Wazuh alerts with IPs: {wazuh_total} (level >= {min_level}), \"\n              f\"tier1 TI matches: {tier1_total}.\")\n    if all_errors:\n        content += f\" ({len(all_errors)} query error(s))\"\n    body = json.dumps({\"content\": content})\n\nprint(json.dumps({\"body\": body}))\n",
           "multiline": false,
           "multiselect": false,
           "options": null,
@@ -575,13 +575,13 @@
   "tags": [
     "phase14",
     "cross-correlator",
-    "haccp",
+    "elk-01",
     "wazuh"
   ],
   "id": "c94fd866-0c53-486b-ba4f-92f4330e6dd6",
   "is_valid": true,
-  "name": "WF-HACCP-3: Nightly Wazuh Cross-Correlator",
-  "description": "Nightly workflow that queries brisket Wazuh alerts and haccp tier1 TI matches from the same 24h window, joins on IP intersection, and posts dual-hit indicators to #soc-alerts. Zero Ollama calls, zero TheHive cases.",
+  "name": "WF-ELK-3: Nightly Wazuh Cross-Correlator",
+  "description": "Nightly workflow that queries soc-01 Wazuh alerts and elk-01 tier1 TI matches from the same 24h window, joins on IP intersection, and posts dual-hit indicators to #soc-alerts. Zero Ollama calls, zero TheHive cases.",
   "start": "1d7ed962-d56d-4bdc-9d59-d0a5bcfa8813",
   "owner": "",
   "sharing": "private",
@@ -610,37 +610,37 @@
   "org_id": "187412c7-59a0-46c9-b3bb-d2e184449bf4",
   "workflow_variables": [
     {
-      "description": "brisket Wazuh OpenSearch URL",
+      "description": "soc-01 Wazuh OpenSearch URL",
       "id": "284a70ce-26a5-465d-9ca1-e57f6eb0bf66",
       "name": "opensearch_url",
-      "value": "https://10.10.20.30:9200"
+      "value": "https://172.20.2.14:9200"
     },
     {
-      "description": "brisket OpenSearch username",
+      "description": "soc-01 OpenSearch username",
       "id": "b1f830fa-d906-4b52-8724-3a227412fcfa",
       "name": "opensearch_user",
       "value": "REDACTED"
     },
     {
-      "description": "brisket OpenSearch password",
+      "description": "soc-01 OpenSearch password",
       "id": "9626561a-2066-495e-9a77-a2f391eef920",
       "name": "opensearch_pass",
       "value": "REDACTED"
     },
     {
-      "description": "haccp Elasticsearch URL",
+      "description": "elk-01 Elasticsearch URL",
       "id": "189fa7fa-3f11-4242-960c-e3101b0ef62c",
       "name": "elk_url",
-      "value": "https://10.10.30.25:9200"
+      "value": "https://172.20.3.16:9200"
     },
     {
-      "description": "haccp ES username",
+      "description": "elk-01 ES username",
       "id": "ccb3297b-1e15-48a6-ad82-36059fa1df2a",
       "name": "elk_user",
       "value": "REDACTED"
     },
     {
-      "description": "haccp ES password",
+      "description": "elk-01 ES password",
       "id": "7b41edf1-9d8a-4e01-b15e-8f0e553ab266",
       "name": "elk_pass",
       "value": "REDACTED"

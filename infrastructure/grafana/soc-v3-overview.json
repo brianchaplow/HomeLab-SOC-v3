@@ -444,12 +444,12 @@
       "id": 9,
       "targets": [
         {
-          "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{job=\"brisket-node\",mode=\"idle\"}[5m])) * 100)",
+          "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{job=\"soc-01-node\",mode=\"idle\"}[5m])) * 100)",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "brisket CPU Usage",
+      "title": "soc-01 CPU Usage",
       "type": "gauge"
     },
     {
@@ -472,12 +472,12 @@
       "id": 10,
       "targets": [
         {
-          "expr": "100 * (1 - node_memory_MemAvailable_bytes{job=\"brisket-node\"} / node_memory_MemTotal_bytes{job=\"brisket-node\"})",
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes{job=\"soc-01-node\"} / node_memory_MemTotal_bytes{job=\"soc-01-node\"})",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "brisket Memory Usage",
+      "title": "soc-01 Memory Usage",
       "type": "gauge"
     },
     {
@@ -559,7 +559,7 @@
       },
       "targets": [
         {
-          "expr": "nvidia_smi_utilization_gpu_ratio{job=\"brisket-nvidia\"} * 100",
+          "expr": "nvidia_smi_utilization_gpu_ratio{job=\"soc-01-nvidia\"} * 100",
           "legendFormat": "",
           "refId": "A"
         }
@@ -646,7 +646,7 @@
       },
       "targets": [
         {
-          "expr": "nvidia_smi_memory_used_bytes{job=\"brisket-nvidia\"} / nvidia_smi_memory_total_bytes{job=\"brisket-nvidia\"} * 100",
+          "expr": "nvidia_smi_memory_used_bytes{job=\"soc-01-nvidia\"} / nvidia_smi_memory_total_bytes{job=\"soc-01-nvidia\"} * 100",
           "legendFormat": "",
           "refId": "A"
         }
@@ -718,7 +718,7 @@
         "x": 0,
         "y": 37
       },
-      "title": "ELK Detection & Fleet Health (haccp)",
+      "title": "ELK Detection & Fleet Health (elk-01)",
       "type": "row"
     },
     {
@@ -1164,7 +1164,7 @@
         "x": 0,
         "y": 50
       },
-      "title": "haccp Node Health",
+      "title": "elk-01 Node Health",
       "type": "row"
     },
     {
@@ -1203,12 +1203,12 @@
       },
       "targets": [
         {
-          "expr": "100 - (avg(rate(node_cpu_seconds_total{instance=\"10.10.30.25:9100\",mode=\"idle\"}[5m])) * 100)",
+          "expr": "100 - (avg(rate(node_cpu_seconds_total{instance=\"172.20.3.16:9100\",mode=\"idle\"}[5m])) * 100)",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "haccp CPU Usage",
+      "title": "elk-01 CPU Usage",
       "type": "gauge"
     },
     {
@@ -1247,12 +1247,12 @@
       },
       "targets": [
         {
-          "expr": "(1 - (node_memory_MemAvailable_bytes{instance=\"10.10.30.25:9100\"} / node_memory_MemTotal_bytes{instance=\"10.10.30.25:9100\"})) * 100",
+          "expr": "(1 - (node_memory_MemAvailable_bytes{instance=\"172.20.3.16:9100\"} / node_memory_MemTotal_bytes{instance=\"172.20.3.16:9100\"})) * 100",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "haccp Memory Usage",
+      "title": "elk-01 Memory Usage",
       "type": "gauge"
     },
     {
@@ -1291,12 +1291,12 @@
       },
       "targets": [
         {
-          "expr": "(1 - (node_filesystem_avail_bytes{instance=\"10.10.30.25:9100\",mountpoint=\"/\"} / node_filesystem_size_bytes{instance=\"10.10.30.25:9100\",mountpoint=\"/\"})) * 100",
+          "expr": "(1 - (node_filesystem_avail_bytes{instance=\"172.20.3.16:9100\",mountpoint=\"/\"} / node_filesystem_size_bytes{instance=\"172.20.3.16:9100\",mountpoint=\"/\"})) * 100",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "haccp Disk Usage (/)",
+      "title": "elk-01 Disk Usage (/)",
       "type": "gauge"
     },
     {
@@ -1335,12 +1335,12 @@
       },
       "targets": [
         {
-          "expr": "(1 - (node_filesystem_avail_bytes{instance=\"10.10.30.25:9100\",mountpoint=\"/opt/arkime/raw\"} / node_filesystem_size_bytes{instance=\"10.10.30.25:9100\",mountpoint=\"/opt/arkime/raw\"})) * 100",
+          "expr": "(1 - (node_filesystem_avail_bytes{instance=\"172.20.3.16:9100\",mountpoint=\"/opt/arkime/raw\"} / node_filesystem_size_bytes{instance=\"172.20.3.16:9100\",mountpoint=\"/opt/arkime/raw\"})) * 100",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "haccp PCAP Disk",
+      "title": "elk-01 PCAP Disk",
       "type": "gauge"
     },
     {

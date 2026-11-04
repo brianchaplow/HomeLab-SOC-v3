@@ -6,7 +6,7 @@
     Pulls all SOC configs/scripts from deployed infrastructure and 
     syncs to GitHub repo + Astro website assets.
     
-    Run from PITBOSS (Windows workstation).
+    Run from ADMIN-WS (Windows workstation).
 
 .AUTHOR
     Brian Chaplow
@@ -15,10 +15,10 @@
     Updated: January 2026
     
     Hosts:
-      - QNAP (smokehouse): 10.10.20.10:2222
+      - QNAP (sensor-01): 172.20.2.11:2222
       - GCP VM: via gcloud
-      - pitcrew: 10.10.30.20
-      - smoker: 10.10.30.21
+      - pve-01: 172.20.3.11
+      - pve-02: 172.20.3.12
 #>
 
 param(
@@ -40,12 +40,12 @@ $Config = @{
     
     # Remote hosts
     # SSH user comes from $env:SOC_SSH_USER (falls back to the local username)
-    QnapHost   = "$(if ($env:SOC_SSH_USER) { $env:SOC_SSH_USER } else { $env:USERNAME })@10.10.20.10"
+    QnapHost   = "$(if ($env:SOC_SSH_USER) { $env:SOC_SSH_USER } else { $env:USERNAME })@172.20.2.11"
     QnapPort   = 2222
     GcpVm      = "wordpress-1-vm"
     GcpZone    = "us-east4-a"
-    Pitcrew    = "root@10.10.30.20"
-    Smoker     = "root@10.10.30.21"
+    Pve01    = "root@172.20.3.11"
+    Pve02     = "root@172.20.3.12"
     
     # QNAP paths
     QnapSocRoot       = "/share/Container/SOC"
@@ -109,7 +109,7 @@ function Test-SshHost {
 # =============================================================================
 
 function Get-QnapFiles {
-    Write-Section "Collecting from QNAP (smokehouse)"
+    Write-Section "Collecting from QNAP (sensor-01)"
     
     if (-not (Test-SshHost -HostName $Config.QnapHost -Port $Config.QnapPort)) {
         Write-Status "Cannot connect to QNAP" -Type Error
@@ -294,7 +294,7 @@ This directory contains trained ML models for threat detection.
 
 ## Training Location
 
-Models are trained on the Kali system (sear) at:
+Models are trained on the Kali system (attack-01) at:
 - `~/soc-ml/`
 
 ## Why Models Aren't in Repo
@@ -355,36 +355,36 @@ function Get-ProxmoxFiles {
     New-Item -ItemType Directory -Path $dest -Force | Out-Null
     
     # Telegraf configs from Proxmox hosts
-    if (Test-SshHost -HostName $Config.Pitcrew) {
-        Write-Status "Fetching from pitcrew..." -Type Info
+    if (Test-SshHost -HostName $Config.Pve01) {
+        Write-Status "Fetching from pve-01..." -Type Info
         if (-not $DryRun) {
-            scp "$($Config.Pitcrew):/etc/telegraf/telegraf.conf" "$dest\telegraf-pitcrew.conf" 2>$null
+            scp "$($Config.Pve01):/etc/telegraf/telegraf.conf" "$dest\telegraf-pve-01.conf" 2>$null
             if ($LASTEXITCODE -eq 0) {
-                Write-Status "telegraf-pitcrew.conf" -Type Success
+                Write-Status "telegraf-pve-01.conf" -Type Success
             } else {
-                Write-Status "Failed: telegraf-pitcrew.conf" -Type Warning
+                Write-Status "Failed: telegraf-pve-01.conf" -Type Warning
             }
         } else {
-            Write-Status "DRY RUN: Would copy telegraf from pitcrew" -Type Warning
+            Write-Status "DRY RUN: Would copy telegraf from pve-01" -Type Warning
         }
     } else {
-        Write-Status "Cannot connect to pitcrew" -Type Warning
+        Write-Status "Cannot connect to pve-01" -Type Warning
     }
     
-    if (Test-SshHost -HostName $Config.Smoker) {
-        Write-Status "Fetching from smoker..." -Type Info
+    if (Test-SshHost -HostName $Config.Pve02) {
+        Write-Status "Fetching from pve-02..." -Type Info
         if (-not $DryRun) {
-            scp "$($Config.Smoker):/etc/telegraf/telegraf.conf" "$dest\telegraf-smoker.conf" 2>$null
+            scp "$($Config.Pve02):/etc/telegraf/telegraf.conf" "$dest\telegraf-pve-02.conf" 2>$null
             if ($LASTEXITCODE -eq 0) {
-                Write-Status "telegraf-smoker.conf" -Type Success
+                Write-Status "telegraf-pve-02.conf" -Type Success
             } else {
-                Write-Status "Failed: telegraf-smoker.conf" -Type Warning
+                Write-Status "Failed: telegraf-pve-02.conf" -Type Warning
             }
         } else {
-            Write-Status "DRY RUN: Would copy telegraf from smoker" -Type Warning
+            Write-Status "DRY RUN: Would copy telegraf from pve-02" -Type Warning
         }
     } else {
-        Write-Status "Cannot connect to smoker" -Type Warning
+        Write-Status "Cannot connect to pve-02" -Type Warning
     }
     
     Write-Status "Proxmox collection complete" -Type Success

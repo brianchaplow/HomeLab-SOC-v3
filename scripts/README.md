@@ -6,9 +6,9 @@ Utility scripts for SOC infrastructure data collection and the v2 automation sui
 
 [`collection/Collect-SOC.ps1`](collection/Collect-SOC.ps1) is a PowerShell script that gathers configurations and operational state from all SOC hosts via SSH. It collects:
 
-- Docker Compose files and container status from brisket, smokehouse, and smoker
+- Docker Compose files and container status from soc-01, sensor-01, and pve-02
 - Wazuh manager configuration, custom rules, and decoders
-- Suricata and Zeek sensor configurations from smokehouse
+- Suricata and Zeek sensor configurations from sensor-01
 - Prometheus and Grafana configurations
 - Velociraptor server/client configs
 - Caldera configuration files
@@ -29,7 +29,7 @@ The [`automation/`](automation/) directory contains the **v2 soc-automation scri
 | [`scripts/enrichment.py`](automation/scripts/enrichment.py) | AbuseIPDB + WHOIS lookup for alert IPs | Shuffle WF1 |
 | [`scripts/autoblock.py`](automation/scripts/autoblock.py) | Automated Cloudflare WAF blocking | Shuffle WF1 |
 | [`scripts/digest.py`](automation/scripts/digest.py) | Daily alert digest to Discord | Shuffle WF2 |
-| [`scripts/ml_scorer.py`](automation/scripts/ml_scorer.py) | XGBoost model inference utilities | ML Scorer container (brisket:5002) |
+| [`scripts/ml_scorer.py`](automation/scripts/ml_scorer.py) | XGBoost model inference utilities | ML Scorer container (soc-01:5002) |
 
 ### Shared Utilities
 

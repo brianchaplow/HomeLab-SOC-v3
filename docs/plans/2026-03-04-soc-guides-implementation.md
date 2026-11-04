@@ -25,15 +25,15 @@ Create `docs/guides/portfolio-overview.md` with:
 
 **Section 1 — SOC Architecture at a Glance:**
 - Title and introduction (what this SOC is, why it exists)
-- Key metrics summary table: 10 Wazuh agents, 214 Elastic detection rules, PR-AUC 0.9998, 7 Velociraptor clients, 8 SOAR workflows (7 with LLM), 29 MITRE ATT&CK profiles, 12 Docker containers on brisket
+- Key metrics summary table: 10 Wazuh agents, 214 Elastic detection rules, PR-AUC 0.9998, 7 Velociraptor clients, 8 SOAR workflows (7 with LLM), 29 MITRE ATT&CK profiles, 12 Docker containers on soc-01
 - Technology stack table: Wazuh 4.14.2, Elasticsearch 8.17, Shuffle SOAR, TheHive 4, Cortex 3, Velociraptor 0.75.3, Caldera 5.3.0, XGBoost ML, Ollama qwen3:8b
 - Hardware inventory summary: 8 physical hosts, 176 GB cluster RAM, 12 GB GPU VRAM (RTX A1000 8GB + GTX 1650 Ti 4GB)
 - High-level data flow narrative: Endpoints -> Sensors -> SIEM -> SOAR -> Response (with Mermaid or text diagram)
 
 **Section 2 — The Alert Lifecycle (End-to-End):**
 Trace a real alert through the full lifecycle with these subsections:
-- **Detection:** Suricata IDS on smokehouse SPAN port (eth4) fires on SQL injection payload -> eve.json -> Wazuh agent ships to Manager -> decoded/rule-matched -> alert created with rule.id/level/MITRE -> indexed in OpenSearch `wazuh-alerts-4.x-YYYY.MM.DD`. Parallel: Zeek captures HTTP flow metadata -> Fluent Bit -> `zeek-http` index.
-- **Automated Enrichment:** Alert level 8+ triggers Shuffle WF1 webhook -> AbuseIPDB lookup (confidence score, reports, country, ISP) + ML Scorer POST to brisket:5002 (returns ml_score 0-1, ml_label, top features) + Ollama qwen3:8b generates 1-2 sentence triage summary.
+- **Detection:** Suricata IDS on sensor-01 SPAN port (eth4) fires on SQL injection payload -> eve.json -> Wazuh agent ships to Manager -> decoded/rule-matched -> alert created with rule.id/level/MITRE -> indexed in OpenSearch `wazuh-alerts-4.x-YYYY.MM.DD`. Parallel: Zeek captures HTTP flow metadata -> Fluent Bit -> `zeek-http` index.
+- **Automated Enrichment:** Alert level 8+ triggers Shuffle WF1 webhook -> AbuseIPDB lookup (confidence score, reports, country, ISP) + ML Scorer POST to soc-01:5002 (returns ml_score 0-1, ml_label, top features) + Ollama qwen3:8b generates 1-2 sentence triage summary.
 - **Scoring Decision:** `combined_score = max(abuse_normalized, ml_score)`. Block decision: abuse >= 90 AND reports >= 5 AND NOT whitelisted. Alert decision: combined >= 0.7 OR rule_level >= 10.
 - **Case Creation:** TheHive case auto-created via Shuffle with title, enrichment context, severity mapping, TLP-AMBER, tags. NIST 800-61 task structure: Identification, Containment, Eradication, Recovery, Lessons Learned.
 - **Investigation:** Velociraptor artifact collection on affected endpoint (processes, network connections, file hashes, persistence). Zeek flow correlation (5-tuple + timestamp join). Cortex analyzers (VirusTotal for hashes, Shodan for IPs).
@@ -68,14 +68,14 @@ git commit -m "Add portfolio overview: architecture and alert lifecycle sections
 **Section 3 — Detection Engineering:**
 - Dual-SIEM architecture rationale: Wazuh (opinionated integrated platform — manager/agents/rules/dashboard tightly coupled) vs Elastic (flexible query-driven — KQL/EQL, pre-built rules, ML jobs). Why both: interview differentiator, resilience, comparison experience.
 - Wazuh detection: 10 agents across 5 VLANs + GCP. Agent enrollment via wazuh-authd (:1515). Alert levels 0-15. Custom rules (local_rules.xml, IDs 100000+). Custom decoders for non-standard log formats. FIM (syscheck) every 12h. SCA compliance checks. Vulnerability detection with hourly feed updates.
-- Network detection: Suricata IDS on smokehouse SPAN (47,487 ET Open rules + custom SIDs 9000001-9000021 for SQL injection, XSS, command injection, directory traversal). Zeek NSM producing 7 index types (conn, dns, http, ssl, files, notice, weird).
+- Network detection: Suricata IDS on sensor-01 SPAN (47,487 ET Open rules + custom SIDs 9000001-9000021 for SQL injection, XSS, command injection, directory traversal). Zeek NSM producing 7 index types (conn, dns, http, ssl, files, notice, weird).
 - ELK detection: 214 enabled rules (of 1,419 total) mapped to MITRE ATT&CK. Breakdown: Defense Evasion 57, Credential Access 45, Execution 38, Persistence 31, Privilege Escalation 29, Lateral Movement 21. Rules run on 5-minute intervals querying logs-* indices.
 - OPNsense syslog: Firewall events via UDP 514, decoded by Wazuh.
 
 **Section 4 — SOAR & LLM Automation:**
-- Shuffle architecture: Frontend (:3443), Backend (:5001), Orborus (worker spawner), OpenSearch (:9202 internal state). All on brisket.
+- Shuffle architecture: Frontend (:3443), Backend (:5001), Orborus (worker spawner), OpenSearch (:9202 internal state). All on soc-01.
 - Workflow inventory table: WF1 (real-time enrichment, webhook), WF2 (watch digest, 0605/1805 EST), WF3 (detection gaps, on-demand), WF5 (cluster triage, 0600 EST), WF6 (model drift, 0900 EST), WF7 (honeypot intel, Sun 1200 EST), WF8 (anomaly finder, 1500 EST).
-- Scheduling architecture: Shuffle's native scheduler is interval-based (seconds), not cron. Precise wall-clock execution uses system cron on brisket with `curl POST` to `/api/v1/workflows/{id}/execute`.
+- Scheduling architecture: Shuffle's native scheduler is interval-based (seconds), not cron. Precise wall-clock execution uses system cron on soc-01 with `curl POST` to `/api/v1/workflows/{id}/execute`.
 - Workflow variable convention: All credentials use `$varname` substitution. Never hardcoded. Safe for repo export.
 - Ollama integration patterns: qwen3:8b model, `/no_think` prefix suppresses reasoning tokens, `<think>` tags stripped via regex, temperature 0.3, `num_predict` 1000-3000.
 - GPU scheduling: 3+ hour stagger between Ollama-heavy workflows to avoid RTX A1000 contention. Schedule: 0600 WF5, 0605 WF2, 0900 WF6, 1200 WF7, 1500 WF8, 1805 WF2.
@@ -104,38 +104,38 @@ git commit -m "Add portfolio overview: detection engineering and SOAR/LLM sectio
 - Temporal train/test split: All training samples precede test samples chronologically. Prevents data leakage.
 - PR-AUC 0.9998: Chosen over ROC-AUC because dataset is heavily imbalanced (benign >> attack). PR-AUC finds needles in haystacks.
 - 6 models trained: XGBoost, LightGBM, RandomForest, LogisticRegression, IsolationForest, SelfTrainingClassifier.
-- Deployment: FastAPI container ml-scorer on brisket:5002. GPU-accelerated (RTX A1000). Health check at `/health`.
+- Deployment: FastAPI container ml-scorer on soc-01:5002. GPU-accelerated (RTX A1000). Health check at `/health`.
 - Drift monitoring: WF6 daily samples ~200 alerts, compares distribution vs baseline, classifies STABLE/MINOR_DRIFT/SIGNIFICANT_DRIFT.
 - Training code in separate repo: github.com/brianchaplow/soc-ml.
 
 **Section 6 — Incident Response & Case Management:**
-- TheHive 4 on pitcrew LXC 200 (10.10.30.22:9000). Case lifecycle aligned to NIST 800-61.
-- Cortex 3 on same LXC (10.10.30.22:9001). 5 analyzers: AbuseIPDB (fully operational), VirusTotal (needs API key), Shodan (needs API key), Abuse Finder (operational), GoogleDNS (operational).
-- Velociraptor v0.75.3 on brisket (GUI :8889, client frontend :8000, gRPC :8001). 7 enrolled clients across all host types. VQL for live forensic artifact collection.
+- TheHive 4 on pve-01 LXC 200 (172.20.3.13:9000). Case lifecycle aligned to NIST 800-61.
+- Cortex 3 on same LXC (172.20.3.13:9001). 5 analyzers: AbuseIPDB (fully operational), VirusTotal (needs API key), Shodan (needs API key), Abuse Finder (operational), GoogleDNS (operational).
+- Velociraptor v0.75.3 on soc-01 (GUI :8889, client frontend :8000, gRPC :8001). 7 enrolled clients across all host types. VQL for live forensic artifact collection.
 - Integration: Shuffle WF1 auto-creates cases. WF5 creates TheHive alerts for INVESTIGATE clusters. WF3 creates cases for detection gap reports.
 - After-action process: NIST 800-61 Section 3.4 template. MTTD/MTTR metrics tracked per case.
 
 **Section 7 — Adversary Emulation & Validation:**
-- Caldera v5.3.0 on smoker (10.10.30.21:8888). 4 Sandcat agents (DC01, WS01, DVWA, Metasploitable 3).
+- Caldera v5.3.0 on pve-02 (172.20.3.12:8888). 4 Sandcat agents (DC01, WS01, DVWA, Metasploitable 3).
 - 29 MITRE ATT&CK adversary profiles for validating detection coverage.
-- run_attack.sh: 200+ attack types across 15+ categories. CSV ground-truth logging with attack_id, timestamps, MITRE technique, tool, source/target IPs, success flag. All attacks originate from sear (10.10.20.20), target VLAN 40 only.
+- run_attack.sh: 200+ attack types across 15+ categories. CSV ground-truth logging with attack_id, timestamps, MITRE technique, tool, source/target IPs, success flag. All attacks originate from attack-01 (172.20.2.12), target VLAN 400 only.
 - Purple team closed loop: Execute (Caldera/manual) -> Detect (Wazuh alerts) -> Measure (WF3 coverage %) -> Improve (write rules) -> Retrain (ML pipeline).
-- VLAN 40 isolation: Targets cannot initiate outbound. All attack traffic contained.
+- VLAN 400 isolation: Targets cannot initiate outbound. All attack traffic contained.
 
 **Section 8 — Honeypot Research:**
 - GCP WordPress honeypot (INST 570 course project). PHP wp-login.php trap captures credentials.
-- Data pipeline: Fluent Bit ships credentials.json + Apache access logs to ELK LXC 201 via Tailscale overlay. Wazuh agent 009 ships OS events to brisket, synced to ELK via honeypot-wazuh-sync.py (cron */15).
+- Data pipeline: Fluent Bit ships credentials.json + Apache access logs to ELK LXC 201 via Tailscale overlay. Wazuh agent 009 ships OS events to soc-01, synced to ELK via honeypot-wazuh-sync.py (cron */15).
 - 3 ELK indices: honeypot-credentials (~3,140), honeypot-access (~737), honeypot-wazuh (~5,925).
 - 15-panel Kibana dashboard (programmatically built): geographic map, credential word clouds, MITRE technique breakdown, attacker profiles.
 - WF7 weekly intelligence reports (Ollama-generated CTI analysis).
 - Tailscale: GCP VM connects via WireGuard mesh (100.x.x.x). No inbound port exposure on home network.
 
 **Section 9 — Network Security Design:**
-- 5 VLANs: 10 (Management), 20 (SOC), 30 (Lab/Proxmox/AD), 40 (Targets-ISOLATED), 50 (IoT).
-- OPNsense firewall (Protectli VP2420): Stateful inter-VLAN routing policy. VLAN 40 deny-all-outbound. VLAN 50 internet-only.
-- MokerLink 10G managed switch: SPAN mirror on TE10 -> smokehouse eth4. 9-rule stateless ACL on TE4 (sear) for intra-VLAN micro-segmentation — permits only Wazuh (1514/1515), OpenSearch (9200), Velociraptor (8000), Prometheus (9100), SSH (22); denies all else.
+- 5 VLANs: 100 (Management), 200 (SOC), 300 (Lab/Proxmox/AD), 400 (Targets-ISOLATED), 500 (IoT).
+- OPNsense firewall (Protectli VP2420): Stateful inter-VLAN routing policy. VLAN 400 deny-all-outbound. VLAN 500 internet-only.
+- MokerLink 10G managed switch: SPAN mirror on TE10 -> sensor-01 eth4. 9-rule stateless ACL on TE4 (attack-01) for intra-VLAN micro-segmentation — permits only Wazuh (1514/1515), OpenSearch (9200), Velociraptor (8000), Prometheus (9100), SSH (22); denies all else.
 - Defense-in-depth layers: Perimeter (OPNsense) -> Segmentation (VLANs) -> Micro-segmentation (ACLs) -> Host (Wazuh agents, FIM, SCA) -> Detection (214 rules, Suricata, Zeek) -> AI/ML (XGBoost, Ollama).
-- Docker target networking: ipvlan L2 on vmbr0v40 (VLAN 40 bridge) places containers directly on isolated subnet without NAT.
+- Docker target networking: ipvlan L2 on vmbr0v40 (VLAN 400 bridge) places containers directly on isolated subnet without NAT.
 
 **Step 2: Commit**
 
@@ -161,21 +161,21 @@ Service access table with every URL, port, credential:
 
 | Service | URL | User | Password |
 |---------|-----|------|----------|
-| Wazuh Dashboard | https://10.10.20.30:5601 | admin | <PLATFORM_PASSWORD> |
-| Wazuh API | https://10.10.20.30:55000 | wazuh-wui | <WAZUH_API_PASSWORD> |
-| OpenSearch (Wazuh) | https://10.10.20.30:9200 | admin | (in .env) |
-| Shuffle SOAR | https://10.10.20.30:3443 | admin | <PLATFORM_PASSWORD> |
-| Shuffle API | http://10.10.20.30:5001 | — | API key: <SHUFFLE_API_KEY> |
-| TheHive | http://10.10.30.22:9000 | socadmin@thehive.local | <PLATFORM_PASSWORD> |
-| Cortex | http://10.10.30.22:9001 | socadmin@SOC | <PLATFORM_PASSWORD> |
-| Velociraptor | https://10.10.20.30:8889 | admin | <PLATFORM_PASSWORD> |
-| Caldera | http://10.10.30.21:8888 | red | <PLATFORM_PASSWORD> |
-| ELK Kibana | http://10.10.30.23:5601 | elastic | <PLATFORM_PASSWORD> |
-| ELK Elasticsearch | https://10.10.30.23:9200 | elastic | <PLATFORM_PASSWORD> |
-| Grafana | http://10.10.20.30:3000 | admin | (same as OpenSearch) |
-| Prometheus | http://10.10.20.30:9090 | — | — |
-| ML Scorer | http://10.10.20.30:5002 | — | — |
-| Ollama | http://10.10.20.30:11434 | — | — |
+| Wazuh Dashboard | https://172.20.2.14:5601 | admin | <PLATFORM_PASSWORD> |
+| Wazuh API | https://172.20.2.14:55000 | wazuh-wui | <WAZUH_API_PASSWORD> |
+| OpenSearch (Wazuh) | https://172.20.2.14:9200 | admin | (in .env) |
+| Shuffle SOAR | https://172.20.2.14:3443 | admin | <PLATFORM_PASSWORD> |
+| Shuffle API | http://172.20.2.14:5001 | — | API key: <SHUFFLE_API_KEY> |
+| TheHive | http://172.20.3.13:9000 | socadmin@thehive.local | <PLATFORM_PASSWORD> |
+| Cortex | http://172.20.3.13:9001 | socadmin@SOC | <PLATFORM_PASSWORD> |
+| Velociraptor | https://172.20.2.14:8889 | admin | <PLATFORM_PASSWORD> |
+| Caldera | http://172.20.3.12:8888 | red | <PLATFORM_PASSWORD> |
+| ELK Kibana | http://172.20.3.14:5601 | elastic | <PLATFORM_PASSWORD> |
+| ELK Elasticsearch | https://172.20.3.14:9200 | elastic | <PLATFORM_PASSWORD> |
+| Grafana | http://172.20.2.14:3000 | admin | (same as OpenSearch) |
+| Prometheus | http://172.20.2.14:9090 | — | — |
+| ML Scorer | http://172.20.2.14:5002 | — | — |
+| Ollama | http://172.20.2.14:11434 | — | — |
 
 SSH commands table (LAN + Tailscale variants).
 
@@ -183,13 +183,13 @@ SSH commands table (LAN + Tailscale variants).
 
 Shift start procedure:
 1. Check Discord channels for overnight WF2 digest, WF8 anomalies, WF1 alerts
-2. Verify Wazuh agent health: `curl -k -u wazuh-wui:'<WAZUH_API_PASSWORD>' https://10.10.20.30:55000/agents?status=active` — expect 10 agents
-3. Check Shuffle workflow status: https://10.10.20.30:3443 -> Workflows -> verify last execution times match schedules
-4. Review open TheHive cases: `curl -u socadmin@thehive.local:'<PLATFORM_PASSWORD>' http://10.10.30.22:9000/api/case?range=0-20&sort=-createdAt`
-5. Check Grafana SOC v3 Overview: http://10.10.20.30:3000 -> CPU, memory, alert rates
-6. Verify ELK containers running: `ssh root@10.10.30.20` then `pct exec 201 -- docker ps` — expect elasticsearch, kibana, fleet-server, logstash
-7. Check ML Scorer health: `curl http://10.10.20.30:5002/health`
-8. Check Velociraptor client status: https://10.10.20.30:8889 -> Clients -> verify 7 clients
+2. Verify Wazuh agent health: `curl -k -u wazuh-wui:'<WAZUH_API_PASSWORD>' https://172.20.2.14:55000/agents?status=active` — expect 10 agents
+3. Check Shuffle workflow status: https://172.20.2.14:3443 -> Workflows -> verify last execution times match schedules
+4. Review open TheHive cases: `curl -u socadmin@thehive.local:'<PLATFORM_PASSWORD>' http://172.20.3.13:9000/api/case?range=0-20&sort=-createdAt`
+5. Check Grafana SOC v3 Overview: http://172.20.2.14:3000 -> CPU, memory, alert rates
+6. Verify ELK containers running: `ssh root@172.20.3.11` then `pct exec 201 -- docker ps` — expect elasticsearch, kibana, fleet-server, logstash
+7. Check ML Scorer health: `curl http://172.20.2.14:5002/health`
+8. Check Velociraptor client status: https://172.20.2.14:8889 -> Clients -> verify 7 clients
 
 **Step 2: Commit**
 
@@ -217,7 +217,7 @@ git commit -m "Add SOC playbook: quick access reference and daily checklist"
 - Levels 12-15: Critical (email alert if enabled)
 
 **3.2 Wazuh Dashboard Navigation:**
-- Login: https://10.10.20.30:5601 -> admin / <PLATFORM_PASSWORD>
+- Login: https://172.20.2.14:5601 -> admin / <PLATFORM_PASSWORD>
 - Modules -> Security Events: real-time alert stream
 - Filter by: agent.name, rule.level, rule.id, data.srcip, @timestamp
 - Click any alert row to expand full JSON details
@@ -246,14 +246,14 @@ Provide 15+ complete curl commands with JSON bodies:
 
 Each query as a complete curl command:
 ```bash
-curl -k -u admin:'PASSWORD' -X GET "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+curl -k -u admin:'PASSWORD' -X GET "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' \
   -d '{...}'
 ```
 
 **3.4 ELK Elasticsearch Queries:**
 
-10+ queries against ELK (10.10.30.23:9200):
+10+ queries against ELK (172.20.3.14:9200):
 1. All detection rule alerts (last 24h)
 2. Alerts by MITRE tactic
 3. Alerts by agent hostname
@@ -266,7 +266,7 @@ curl -k -u admin:'PASSWORD' -X GET "https://10.10.20.30:9200/wazuh-alerts-4.x-*/
 10. Events by data stream dataset
 
 **3.5 Reading Shuffle WF1 Execution History:**
-- Navigate: https://10.10.20.30:3443 -> Workflows -> WF1 Threat Enrichment
+- Navigate: https://172.20.2.14:3443 -> Workflows -> WF1 Threat Enrichment
 - Click "Executions" -> select execution by timestamp
 - Each node shows: input JSON, output JSON, status (success/failure/skipped)
 - Key nodes to check: parse_alert (was it external?), evaluate_score (what was combined_score?), cloudflare_block (did it fire?), thehive_case (was case created?)
@@ -329,7 +329,7 @@ Via API:
 ```bash
 curl -H 'Authorization: Bearer <THEHIVE_API_KEY>' \
   -H 'Content-Type: application/json' \
-  -X POST http://10.10.30.22:9000/api/case \
+  -X POST http://172.20.3.13:9000/api/case \
   -d '{
     "title": "[Manual] Description of incident",
     "description": "Full context here",
@@ -383,7 +383,7 @@ API example:
 ```bash
 curl -H 'Authorization: Bearer <CORTEX_API_KEY>' \
   -H 'Content-Type: application/json' \
-  -X POST http://10.10.30.22:9001/api/analyzer/AbuseIPDB_1_1/run \
+  -X POST http://172.20.3.13:9001/api/analyzer/AbuseIPDB_1_1/run \
   -d '{"data": "1.2.3.4", "dataType": "ip", "tlp": 2}'
 ```
 
@@ -578,7 +578,7 @@ For each workflow, document:
 
 **WF2 — Watch Turnover Digest:**
 - Trigger: Cron 0605/1805 EST
-- Manual: `curl -X POST http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/execute -H 'Authorization: Bearer <SHUFFLE_API_KEY>'`
+- Manual: `curl -X POST http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID/execute -H 'Authorization: Bearer <SHUFFLE_API_KEY>'`
 - Output: Two Discord messages (watch data + MITRE analysis + turnover narrative)
 - Interpretation: Posture levels (NORMAL/GUARDED/ELEVATED/CRITICAL), action items, MITRE technique assessment
 
@@ -632,7 +632,7 @@ git commit -m "Add SOC playbook: SOAR workflow operations guide"
 
 **9.1 run_attack.sh Usage:**
 ```bash
-# From sear (10.10.20.20):
+# From attack-01 (172.20.2.12):
 ./run_attack.sh <attack_type> ["optional notes"]
 ./run_attack.sh --list                        # List all 200+ attacks
 ./run_attack.sh --campaign-id CAMP-001 sqli_union "DVWA test"
@@ -645,15 +645,15 @@ Key attack categories (with examples):
 - Recon: syn_scan, full_tcp, udp_scan, version_detection, os_fingerprinting
 - Brute force: ssh, ftp, telnet, mysql, postgres
 - C2: http_beacon, dns_beacon, http_exfiltration
-- AD (VLAN 30, restricted): ldap_enum, kerberoast, password_spray, bloodhound
+- AD (VLAN 300, restricted): ldap_enum, kerberoast, password_spray, bloodhound
 - Metasploit: vsftpd, distcc, ms17_010, tomcat, java_rmi
 
-Safety: All attacks default to VLAN 40. AD attacks require typing "CONFIRM-AD".
+Safety: All attacks default to VLAN 400. AD attacks require typing "CONFIRM-AD".
 
 **9.2 Caldera Campaign Execution:**
 
 Via UI:
-1. Login: http://10.10.30.21:8888 -> red/<PLATFORM_PASSWORD>
+1. Login: http://172.20.3.12:8888 -> red/<PLATFORM_PASSWORD>
 2. Operations -> Create Operation
 3. Select adversary profile (29 available)
 4. Select agent group: "targets"
@@ -662,7 +662,7 @@ Via UI:
 
 Via API:
 ```bash
-curl -X POST http://10.10.30.21:8888/api/v2/operations \
+curl -X POST http://172.20.3.12:8888/api/v2/operations \
   -H 'KEY: <CALDERA_API_KEY>' \
   -H 'Content-Type: application/json' \
   -d '{
@@ -687,7 +687,7 @@ Critical: Use FULL adversary UUIDs (truncated causes 0-link failures).
 ```
 attack_id,timestamp_start,timestamp_end,category,subcategory,technique_id,tool,source_ip,target_ip,target_port,target_service,success,notes
 ```
-Location: `attack-scripts/attack_log.csv` on sear.
+Location: `attack-scripts/attack_log.csv` on attack-01.
 
 **Step 2: Commit**
 
@@ -716,14 +716,14 @@ Each runbook follows the format:
 
 **RB-01: SSH Brute Force**
 - Trigger: Wazuh rule 5763 (multiple SSH auth failures) or high-frequency `rule.groups: authentication_failed`
-- Verify: Query OpenSearch for source IP, count failures, check if source is internal (sear running brute force test) vs external
+- Verify: Query OpenSearch for source IP, count failures, check if source is internal (attack-01 running brute force test) vs external
 - Investigate: AbuseIPDB lookup, check if IP appears in other agent alerts, Zeek conn log for full session metadata
 - Respond: If external malicious: Cloudflare block. If internal: verify it's authorized testing via attack_log.csv
 - Document: TheHive case with source IP, failure count, country, resolution
 
 **RB-02: SQL Injection**
 - Trigger: Suricata SID 2006446 (UNION SELECT) or custom SIDs 9000001-9000005
-- Verify: Check Zeek HTTP index for actual payload in URL/body. Check if source is sear (authorized) or unknown
+- Verify: Check Zeek HTTP index for actual payload in URL/body. Check if source is attack-01 (authorized) or unknown
 - Investigate: Full HTTP request chain in zeek-http. Check for successful injection (HTTP 200 with data exfil patterns). Review DVWA/target access logs
 - Respond: Block source if external. Review web app configs if attack succeeded. Document payloads as IOCs
 - Document: TheHive case with payloads, response codes, MITRE T1190

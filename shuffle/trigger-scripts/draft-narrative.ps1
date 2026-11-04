@@ -1,13 +1,13 @@
 # Trigger WF-NARRATIVE (Escalation Narrative Drafter) for a TheHive case.
 # Usage: .\draft-narrative.ps1 923
 # The draft posts to the #soc-alerts Discord channel; edit and approve before
-# carrying it into the ticket. Runs on demand from PITBOSS - no cron entry.
+# carrying it into the ticket. Runs on demand from ADMIN-WS - no cron entry.
 param(
     [Parameter(Mandatory = $true)][int]$CaseNumber
 )
 
 $WF_ID = "5bdf5dd7-8d5a-4efc-bdf8-e080b99e7cca"
-$BACKEND = "http://10.10.20.30:5001"
+$BACKEND = "http://172.20.2.14:5001"
 
 $envLine = Get-Content "C:\Projects\.env" | Where-Object { $_ -match '^SHUFFLE_API_KEY=' }
 if (-not $envLine) { throw "SHUFFLE_API_KEY not found in C:\Projects\.env" }

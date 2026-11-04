@@ -44,8 +44,8 @@ def test_honeypot_import_runs_ssh_without_a_shell(honeypot_import, monkeypatch):
         return subprocess.CompletedProcess(argv, 0, stdout="{}", stderr="")
 
     monkeypatch.setattr(honeypot_import.subprocess, "run", fake_run)
-    monkeypatch.setattr(honeypot_import, "BRISKET_OS_PASS", 'pa"ss $(id) `x` \\')
-    honeypot_import.brisket_search("/_search/scroll", {"scroll_id": 'a"b'})
+    monkeypatch.setattr(honeypot_import, "SOC01_OS_PASS", 'pa"ss $(id) `x` \\')
+    honeypot_import.soc01_search("/_search/scroll", {"scroll_id": 'a"b'})
     argv, kw = calls[0]
     assert isinstance(argv, list) and argv[0] == "ssh"
     assert kw.get("shell") is not True

@@ -10,17 +10,17 @@ This playbook is the single operational reference for anyone sitting down to ope
 
 ## Prerequisites
 
-### PITBOSS Workstation
+### ADMIN-WS Workstation
 
-All SOC operations are performed from **PITBOSS** (10.10.10.100), a Windows 11 laptop on VLAN 10 with network access to all VLANs. PITBOSS is the only machine you need physical access to.
+All SOC operations are performed from **ADMIN-WS** (172.20.1.12), a Windows 11 laptop on VLAN 100 with network access to all VLANs. ADMIN-WS is the only machine you need physical access to.
 
 ### Shell Environment: Git Bash
 
-Most commands in this playbook use **bash syntax** (single quotes, `$(...)` variable substitution, pipes). Windows PowerShell does not support this syntax natively. All commands marked "Run from PITBOSS" should be run in **Git Bash**, not PowerShell.
+Most commands in this playbook use **bash syntax** (single quotes, `$(...)` variable substitution, pipes). Windows PowerShell does not support this syntax natively. All commands marked "Run from ADMIN-WS" should be run in **Git Bash**, not PowerShell.
 
-**What is Git Bash?** Git Bash is a bash shell emulator that comes bundled with [Git for Windows](https://git-scm.com/download/win). It provides a Linux-like terminal on Windows with `curl`, `ssh`, `grep`, and other standard Unix tools. It is already installed on PITBOSS.
+**What is Git Bash?** Git Bash is a bash shell emulator that comes bundled with [Git for Windows](https://git-scm.com/download/win). It provides a Linux-like terminal on Windows with `curl`, `ssh`, `grep`, and other standard Unix tools. It is already installed on ADMIN-WS.
 
-**Python note:** Commands that pipe JSON through Python use `python` (not `python3`). On Windows, the Python executable is `python`. If `python` is not found, install Python from [python.org](https://www.python.org/downloads/) and ensure it's added to PATH. PITBOSS has Python 3.14 installed at `C:\Python314\`.
+**Python note:** Commands that pipe JSON through Python use `python` (not `python3`). On Windows, the Python executable is `python`. If `python` is not found, install Python from [python.org](https://www.python.org/downloads/) and ensure it's added to PATH. ADMIN-WS has Python 3.14 installed at `C:\Python314\`.
 
 **How to open Git Bash:**
 - Press **Win+S**, type `Git Bash`, and press Enter
@@ -30,24 +30,24 @@ Most commands in this playbook use **bash syntax** (single quotes, `$(...)` vari
 **Quick test — run this to verify connectivity:**
 
 ```bash
-curl -sk https://10.10.20.30:5601 | head -1
+curl -sk https://172.20.2.14:5601 | head -1
 ```
 
 If you see HTML output, Git Bash and network access are working.
 
-**When is PowerShell used?** Only for Windows-specific operations: restarting services on DC01/WS01 via WinRM, or running local Windows commands. These are explicitly marked as **"Run from PITBOSS (PowerShell)"** in the playbook.
+**When is PowerShell used?** Only for Windows-specific operations: restarting services on DC01/WS01 via WinRM, or running local Windows commands. These are explicitly marked as **"Run from ADMIN-WS (PowerShell)"** in the playbook.
 
 ### SSH Access
 
-Git Bash includes a built-in SSH client. SSH keys for all Linux hosts are pre-configured on PITBOSS. You should be able to SSH to any host without a password:
+Git Bash includes a built-in SSH client. SSH keys for all Linux hosts are pre-configured on ADMIN-WS. You should be able to SSH to any host without a password:
 
 ```bash
-ssh <user>@10.10.20.30    # brisket (SOC core)
-ssh <user>@10.10.30.25    # haccp (ELK + Arkime)
-ssh root@10.10.30.20        # pitcrew (Proxmox)
-ssh root@10.10.30.21        # smoker (Proxmox)
-ssh <user>@10.10.20.20     # sear (Kali attack box)
-ssh -p 2222 <user>@10.10.20.10  # smokehouse (QNAP, non-standard port)
+ssh <user>@172.20.2.14    # soc-01 (SOC core)
+ssh <user>@172.20.3.16    # elk-01 (ELK + Arkime)
+ssh root@172.20.3.11        # pve-01 (Proxmox)
+ssh root@172.20.3.12        # pve-02 (Proxmox)
+ssh <user>@172.20.2.12     # attack-01 (Kali attack box)
+ssh -p 2222 <user>@172.20.2.11  # sensor-01 (QNAP, non-standard port)
 ```
 
 If any SSH connection prompts for a password, the SSH key is not configured for that host. Contact the SOC admin.
@@ -56,10 +56,10 @@ If any SSH connection prompts for a password, the SSH key is not configured for 
 
 Every command block in this playbook is preceded by a bold label telling you where and how to run it:
 
-- **"Run from PITBOSS (Git Bash):"** — Open Git Bash on PITBOSS and paste the command. These are typically curl/API calls that reach services over the network.
+- **"Run from ADMIN-WS (Git Bash):"** — Open Git Bash on ADMIN-WS and paste the command. These are typically curl/API calls that reach services over the network.
 - **"SSH to [host], then run:"** — Open Git Bash, SSH to the specified host, then run the command on that remote host.
-- **"Run from PITBOSS (PowerShell):"** — Open PowerShell on PITBOSS. Used only for WinRM commands to Windows hosts.
-- **"Open in browser from PITBOSS:"** — Open Chrome and navigate to the specified URL.
+- **"Run from ADMIN-WS (PowerShell):"** — Open PowerShell on ADMIN-WS. Used only for WinRM commands to Windows hosts.
+- **"Open in browser from ADMIN-WS:"** — Open Chrome and navigate to the specified URL.
 
 ---
 
@@ -86,49 +86,49 @@ Every command block in this playbook is preceded by a bold label telling you whe
 
 | Service | URL | User | Password |
 |---------|-----|------|----------|
-| Wazuh Dashboard | [https://10.10.20.30:5601](https://10.10.20.30:5601) | admin | <PLATFORM_PASSWORD> |
-| Wazuh API | [https://10.10.20.30:55000](https://10.10.20.30:55000) | wazuh-wui | <WAZUH_API_PASSWORD> |
-| OpenSearch (Wazuh Indexer) | [https://10.10.20.30:9200](https://10.10.20.30:9200) | admin | (in .env on brisket) |
-| Shuffle SOAR | [https://10.10.20.30:3443](https://10.10.20.30:3443) | admin | <PLATFORM_PASSWORD> |
-| Shuffle API | [http://10.10.20.30:5001](http://10.10.20.30:5001) | -- | API key: <SHUFFLE_API_KEY> |
-| TheHive (SOC) | [http://10.10.30.22:9000](http://10.10.30.22:9000) | socadmin@thehive.local | <PLATFORM_PASSWORD> |
-| TheHive (admin) | [http://10.10.30.22:9000](http://10.10.30.22:9000) | admin@thehive.local | <THEHIVE_ADMIN_PASSWORD> |
-| Cortex | [http://10.10.30.22:9001](http://10.10.30.22:9001) | socadmin@SOC | <PLATFORM_PASSWORD> |
-| Velociraptor | [https://10.10.20.30:8889](https://10.10.20.30:8889) | admin | <PLATFORM_PASSWORD> |
-| Caldera | [http://10.10.30.21:8888](http://10.10.30.21:8888) | red / blue | <PLATFORM_PASSWORD> |
-| ELK Kibana | [http://10.10.30.25:5601](http://10.10.30.25:5601) | elastic | <PLATFORM_PASSWORD> |
-| ELK Elasticsearch | [https://10.10.30.25:9200](https://10.10.30.25:9200) | elastic | <PLATFORM_PASSWORD> |
-| Grafana (brisket) | [http://10.10.20.30:3000](http://10.10.20.30:3000) | admin | (same as OpenSearch .env) |
-| Prometheus | [http://10.10.20.30:9090](http://10.10.20.30:9090) | -- | -- |
-| ML Scorer | [http://10.10.20.30:5002](http://10.10.20.30:5002) | -- | -- |
-| Ollama | [http://10.10.20.30:11434](http://10.10.20.30:11434) | -- | -- |
-| PBS | [https://10.10.30.24:8007](https://10.10.30.24:8007) | root@pam | <PLATFORM_PASSWORD> |
-| Arkime Viewer | [http://10.10.30.25:8005](http://10.10.30.25:8005) | admin | <PLATFORM_PASSWORD> |
-| OpenCTI | [http://10.10.30.26:8080](http://10.10.30.26:8080) | admin@opencti.local | <PLATFORM_PASSWORD> |
-| Proxmox (smoker) | [https://10.10.30.21:8006](https://10.10.30.21:8006) | root@pam | (SSH key) |
-| Proxmox (pitcrew) | [https://10.10.30.20:8006](https://10.10.30.20:8006) | root@pam | (SSH key) |
+| Wazuh Dashboard | [https://172.20.2.14:5601](https://172.20.2.14:5601) | admin | <PLATFORM_PASSWORD> |
+| Wazuh API | [https://172.20.2.14:55000](https://172.20.2.14:55000) | wazuh-wui | <WAZUH_API_PASSWORD> |
+| OpenSearch (Wazuh Indexer) | [https://172.20.2.14:9200](https://172.20.2.14:9200) | admin | (in .env on soc-01) |
+| Shuffle SOAR | [https://172.20.2.14:3443](https://172.20.2.14:3443) | admin | <PLATFORM_PASSWORD> |
+| Shuffle API | [http://172.20.2.14:5001](http://172.20.2.14:5001) | -- | API key: <SHUFFLE_API_KEY> |
+| TheHive (SOC) | [http://172.20.3.13:9000](http://172.20.3.13:9000) | socadmin@thehive.local | <PLATFORM_PASSWORD> |
+| TheHive (admin) | [http://172.20.3.13:9000](http://172.20.3.13:9000) | admin@thehive.local | <THEHIVE_ADMIN_PASSWORD> |
+| Cortex | [http://172.20.3.13:9001](http://172.20.3.13:9001) | socadmin@SOC | <PLATFORM_PASSWORD> |
+| Velociraptor | [https://172.20.2.14:8889](https://172.20.2.14:8889) | admin | <PLATFORM_PASSWORD> |
+| Caldera | [http://172.20.3.12:8888](http://172.20.3.12:8888) | red / blue | <PLATFORM_PASSWORD> |
+| ELK Kibana | [http://172.20.3.16:5601](http://172.20.3.16:5601) | elastic | <PLATFORM_PASSWORD> |
+| ELK Elasticsearch | [https://172.20.3.16:9200](https://172.20.3.16:9200) | elastic | <PLATFORM_PASSWORD> |
+| Grafana (soc-01) | [http://172.20.2.14:3000](http://172.20.2.14:3000) | admin | (same as OpenSearch .env) |
+| Prometheus | [http://172.20.2.14:9090](http://172.20.2.14:9090) | -- | -- |
+| ML Scorer | [http://172.20.2.14:5002](http://172.20.2.14:5002) | -- | -- |
+| Ollama | [http://172.20.2.14:11434](http://172.20.2.14:11434) | -- | -- |
+| PBS | [https://172.20.3.15:8007](https://172.20.3.15:8007) | root@pam | <PLATFORM_PASSWORD> |
+| Arkime Viewer | [http://172.20.3.16:8005](http://172.20.3.16:8005) | admin | <PLATFORM_PASSWORD> |
+| OpenCTI | [http://172.20.3.17:8080](http://172.20.3.17:8080) | admin@opencti.local | <PLATFORM_PASSWORD> |
+| Proxmox (pve-02) | [https://172.20.3.12:8006](https://172.20.3.12:8006) | root@pam | (SSH key) |
+| Proxmox (pve-01) | [https://172.20.3.11:8006](https://172.20.3.11:8006) | root@pam | (SSH key) |
 
-### 1.2 Target Credentials (VLAN 40 Only)
+### 1.2 Target Credentials (VLAN 400 Only)
 
 | Target | URL / Access | User | Password |
 |--------|-------------|------|----------|
-| DVWA (web) | [http://10.10.40.10:80](http://10.10.40.10:80) | admin | <DVWA_WEB_PASSWORD> |
-| DVWA (SSH) | 10.10.40.10:22 | dvwaadmin | <DVWA_SSH_PASSWORD> |
-| Metasploitable 3 (Linux) | 10.10.40.20:22 | vagrant | <VAGRANT_PASSWORD> |
-| Metasploitable 3 (Win) | 10.10.40.21 (WinRM) | vagrant | <VAGRANT_PASSWORD> |
-| WordPress | [http://10.10.40.30](http://10.10.40.30) | admin | admin |
-| crAPI | [http://10.10.40.31](http://10.10.40.31) | victim@example.com | <CRAPI_PASSWORD> |
-| vsftpd | 10.10.40.32:21 | ftpuser | <FTP_PASSWORD> |
-| SMTP relay | 10.10.40.42:25 | -- | -- |
-| SNMPd | 10.10.40.43:161 | community: public | -- |
+| DVWA (web) | [http://172.20.4.11:80](http://172.20.4.11:80) | admin | <DVWA_WEB_PASSWORD> |
+| DVWA (SSH) | 172.20.4.11:22 | dvwaadmin | <DVWA_SSH_PASSWORD> |
+| Metasploitable 3 (Linux) | 172.20.4.12:22 | vagrant | <VAGRANT_PASSWORD> |
+| Metasploitable 3 (Win) | 172.20.4.13 (WinRM) | vagrant | <VAGRANT_PASSWORD> |
+| WordPress | [http://172.20.4.14](http://172.20.4.14) | admin | admin |
+| crAPI | [http://172.20.4.15](http://172.20.4.15) | victim@example.com | <CRAPI_PASSWORD> |
+| vsftpd | 172.20.4.16:21 | ftpuser | <FTP_PASSWORD> |
+| SMTP relay | 172.20.4.18:25 | -- | -- |
+| SNMPd | 172.20.4.19:161 | community: public | -- |
 
 ### 1.3 AD Domain Credentials
 
 | Service | Host | User | Password |
 |---------|------|------|----------|
-| Domain Controller | DC01 (10.10.30.40) | Administrator | <PLATFORM_PASSWORD> |
-| Workstation | WS01 (10.10.30.41) | Administrator | <PLATFORM_PASSWORD> |
-| Domain | smokehouse.local | -- | WinRM enabled on both |
+| Domain Controller | DC01 (172.20.3.20) | Administrator | <PLATFORM_PASSWORD> |
+| Workstation | WS01 (172.20.3.21) | Administrator | <PLATFORM_PASSWORD> |
+| Domain | lab.local | -- | WinRM enabled on both |
 
 ### 1.4 API Keys & Tokens
 
@@ -138,60 +138,60 @@ Every command block in this playbook is preceded by a bold label telling you whe
 | Cortex API Key | <CORTEX_API_KEY> | Cortex REST API (socadmin@SOC org-admin) |
 | Shuffle API Key | <SHUFFLE_API_KEY> | External API calls to Shuffle |
 | Caldera API Key | <CALDERA_API_KEY> | Header: `KEY: <CALDERA_API_KEY>` |
-| ELK Fleet Service Token | (in .env on haccp) | Fleet Server (in .env on haccp) |
-| Proxmox API (smoker) | root@pam!telegraf | <PROXMOX_SMOKER_TOKEN> |
-| Proxmox API (pitcrew) | root@pam!telegraf | <PROXMOX_PITCREW_TOKEN> |
+| ELK Fleet Service Token | (in .env on elk-01) | Fleet Server (in .env on elk-01) |
+| Proxmox API (pve-02) | root@pam!telegraf | <PROXMOX_PVE02_TOKEN> |
+| Proxmox API (pve-01) | root@pam!telegraf | <PROXMOX_PVE01_TOKEN> |
 | OpenCTI Admin Token | <OPENCTI_API_TOKEN> | OpenCTI GraphQL API, Shuffle WF1 enrichment |
 | NVD API Key | <NVD_API_KEY> | OpenCTI CVE connector |
 
 ### 1.5 SSH Access
 
-**From PITBOSS (LAN):**
+**From ADMIN-WS (LAN):**
 
 ```bash
-ssh <user>@10.10.20.30            # brisket
-ssh root@10.10.30.21                # smoker (passwordless)
-ssh <user>@10.10.20.20             # sear
-ssh -p 2222 <user>@10.10.20.10   # smokehouse QNAP
-ssh root@10.10.30.20                # pitcrew (passwordless)
-ssh <user>@10.10.30.25            # haccp
+ssh <user>@172.20.2.14            # soc-01
+ssh root@172.20.3.12                # pve-02 (passwordless)
+ssh <user>@172.20.2.12             # attack-01
+ssh -p 2222 <user>@172.20.2.11   # sensor-01 QNAP
+ssh root@172.20.3.11                # pve-01 (passwordless)
+ssh <user>@172.20.3.16            # elk-01
 ```
 
-**From PITBOSS (Tailscale -- remote/travel):**
+**From ADMIN-WS (Tailscale -- remote/travel):**
 
 ```bash
-ssh <user>@<brisket-tailscale-ip>     # brisket
-ssh <user>@<sear-tailscale-ip>         # sear
-ssh -p 2222 <user>@<qnap-tailscale-ip> # smokehouse QNAP
-ssh <user>@<haccp-tailscale-ip>       # haccp
+ssh <user>@<soc-01-tailscale-ip>     # soc-01
+ssh <user>@<attack-01-tailscale-ip>         # attack-01
+ssh -p 2222 <user>@<qnap-tailscale-ip> # sensor-01 QNAP
+ssh <user>@<elk-01-tailscale-ip>       # elk-01
 ```
 
 ### 1.6 VLAN Map
 
 | VLAN | Subnet | Purpose |
 |------|--------|---------|
-| 10 | 10.10.10.0/24 | Management (OPNsense, MokerLink, PITBOSS) |
-| 20 | 10.10.20.0/24 | SOC infrastructure (brisket, smokehouse, sear) |
-| 30 | 10.10.30.0/24 | Lab (pitcrew, smoker, TheHive, ELK, AD) |
-| 40 | 10.10.40.0/24 | Targets -- FULLY ISOLATED |
-| 50 | 10.10.50.0/24 | IoT -- internet only |
+| 100 | 172.20.1.0/24 | Management (OPNsense, MokerLink, ADMIN-WS) |
+| 200 | 172.20.2.0/24 | SOC infrastructure (soc-01, sensor-01, attack-01) |
+| 300 | 172.20.3.0/24 | Lab (pve-01, pve-02, TheHive, ELK, AD) |
+| 400 | 172.20.4.0/24 | Targets -- FULLY ISOLATED |
+| 500 | 172.20.5.0/24 | IoT -- internet only |
 
 ### 1.7 Wazuh Agent Inventory
 
 | Agent ID | Host | IP | VLAN | OS |
 |----------|------|----|------|----|
-| 001 | smoker | 10.10.30.21 | 30 | Proxmox VE |
-| 002 | sear | 10.10.20.20 | 20 | Kali Linux |
-| 003 | pitcrew | 10.10.30.20 | 30 | Proxmox VE |
-| 005 | PITBOSS | 10.10.10.100 | 10 | Windows 11 |
-| 006 | smokehouse | 10.10.20.10 | 20 | QTS (QNAP) |
-| 007 | DC01 | 10.10.30.40 | 30 | Windows Server 2022 |
+| 001 | pve-02 | 172.20.3.12 | 300 | Proxmox VE |
+| 002 | attack-01 | 172.20.2.12 | 200 | Kali Linux |
+| 003 | pve-01 | 172.20.3.11 | 300 | Proxmox VE |
+| 005 | ADMIN-WS | 172.20.1.12 | 100 | Windows 11 |
+| 006 | sensor-01 | 172.20.2.11 | 200 | QTS (QNAP) |
+| 007 | DC01 | 172.20.3.20 | 300 | Windows Server 2022 |
 | 009 | GCP VM | `<tailscale>` | -- | Ubuntu (GCP) |
-| 010 | thehive | 10.10.30.22 | 30 | TheHive LXC 200 |
-| 012 | WS01 | 10.10.30.41 | 30 | Windows 10 |
-| 013 | pbs | 10.10.30.24 | 30 | PBS LXC 300 |
-| 014 | haccp | 10.10.30.25 | 30 | Ubuntu 24.04 |
-| -- | OPNsense | 10.10.10.1 | 10 | Syslog (514/UDP) |
+| 010 | thehive | 172.20.3.13 | 300 | TheHive LXC 200 |
+| 012 | WS01 | 172.20.3.21 | 300 | Windows 10 |
+| 013 | pbs | 172.20.3.15 | 300 | PBS LXC 300 |
+| 014 | elk-01 | 172.20.3.16 | 300 | Ubuntu 24.04 |
+| -- | OPNsense | 172.20.1.1 | 100 | Syslog (514/UDP) |
 
 ---
 
@@ -205,16 +205,16 @@ Open the SOC Discord channels. Review any alerts posted by Shuffle workflows sin
 
 ### Step 2: Verify Wazuh Agent Health
 
-**Run from PITBOSS (Git Bash) -- queries the Wazuh API on brisket over the network:**
+**Run from ADMIN-WS (Git Bash) -- queries the Wazuh API on soc-01 over the network:**
 
 ```bash
 # Get JWT token
 TOKEN=$(curl -s -u wazuh-wui:'<WAZUH_API_PASSWORD>' -k -X POST \
-  "https://10.10.20.30:55000/security/user/authenticate" | \
+  "https://172.20.2.14:55000/security/user/authenticate" | \
   python -c "import sys,json; print(json.load(sys.stdin)['data']['token'])")
 
 # List all agents with status
-curl -s -k -X GET "https://10.10.20.30:55000/agents?pretty=true&select=id,name,status,ip,os.name,lastKeepAlive" \
+curl -s -k -X GET "https://172.20.2.14:55000/agents?pretty=true&select=id,name,status,ip,os.name,lastKeepAlive" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -227,7 +227,7 @@ Expected: All 12 agents show `status: active`. If any show `disconnected`, check
 sudo systemctl restart wazuh-agent
 ```
 
-**On a disconnected Windows host, open an admin PowerShell on that machine (RDP to DC01/WS01 or run locally on PITBOSS):**
+**On a disconnected Windows host, open an admin PowerShell on that machine (RDP to DC01/WS01 or run locally on ADMIN-WS):**
 
 ```powershell
 # On the disconnected host (Windows, from admin PowerShell)
@@ -236,7 +236,7 @@ Restart-Service WazuhSvc
 
 ### Step 3: Verify Shuffle Workflow Status
 
-**Open in browser from PITBOSS:** Navigate to https://10.10.20.30:3443 (login: admin / <PLATFORM_PASSWORD>) and go to Workflows. Confirm all 7 workflows show as enabled (green toggle). Check the execution history for the last 24 hours:
+**Open in browser from ADMIN-WS:** Navigate to https://172.20.2.14:3443 (login: admin / <PLATFORM_PASSWORD>) and go to Workflows. Confirm all 7 workflows show as enabled (green toggle). Check the execution history for the last 24 hours:
 
 - WF1: Should have executions for every level 8+ alert
 - WF2: Should have 2 executions (06:05 and 18:05 EST)
@@ -245,25 +245,25 @@ Restart-Service WazuhSvc
 - WF7: Decommissioned 2026-03-12 (honeypot campaign ended)
 - WF8: Should have 1 execution (15:00 EST)
 
-If a cron workflow did not fire, check the brisket crontab:
+If a cron workflow did not fire, check the soc-01 crontab:
 
-**SSH to brisket first, then run:**
+**SSH to soc-01 first, then run:**
 
 ```bash
-ssh <user>@10.10.20.30
+ssh <user>@172.20.2.14
 crontab -l
 ```
 
 ### Step 4: Review TheHive Open Cases
 
-**Open in browser from PITBOSS:** Navigate to http://10.10.30.22:9000 (login: socadmin@thehive.local / <PLATFORM_PASSWORD>). Check the case list filtered by status `New` and `InProgress`. Prioritize any severity 3 (High) or 4 (Critical) cases.
+**Open in browser from ADMIN-WS:** Navigate to http://172.20.3.13:9000 (login: socadmin@thehive.local / <PLATFORM_PASSWORD>). Check the case list filtered by status `New` and `InProgress`. Prioritize any severity 3 (High) or 4 (Critical) cases.
 
 API alternative:
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -s -X POST "http://10.10.30.22:9000/api/case/_search" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/_search" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -279,51 +279,51 @@ curl -s -X POST "http://10.10.30.22:9000/api/case/_search" \
 
 ### Step 5: Check Grafana SOC Dashboard
 
-**Open in browser from PITBOSS:** Navigate to http://10.10.20.30:3000 (login: admin / password from OpenSearch .env on brisket) and load the "SOC v3 Overview" dashboard. Verify:
+**Open in browser from ADMIN-WS:** Navigate to http://172.20.2.14:3000 (login: admin / password from OpenSearch .env on soc-01) and load the "SOC v3 Overview" dashboard. Verify:
 
 - All Prometheus scrape targets are UP (7 targets)
-- No anomalous CPU/memory spikes on brisket
+- No anomalous CPU/memory spikes on soc-01
 - GPU utilization is reasonable (Ollama + ML Scorer)
 - Disk usage is below 80% on all hosts
 
 ### Step 6: Verify ELK Stack Containers
 
-ELK containers on haccp do NOT auto-start on reboot. Verify they are running:
+ELK containers on elk-01 do NOT auto-start on reboot. Verify they are running:
 
-**Run from PITBOSS (Git Bash) -- executes command on haccp via SSH:**
+**Run from ADMIN-WS (Git Bash) -- executes command on elk-01 via SSH:**
 
 ```bash
-ssh <user>@10.10.30.25 'cd /opt/elk && docker compose ps'
+ssh <user>@172.20.3.16 'cd /opt/elk && docker compose ps'
 ```
 
 Expected: elasticsearch, kibana, fleet-server, and logstash all show as `running`. If not:
 
-**Same machine (PITBOSS, SSH to haccp):**
+**Same machine (ADMIN-WS, SSH to elk-01):**
 
 ```bash
-ssh <user>@10.10.30.25 'cd /opt/elk && docker compose up -d'
+ssh <user>@172.20.3.16 'cd /opt/elk && docker compose up -d'
 ```
 
 ### Step 7: Check ML Scorer Health
 
-**Run from PITBOSS (Git Bash) -- queries the ML Scorer API on brisket over the network:**
+**Run from ADMIN-WS (Git Bash) -- queries the ML Scorer API on soc-01 over the network:**
 
 ```bash
-curl -s http://10.10.20.30:5002/health
+curl -s http://172.20.2.14:5002/health
 ```
 
 Expected response: `{"status": "healthy"}` (or equivalent). If the scorer is down:
 
-**SSH to brisket first, then run:**
+**SSH to soc-01 first, then run:**
 
 ```bash
-ssh <user>@10.10.20.30
+ssh <user>@172.20.2.14
 docker restart ml-scorer
 ```
 
 ### Step 8: Verify Velociraptor Client Count
 
-**Open in browser from PITBOSS:** Navigate to https://10.10.20.30:8889 (login: admin / <PLATFORM_PASSWORD>). Go to the client search page. Verify clients are enrolled and showing recent check-in times (<15 minutes). Clients: brisket, smokehouse, sear, DC01, WS01, DVWA, GCP VM.
+**Open in browser from ADMIN-WS:** Navigate to https://172.20.2.14:8889 (login: admin / <PLATFORM_PASSWORD>). Go to the client search page. Verify clients are enrolled and showing recent check-in times (<15 minutes). Clients: soc-01, sensor-01, attack-01, DC01, WS01, DVWA, GCP VM.
 
 ---
 
@@ -345,9 +345,9 @@ Wazuh uses a 0-15 severity scale. The ossec.conf on this SOC is configured with 
 
 ### 3.2 Wazuh Dashboard Navigation
 
-**All steps below are performed in a browser from PITBOSS.**
+**All steps below are performed in a browser from ADMIN-WS.**
 
-1. Open https://10.10.20.30:5601 and log in (admin / <PLATFORM_PASSWORD>)
+1. Open https://172.20.2.14:5601 and log in (admin / <PLATFORM_PASSWORD>)
 2. Navigate to **Wazuh > Security Events** for the primary alert view
 3. Use the time picker (top right) to set the window (default: last 24 hours)
 4. Key filter fields:
@@ -363,15 +363,15 @@ Wazuh uses a 0-15 severity scale. The ossec.conf on this SOC is configured with 
 
 ### 3.3 OpenSearch Query Templates (Wazuh Alerts)
 
-All queries target `https://10.10.20.30:9200`. Replace `PASSWORD` with the OpenSearch admin password from the .env file on brisket. All queries in this section can be run from PITBOSS (Git Bash) since PITBOSS has network access to brisket.
+All queries target `https://172.20.2.14:9200`. Replace `PASSWORD` with the OpenSearch admin password from the .env file on soc-01. All queries in this section can be run from ADMIN-WS (Git Bash) since ADMIN-WS has network access to soc-01.
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 **Query 1: Last Hour Alerts**
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -391,12 +391,12 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
   "query": {
-    "term": {"data.srcip": "10.10.20.20"}
+    "term": {"data.srcip": "172.20.2.12"}
   },
   "_source": ["@timestamp", "rule.id", "rule.level", "rule.description", "agent.name", "data.srcip", "data.dstip"]
 }'
@@ -406,12 +406,12 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
   "query": {
-    "term": {"data.dstip": "10.10.40.10"}
+    "term": {"data.dstip": "172.20.4.11"}
   },
   "_source": ["@timestamp", "rule.id", "rule.level", "rule.description", "agent.name", "data.srcip", "data.dstip"]
 }'
@@ -421,7 +421,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -436,12 +436,12 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
   "query": {
-    "term": {"agent.name": "PITBOSS"}
+    "term": {"agent.name": "ADMIN-WS"}
   },
   "_source": ["@timestamp", "rule.id", "rule.level", "rule.description", "data.srcip"]
 }'
@@ -451,7 +451,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -468,7 +468,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 100,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -485,7 +485,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {
@@ -512,7 +512,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {
@@ -534,7 +534,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {
@@ -561,7 +561,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -587,7 +587,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -607,7 +607,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -627,12 +627,12 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/zeek-http/_search" \
+  "https://172.20.2.14:9200/zeek-http/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
   "query": {
-    "term": {"id.orig_h": "10.10.20.20"}
+    "term": {"id.orig_h": "172.20.2.12"}
   },
   "_source": ["@timestamp", "id.orig_h", "id.resp_h", "id.resp_p", "method", "host", "uri", "status_code", "user_agent"]
 }'
@@ -642,7 +642,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/zeek-dns/_search" \
+  "https://172.20.2.14:9200/zeek-dns/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -657,15 +657,15 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/zeek-conn/_search" \
+  "https://172.20.2.14:9200/zeek-conn/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
   "query": {
     "bool": {
       "must": [
-        {"term": {"id.orig_h": "10.10.20.20"}},
-        {"term": {"id.resp_h": "10.10.40.10"}}
+        {"term": {"id.orig_h": "172.20.2.12"}},
+        {"term": {"id.resp_h": "172.20.4.11"}}
       ]
     }
   },
@@ -677,7 +677,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -690,15 +690,15 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ### 3.4 ELK Elasticsearch Queries
 
-All queries target `https://10.10.30.25:9200` (ELK on haccp) with user `elastic` and password `<PLATFORM_PASSWORD>`. All queries in this section can be run from PITBOSS (Git Bash) since PITBOSS has network access to haccp.
+All queries target `https://172.20.3.16:9200` (ELK on elk-01) with user `elastic` and password `<PLATFORM_PASSWORD>`. All queries in this section can be run from ADMIN-WS (Git Bash) since ADMIN-WS has network access to elk-01.
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 **Query 1: Detection Rule Alerts (Last 24h)**
 
 ```bash
 curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/.alerts-security.alerts-default/_search" \
+  "https://172.20.3.16:9200/.alerts-security.alerts-default/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -713,7 +713,7 @@ curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 ```bash
 curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/.alerts-security.alerts-default/_search" \
+  "https://172.20.3.16:9200/.alerts-security.alerts-default/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {
@@ -734,7 +734,7 @@ curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 ```bash
 curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/.alerts-security.alerts-default/_search" \
+  "https://172.20.3.16:9200/.alerts-security.alerts-default/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -749,7 +749,7 @@ curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 ```bash
 curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/logs-*/_search" \
+  "https://172.20.3.16:9200/logs-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -769,7 +769,7 @@ curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 ```bash
 curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/logs-*/_search" \
+  "https://172.20.3.16:9200/logs-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -789,7 +789,7 @@ curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 ```bash
 curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/.fleet-agents/_search" \
+  "https://172.20.3.16:9200/.fleet-agents/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 20,
   "_source": ["local_metadata.host.hostname", "status", "last_checkin", "policy_id"]
@@ -800,7 +800,7 @@ curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 ```bash
 curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/honeypot-credentials/_search" \
+  "https://172.20.3.16:9200/honeypot-credentials/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -814,7 +814,7 @@ curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 ```bash
 curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/honeypot-access/_search" \
+  "https://172.20.3.16:9200/honeypot-access/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {
@@ -836,7 +836,7 @@ curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 ```bash
 curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/honeypot-wazuh/_search" \
+  "https://172.20.3.16:9200/honeypot-wazuh/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {
@@ -857,7 +857,7 @@ curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 ```bash
 curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/logs-*/_search" \
+  "https://172.20.3.16:9200/logs-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {
@@ -877,9 +877,9 @@ curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 ### 3.5 Reading Shuffle WF1 Execution History
 
-**All steps below are performed in a browser from PITBOSS.**
+**All steps below are performed in a browser from ADMIN-WS.**
 
-1. Open https://10.10.20.30:3443 (login: admin / <PLATFORM_PASSWORD>), navigate to Workflows, open WF1
+1. Open https://172.20.2.14:3443 (login: admin / <PLATFORM_PASSWORD>), navigate to Workflows, open WF1
 2. Click the clock icon (execution history) in the top right
 3. Each execution shows:
    - **Trigger:** The Wazuh alert JSON that initiated the workflow
@@ -897,7 +897,7 @@ curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 ### 4.1 ML Score Interpretation
 
-The XGBoost ML Scorer (brisket:5002) returns a threat probability between 0.0 and 1.0. The model was trained on labeled attack data from Caldera campaigns with a PR-AUC of 0.9998.
+The XGBoost ML Scorer (soc-01:5002) returns a threat probability between 0.0 and 1.0. The model was trained on labeled attack data from Caldera campaigns with a PR-AUC of 0.9998.
 
 | Score Range | Classification | Meaning |
 |-------------|---------------|---------|
@@ -908,14 +908,14 @@ The XGBoost ML Scorer (brisket:5002) returns a threat probability between 0.0 an
 
 Manual scoring (for alerts not auto-scored by WF1):
 
-**Run from PITBOSS (Git Bash) -- queries the ML Scorer API on brisket:**
+**Run from ADMIN-WS (Git Bash) -- queries the ML Scorer API on soc-01:**
 
 ```bash
-curl -s -X POST "http://10.10.20.30:5002/score" \
+curl -s -X POST "http://172.20.2.14:5002/score" \
   -H "Content-Type: application/json" \
   -d '{
-    "src_ip": "10.10.20.20",
-    "dst_ip": "10.10.40.10",
+    "src_ip": "172.20.2.12",
+    "dst_ip": "172.20.4.11",
     "dst_port": 80,
     "protocol": "TCP",
     "rule_level": 12,
@@ -935,7 +935,7 @@ WF1 queries AbuseIPDB for external IP reputation. The confidence score indicates
 | 75 - 90 | High confidence malicious | Strong evidence. Block candidate. |
 | 90 - 100 | Confirmed malicious | Known bad actor. Auto-block threshold. |
 
-Note: AbuseIPDB only applies to external (public) IPs. Internal lab IPs (10.10.x.x) will return 0 or not found.
+Note: AbuseIPDB only applies to external (public) IPs. Internal lab IPs (172.20.x.x) will return 0 or not found.
 
 ### 4.3 Reading Ollama Triage Summaries
 
@@ -972,27 +972,27 @@ Use this matrix to decide the response action based on the combined enrichment s
 
 **Via API:**
 
-**Run from PITBOSS (Git Bash) -- queries the TheHive API on pitcrew LXC 200:**
+**Run from ADMIN-WS (Git Bash) -- queries the TheHive API on pve-01 LXC 200:**
 
 ```bash
-curl -s -X POST "http://10.10.30.22:9000/api/case" \
+curl -s -X POST "http://172.20.3.13:9000/api/case" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "Suspicious SQL Injection from 10.10.20.20 to DVWA",
-    "description": "## Alert Summary\n\nWazuh rule 9000001 fired at 2026-01-09T14:30:46Z.\nSource: 10.10.20.20 (sear)\nTarget: 10.10.40.10 (DVWA) port 80\nML Score: 0.92\nAbuseIPDB: N/A (internal IP)\n\n## Raw Alert\n\nUNION SELECT username,password FROM users",
+    "title": "Suspicious SQL Injection from 172.20.2.12 to DVWA",
+    "description": "## Alert Summary\n\nWazuh rule 9000001 fired at 2026-01-09T14:30:46Z.\nSource: 172.20.2.12 (attack-01)\nTarget: 172.20.4.11 (DVWA) port 80\nML Score: 0.92\nAbuseIPDB: N/A (internal IP)\n\n## Raw Alert\n\nUNION SELECT username,password FROM users",
     "severity": 3,
     "tlp": 2,
     "pap": 2,
     "flag": false,
-    "tags": ["sql-injection", "vlan40", "purple-team", "T1190"],
+    "tags": ["sql-injection", "vlan400", "purple-team", "T1190"],
     "status": "New"
   }'
 ```
 
 **Via UI:**
 
-**Open in browser from PITBOSS:** Navigate to http://10.10.30.22:9000 (login: socadmin@thehive.local / <PLATFORM_PASSWORD>).
+**Open in browser from ADMIN-WS:** Navigate to http://172.20.3.13:9000 (login: socadmin@thehive.local / <PLATFORM_PASSWORD>).
 
 1. Click "New Case" (+ button)
 3. Fill in: Title, Severity (1-4), TLP, PAP, Description, Tags
@@ -1024,7 +1024,7 @@ To manually promote a Wazuh alert to a TheHive case:
 
 ### 5.1 Zeek Flow Correlation
 
-When investigating an alert, correlate with Zeek network metadata. Zeek indices on brisket OpenSearch provide protocol-level visibility. All OpenSearch queries in this section can be run from PITBOSS (Git Bash).
+When investigating an alert, correlate with Zeek network metadata. Zeek indices on soc-01 OpenSearch provide protocol-level visibility. All OpenSearch queries in this section can be run from ADMIN-WS (Git Bash).
 
 **zeek-conn (Connection logs):**
 
@@ -1038,19 +1038,19 @@ Key fields: `id.orig_h` (source IP), `id.orig_p` (source port), `id.resp_h` (des
 - `RSTO` -- Connection reset by originator
 - `RSTOS0` -- Reset after SYN, no SYN-ACK seen
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # All connections from a suspect IP in the last hour
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/zeek-conn/_search" \
+  "https://172.20.2.14:9200/zeek-conn/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 100,
   "sort": [{"@timestamp": {"order": "desc"}}],
   "query": {
     "bool": {
       "must": [
-        {"term": {"id.orig_h": "10.10.20.20"}},
+        {"term": {"id.orig_h": "172.20.2.12"}},
         {"range": {"@timestamp": {"gte": "now-1h"}}}
       ]
     }
@@ -1063,19 +1063,19 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 Key fields: `method`, `host`, `uri`, `status_code`, `user_agent`, `resp_mime_types`, `orig_fuids` (file UID link).
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # HTTP requests to a target in the last hour
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/zeek-http/_search" \
+  "https://172.20.2.14:9200/zeek-http/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 100,
   "sort": [{"@timestamp": {"order": "desc"}}],
   "query": {
     "bool": {
       "must": [
-        {"term": {"id.resp_h": "10.10.40.10"}},
+        {"term": {"id.resp_h": "172.20.4.11"}},
         {"range": {"@timestamp": {"gte": "now-1h"}}}
       ]
     }
@@ -1088,19 +1088,19 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 Key fields: `query` (domain queried), `qtype_name` (A, AAAA, MX, TXT, etc.), `answers`, `rcode_name` (NOERROR, NXDOMAIN, SERVFAIL).
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # DNS queries from a host
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/zeek-dns/_search" \
+  "https://172.20.2.14:9200/zeek-dns/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
   "query": {
     "bool": {
       "must": [
-        {"term": {"id.orig_h": "10.10.20.20"}},
+        {"term": {"id.orig_h": "172.20.2.12"}},
         {"range": {"@timestamp": {"gte": "now-1h"}}}
       ]
     }
@@ -1113,17 +1113,17 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 Key fields: `server_name` (SNI), `version`, `cipher`, `validation_status`, `ja3` (client fingerprint), `ja3s` (server fingerprint).
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # TLS connections from a host
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/zeek-ssl/_search" \
+  "https://172.20.2.14:9200/zeek-ssl/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
   "query": {
-    "term": {"id.orig_h": "10.10.20.20"}
+    "term": {"id.orig_h": "172.20.2.12"}
   },
   "_source": ["@timestamp", "id.orig_h", "id.resp_h", "id.resp_p", "server_name", "version", "cipher", "ja3", "validation_status"]
 }'
@@ -1133,20 +1133,20 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 Key fields: `source` (HTTP, FTP, etc.), `mime_type`, `filename`, `total_bytes`, `md5`, `sha1`, `sha256`.
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # Files transferred involving a host
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/zeek-files/_search" \
+  "https://172.20.2.14:9200/zeek-files/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
   "query": {
     "bool": {
       "should": [
-        {"term": {"tx_hosts": "10.10.20.20"}},
-        {"term": {"rx_hosts": "10.10.20.20"}}
+        {"term": {"tx_hosts": "172.20.2.12"}},
+        {"term": {"rx_hosts": "172.20.2.12"}}
       ]
     }
   },
@@ -1156,9 +1156,9 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 ### 5.2 Velociraptor Hunts
 
-**Open in browser from PITBOSS:** Navigate to https://10.10.20.30:8889 (login: admin / <PLATFORM_PASSWORD>) and select the target client. Use the notebook interface or VQL query bar for these investigations. All VQL queries below are entered in the Velociraptor web GUI notebook.
+**Open in browser from ADMIN-WS:** Navigate to https://172.20.2.14:8889 (login: admin / <PLATFORM_PASSWORD>) and select the target client. Use the notebook interface or VQL query bar for these investigations. All VQL queries below are entered in the Velociraptor web GUI notebook.
 
-**Run in Velociraptor GUI notebook (browser from PITBOSS):**
+**Run in Velociraptor GUI notebook (browser from ADMIN-WS):**
 
 **List running processes:**
 
@@ -1215,7 +1215,7 @@ WHERE Mtime > now() - 86400
 ORDER BY Mtime DESC
 ```
 
-**Running a hunt across all clients (Velociraptor GUI from PITBOSS):**
+**Running a hunt across all clients (Velociraptor GUI from ADMIN-WS):**
 
 1. Navigate to Hunt Manager (left sidebar)
 2. Click "New Hunt"
@@ -1226,7 +1226,7 @@ ORDER BY Mtime DESC
 
 ### 5.3 Running Cortex Analyzers
 
-Cortex (http://10.10.30.22:9001, accessible from PITBOSS browser) provides automated observable analysis. Five analyzers are configured.
+Cortex (http://172.20.3.13:9001, accessible from ADMIN-WS browser) provides automated observable analysis. Five analyzers are configured.
 
 **Available analyzers and when to use them:**
 
@@ -1240,11 +1240,11 @@ Cortex (http://10.10.30.22:9001, accessible from PITBOSS browser) provides autom
 
 **Running an analyzer via API:**
 
-**Run from PITBOSS (Git Bash) -- queries the Cortex API on pitcrew LXC 200:**
+**Run from ADMIN-WS (Git Bash) -- queries the Cortex API on pve-01 LXC 200:**
 
 ```bash
 # Run AbuseIPDB analyzer on an IP
-curl -s -X POST "http://10.10.30.22:9001/api/analyzer/AbuseIPDB_1_0/run" \
+curl -s -X POST "http://172.20.3.13:9001/api/analyzer/AbuseIPDB_1_0/run" \
   -H "Authorization: Bearer <CORTEX_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1257,17 +1257,17 @@ curl -s -X POST "http://10.10.30.22:9001/api/analyzer/AbuseIPDB_1_0/run" \
 
 The response includes a job ID. Poll for results:
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
 # Get job result (replace JOB_ID)
-curl -s "http://10.10.30.22:9001/api/job/JOB_ID/waitreport?atMost=5minutes" \
+curl -s "http://172.20.3.13:9001/api/job/JOB_ID/waitreport?atMost=5minutes" \
   -H "Authorization: Bearer <CORTEX_API_KEY>"
 ```
 
-**Running analyzers from TheHive UI (browser from PITBOSS):**
+**Running analyzers from TheHive UI (browser from ADMIN-WS):**
 
-1. Open the case in TheHive (http://10.10.30.22:9000)
+1. Open the case in TheHive (http://172.20.3.13:9000)
 2. Navigate to the Observables tab
 3. Click on the observable (IP, hash, domain)
 4. Click "Run Analyzers"
@@ -1282,11 +1282,11 @@ When a syscheck alert fires, correlate the file change with other activity on th
 2. Note the `agent.name` and timestamp
 3. Query for all alerts from that agent in the surrounding time window (+-30 min):
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 100,
   "sort": [{"@timestamp": {"order": "asc"}}],
@@ -1313,11 +1313,11 @@ When a Wazuh alert fires, check if ELK detection rules also triggered for the sa
 1. Note the timestamp, source IP, and target from the Wazuh alert
 2. Query ELK for detection alerts in the same time window:
 
-**Run from PITBOSS (Git Bash) -- queries ELK Elasticsearch on haccp:**
+**Run from ADMIN-WS (Git Bash) -- queries ELK Elasticsearch on elk-01:**
 
 ```bash
 curl -k -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/.alerts-security.alerts-default/_search" \
+  "https://172.20.3.16:9200/.alerts-security.alerts-default/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -1348,7 +1348,7 @@ Shuffle WF1 automatically blocks external IPs via Cloudflare WAF when the combin
 
 **Manual Cloudflare block:**
 
-**Run from PITBOSS (Git Bash) -- calls the Cloudflare external API:**
+**Run from ADMIN-WS (Git Bash) -- calls the Cloudflare external API:**
 
 ```bash
 # Block a single IP via Cloudflare WAF (replace with your token and account ID)
@@ -1374,12 +1374,12 @@ curl -s -X POST \
 
 Use Velociraptor to collect forensic artifacts from a compromised endpoint before isolation:
 
-**Open in browser from PITBOSS:** Navigate to https://10.10.20.30:8889 (login: admin / <PLATFORM_PASSWORD>).
+**Open in browser from ADMIN-WS:** Navigate to https://172.20.2.14:8889 (login: admin / <PLATFORM_PASSWORD>).
 
 1. Navigate to the target client
 2. Open a VQL notebook and run collection artifacts:
 
-**Run in Velociraptor GUI notebook (browser from PITBOSS):**
+**Run in Velociraptor GUI notebook (browser from ADMIN-WS):**
 
 ```sql
 -- Collect process list, network connections, and recent files
@@ -1400,7 +1400,7 @@ SELECT * FROM execve(argv=["netsh", "interface", "set", "interface", "Ethernet",
 
 For immediate network isolation, add a firewall rule on OPNsense to block all traffic to/from the compromised host.
 
-**Open in browser from PITBOSS:** Navigate to https://10.10.10.1 (OPNsense web UI), or SSH: `ssh admin@10.10.10.1`.
+**Open in browser from ADMIN-WS:** Navigate to https://172.20.1.1 (OPNsense web UI), or SSH: `ssh admin@172.20.1.1`.
 
 1. Use the web UI or SSH to OPNsense
 2. Add a block rule on the relevant VLAN interface:
@@ -1422,16 +1422,16 @@ Wazuh has active response commands configured in ossec.conf. Available commands:
 
 Trigger active response via the Wazuh API:
 
-**Run from PITBOSS (Git Bash) -- calls the Wazuh API on brisket:**
+**Run from ADMIN-WS (Git Bash) -- calls the Wazuh API on soc-01:**
 
 ```bash
 TOKEN=$(curl -s -u wazuh-wui:'<WAZUH_API_PASSWORD>' -k -X POST \
-  "https://10.10.20.30:55000/security/user/authenticate" | \
+  "https://172.20.2.14:55000/security/user/authenticate" | \
   python -c "import sys,json; print(json.load(sys.stdin)['data']['token'])")
 
-# Run firewall-drop on agent 001 (brisket) for IP 203.0.113.50
+# Run firewall-drop on agent 001 (soc-01) for IP 203.0.113.50
 curl -s -k -X PUT \
-  "https://10.10.20.30:55000/active-response?pretty=true" \
+  "https://172.20.2.14:55000/active-response?pretty=true" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1447,10 +1447,10 @@ Every response action must be documented in the corresponding TheHive case.
 
 **Adding observables:**
 
-**Run from PITBOSS (Git Bash) -- all TheHive API calls in this section target http://10.10.30.22:9000:**
+**Run from ADMIN-WS (Git Bash) -- all TheHive API calls in this section target http://172.20.3.13:9000:**
 
 ```bash
-curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/artifact" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/CASE_ID/artifact" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1465,10 +1465,10 @@ curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/artifact" \
 
 **Adding a task:**
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
-curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/task" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/CASE_ID/task" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1481,10 +1481,10 @@ curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/task" \
 
 **Adding a task log (evidence/notes):**
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
-curl -s -X POST "http://10.10.30.22:9000/api/case/task/TASK_ID/log" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/task/TASK_ID/log" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1494,10 +1494,10 @@ curl -s -X POST "http://10.10.30.22:9000/api/case/task/TASK_ID/log" \
 
 **Closing a task:**
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
-curl -s -X PATCH "http://10.10.30.22:9000/api/case/task/TASK_ID" \
+curl -s -X PATCH "http://172.20.3.13:9000/api/case/task/TASK_ID" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"status": "Completed"}'
@@ -1549,25 +1549,25 @@ Use consistent tags across all cases:
 - **Attack type:** `sql-injection`, `brute-force`, `port-scan`, `malware`, `credential-stuffing`, `lateral-movement`, `privilege-escalation`, `data-exfiltration`, `command-and-control`, `persistence`
 - **MITRE technique:** `T1190`, `T1110`, `T1059`, etc.
 - **Source:** `purple-team`, `honeypot`, `external`, `insider`
-- **VLAN:** `vlan10`, `vlan20`, `vlan30`, `vlan40`
+- **VLAN:** `vlan100`, `vlan200`, `vlan300`, `vlan400`
 - **Tool:** `sqlmap`, `nmap`, `metasploit`, `caldera`, `hydra`
 
 **API case creation example:**
 
-**Run from PITBOSS (Git Bash) -- all TheHive API calls in Section 7 target http://10.10.30.22:9000:**
+**Run from ADMIN-WS (Git Bash) -- all TheHive API calls in Section 7 target http://172.20.3.13:9000:**
 
 ```bash
-curl -s -X POST "http://10.10.30.22:9000/api/case" \
+curl -s -X POST "http://172.20.3.13:9000/api/case" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "[SEVERITY-3] SQL Injection - sear to DVWA - T1190",
-    "description": "## Incident Summary\n\nWazuh rule 9000001 (HOMELAB SQL Injection - UNION SELECT) fired at 2026-01-09T14:30:46Z.\n\n**Source:** 10.10.20.20 (sear, VLAN 20)\n**Target:** 10.10.40.10 (DVWA, VLAN 40)\n**Port:** 80/TCP\n\n## Enrichment\n\n- ML Score: 0.92 (Critical)\n- AbuseIPDB: N/A (internal)\n- LLM Triage: SQL injection attack using UNION-based technique to extract credentials\n\n## Evidence\n\n- Suricata SID 9000001, 9000003, 9000004, 9000005\n- ET SID 2006446\n- SQLmap user-agent detected",
+    "title": "[SEVERITY-3] SQL Injection - attack-01 to DVWA - T1190",
+    "description": "## Incident Summary\n\nWazuh rule 9000001 (HOMELAB SQL Injection - UNION SELECT) fired at 2026-01-09T14:30:46Z.\n\n**Source:** 172.20.2.12 (attack-01, VLAN 200)\n**Target:** 172.20.4.11 (DVWA, VLAN 400)\n**Port:** 80/TCP\n\n## Enrichment\n\n- ML Score: 0.92 (Critical)\n- AbuseIPDB: N/A (internal)\n- LLM Triage: SQL injection attack using UNION-based technique to extract credentials\n\n## Evidence\n\n- Suricata SID 9000001, 9000003, 9000004, 9000005\n- ET SID 2006446\n- SQLmap user-agent detected",
     "severity": 3,
     "tlp": 2,
     "pap": 0,
     "flag": false,
-    "tags": ["sql-injection", "T1190", "purple-team", "vlan40", "sqlmap"],
+    "tags": ["sql-injection", "T1190", "purple-team", "vlan400", "sqlmap"],
     "status": "New"
   }'
 ```
@@ -1604,24 +1604,24 @@ New --> InProgress --> Resolved
 
 **Updating case status via API:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # Move to InProgress
-curl -s -X PATCH "http://10.10.30.22:9000/api/case/CASE_ID" \
+curl -s -X PATCH "http://172.20.3.13:9000/api/case/CASE_ID" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"status": "InProgress"}'
 
 # Resolve as TruePositive with NoImpact
-curl -s -X PATCH "http://10.10.30.22:9000/api/case/CASE_ID" \
+curl -s -X PATCH "http://172.20.3.13:9000/api/case/CASE_ID" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
     "status": "Resolved",
     "resolutionStatus": "TruePositive",
     "impactStatus": "NoImpact",
-    "summary": "Confirmed SQL injection attack from sear to DVWA during purple team exercise. All 5 custom Suricata rules fired correctly. No impact -- DVWA is an intentionally vulnerable target on isolated VLAN 40."
+    "summary": "Confirmed SQL injection attack from attack-01 to DVWA during purple team exercise. All 5 custom Suricata rules fired correctly. No impact -- DVWA is an intentionally vulnerable target on isolated VLAN 400."
   }'
 ```
 
@@ -1641,10 +1641,10 @@ Checklist:
 - Document initial indicators of compromise (IOCs)
 - Assign severity based on the escalation matrix
 
-**Run from PITBOSS (Git Bash) -- all 5 task creation commands in this section target TheHive API:**
+**Run from ADMIN-WS (Git Bash) -- all 5 task creation commands in this section target TheHive API:**
 
 ```bash
-curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/task" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/CASE_ID/task" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1670,10 +1670,10 @@ Long-term containment:
 - Increase monitoring on affected systems
 - Preserve forensic images before remediation
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
-curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/task" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/CASE_ID/task" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1696,10 +1696,10 @@ Checklist:
 - Remove unauthorized accounts or persistence mechanisms
 - Verify clean state with Velociraptor artifact collection
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
-curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/task" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/CASE_ID/task" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1722,10 +1722,10 @@ Checklist:
 - Monitor for re-infection (24-72 hour watch period)
 - Remove temporary containment rules when confident
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
-curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/task" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/CASE_ID/task" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1741,10 +1741,10 @@ curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/task" \
 
 Purpose: Document what happened, what worked, what did not, and what to improve. This is where the After-Action Report (AAR) lives.
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
-curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/task" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/CASE_ID/task" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1774,10 +1774,10 @@ curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/task" \
 
 **Adding an observable via API:**
 
-**Run from PITBOSS (Git Bash) -- all observable API calls in this section target TheHive (http://10.10.30.22:9000):**
+**Run from ADMIN-WS (Git Bash) -- all observable API calls in this section target TheHive (http://172.20.3.13:9000):**
 
 ```bash
-curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/artifact" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/CASE_ID/artifact" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1793,17 +1793,17 @@ curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/artifact" \
 
 **Running analyzers on an observable via API:**
 
-**Run from PITBOSS (Git Bash) -- TheHive query then Cortex analyzer call:**
+**Run from ADMIN-WS (Git Bash) -- TheHive query then Cortex analyzer call:**
 
 ```bash
 # First, get the observable ID from the case
-curl -s "http://10.10.30.22:9000/api/case/artifact/_search" \
+curl -s "http://172.20.3.13:9000/api/case/artifact/_search" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"query": {"_parent": {"_type": "case", "_query": {"_id": "CASE_ID"}}}}'
 
 # Run analyzer on the observable (use Cortex API)
-curl -s -X POST "http://10.10.30.22:9001/api/analyzer/AbuseIPDB_1_0/run" \
+curl -s -X POST "http://172.20.3.13:9001/api/analyzer/AbuseIPDB_1_0/run" \
   -H "Authorization: Bearer <CORTEX_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1816,11 +1816,11 @@ curl -s -X POST "http://10.10.30.22:9001/api/analyzer/AbuseIPDB_1_0/run" \
 
 **Bulk import observables:**
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
 # Add multiple observables at once
-curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/artifact" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/CASE_ID/artifact" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '[
@@ -1841,11 +1841,11 @@ curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/artifact" \
 - Attacker demonstrates persistent access (backdoor, scheduled task)
 - Attack originates from a previously trusted source (insider threat)
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # Increase severity from 2 to 3
-curl -s -X PATCH "http://10.10.30.22:9000/api/case/CASE_ID" \
+curl -s -X PATCH "http://172.20.3.13:9000/api/case/CASE_ID" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"severity": 3}'
@@ -1982,9 +1982,9 @@ Copy this template and fill in all sections:
 *Report prepared by [Analyst Name] on [Date]. Stored in TheHive Case #XXXX, Task 5.*
 ```
 
-**Storing the AAR (TheHive browser from PITBOSS):**
+**Storing the AAR (TheHive browser from ADMIN-WS):**
 
-1. Open the case in TheHive (http://10.10.30.22:9000)
+1. Open the case in TheHive (http://172.20.3.13:9000)
 2. Navigate to Task 5 (Lessons Learned)
 3. Click "Add Log"
 4. Paste the completed AAR template as the log entry
@@ -2003,11 +2003,11 @@ For Severity 3-4 TruePositive cases, export the AAR as a standalone document:
 
 ## 8. SOAR Workflow Operations
 
-This section documents all Shuffle SOAR workflows. All workflows run on brisket (10.10.20.30). Shuffle Frontend: https://10.10.20.30:3443. Shuffle Backend API: http://10.10.20.30:5001. All workflow credentials use `$varname` substitution (workflow variables) -- never hardcoded.
+This section documents all Shuffle SOAR workflows. All workflows run on soc-01 (172.20.2.14). Shuffle Frontend: https://172.20.2.14:3443. Shuffle Backend API: http://172.20.2.14:5001. All workflow credentials use `$varname` substitution (workflow variables) -- never hardcoded.
 
 **Ollama Configuration (applies to all LLM-enabled workflows):**
 
-- Model: `qwen3:8b` on brisket Ollama (http://10.10.20.30:11434)
+- Model: `qwen3:8b` on soc-01 Ollama (http://172.20.2.14:11434)
 - Temperature: 0.3 (deterministic output)
 - All prompts prefixed with `/no_think` to suppress reasoning chain
 - Response parsing strips `<think>...</think>` tags via regex
@@ -2016,10 +2016,10 @@ This section documents all Shuffle SOAR workflows. All workflows run on brisket 
 
 **Listing all workflows:**
 
-**Run from PITBOSS (Git Bash) -- all Shuffle API calls in Section 8 target http://10.10.20.30:5001:**
+**Run from ADMIN-WS (Git Bash) -- all Shuffle API calls in Section 8 target http://172.20.2.14:5001:**
 
 ```bash
-curl -s http://10.10.20.30:5001/api/v1/workflows \
+curl -s http://172.20.2.14:5001/api/v1/workflows \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>" | \
   python -c "import sys,json; [print(f'{w[\"id\"]:40} {w[\"name\"]}') for w in json.load(sys.stdin)]"
 ```
@@ -2035,7 +2035,7 @@ curl -s http://10.10.20.30:5001/api/v1/workflows \
 1. Parse incoming alert JSON
 2. Extract source IP, check if external (skip RFC1918/internal)
 3. AbuseIPDB lookup: confidence score, report count, country, ISP
-4. ML Scorer: POST to http://10.10.20.30:5002/score with alert JSON -> ml_score (0-1), ml_label, top features
+4. ML Scorer: POST to http://172.20.2.14:5002/score with alert JSON -> ml_score (0-1), ml_label, top features
 5. Combined score: `max(abuse_normalized, ml_score)` where `abuse_normalized = abuseipdb_confidence / 100`
 6. Dedup check: skip if same source IP alerted within 24 hours
 7. Ollama triage: 1-2 sentence analyst summary. If ml_score >= 0.7, includes top 7 feature analysis
@@ -2059,7 +2059,7 @@ Action: TheHive case #1234 created. Cloudflare block: HONEYPOT_DISABLED.
 **Common failure modes:**
 
 - AbuseIPDB rate limit exceeded (1000 checks/day free tier): WF1 continues without AbuseIPDB data, uses ML score only
-- ML Scorer timeout: check GPU contention with `nvidia-smi` on brisket. Restart ml-scorer container
+- ML Scorer timeout: check GPU contention with `nvidia-smi` on soc-01. Restart ml-scorer container
 - Ollama timeout: increase timeout to 120s in Shuffle HTTP action. Check if another workflow is using GPU
 - Dedup false suppression: if a genuinely different alert from the same IP is suppressed, manually create a TheHive case
 
@@ -2071,10 +2071,10 @@ Action: TheHive case #1234 created. Cloudflare block: HONEYPOT_DISABLED.
 
 **Manual execution:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -s -X POST "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/execute" \
+curl -s -X POST "http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID/execute" \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{}'
@@ -2113,7 +2113,7 @@ Action Items:
 
 **Common failure modes:**
 
-- OpenSearch connection timeout: verify indexer health with `curl -sk https://10.10.20.30:9200/_cluster/health -u admin:'PASSWORD'`
+- OpenSearch connection timeout: verify indexer health with `curl -sk https://172.20.2.14:9200/_cluster/health -u admin:'PASSWORD'`
 - Ollama produces truncated output: increase `num_predict` to 3000 in the HTTP action
 - Empty digest (0 alerts): normal during maintenance windows, verify agents are reporting
 
@@ -2125,10 +2125,10 @@ Action Items:
 
 **Manual execution:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -s -X POST "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/execute" \
+curl -s -X POST "http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID/execute" \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -2140,7 +2140,7 @@ curl -s -X POST "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/execute" \
 
 **Pipeline steps:**
 
-1. Query Caldera API (http://10.10.30.21:8888) for operation results (techniques executed, success/fail)
+1. Query Caldera API (http://172.20.3.12:8888) for operation results (techniques executed, success/fail)
 2. Query Wazuh OpenSearch for alerts in the operation time window
 3. Cross-reference: which MITRE techniques generated alerts vs. which did not
 4. Compute detection coverage: `(techniques_detected / techniques_executed) * 100`
@@ -2165,7 +2165,7 @@ TheHive Case: #1245
 
 **Common failure modes:**
 
-- Caldera API unreachable: verify smoker is online, check `curl http://10.10.30.21:8888/api/v2/health -H 'KEY: <CALDERA_API_KEY>'`
+- Caldera API unreachable: verify pve-02 is online, check `curl http://172.20.3.12:8888/api/v2/health -H 'KEY: <CALDERA_API_KEY>'`
 - Zero techniques found: verify the operation_id is correct (use full UUID)
 - Time window mismatch: adjust start_time/end_time to cover the full campaign duration
 
@@ -2177,10 +2177,10 @@ TheHive Case: #1245
 
 **Manual execution:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -s -X POST "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/execute" \
+curl -s -X POST "http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID/execute" \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{}'
@@ -2198,7 +2198,7 @@ curl -s -X POST "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/execute" \
 
 | Category | Meaning | Action |
 |----------|---------|--------|
-| CAMPAIGN | Expected red team / Caldera activity from sear (10.10.20.20) | Acknowledge, no action |
+| CAMPAIGN | Expected red team / Caldera activity from attack-01 (172.20.2.12) | Acknowledge, no action |
 | ROUTINE | Normal operational alerts (agent heartbeats, system updates) | No action |
 | INVESTIGATE | Suspicious activity requiring analyst review | Review TheHive alert, investigate |
 | MISCONFIG | Likely misconfiguration or noisy rule | Tune rule, adjust threshold |
@@ -2214,11 +2214,11 @@ Top 10 Clusters (24h):
    Rules: 5763 SSH brute force (31), 5710 auth failure (16)
    MITRE: T1110.001 Password Guessing
 
-2. 10.10.20.20 (89 alerts) -> CAMPAIGN
+2. 172.20.2.12 (89 alerts) -> CAMPAIGN
    Rules: 31168 Web attack (45), 5763 SSH brute force (44)
-   Note: sear IP, authorized testing
+   Note: attack-01 IP, authorized testing
 
-3. 10.10.10.1 (23 alerts) -> ROUTINE
+3. 172.20.1.1 (23 alerts) -> ROUTINE
    Rules: 60101 Firewall state change (23)
    Note: OPNsense operational logs
 ```
@@ -2226,7 +2226,7 @@ Top 10 Clusters (24h):
 **Common failure modes:**
 
 - Too many clusters (>50): workflow may timeout. Increase execution timeout in Shuffle settings
-- INVESTIGATE classification on known sear IP: sear (10.10.20.20) should be in the whitelist. Check workflow variable configuration
+- INVESTIGATE classification on known attack-01 IP: attack-01 (172.20.2.12) should be in the whitelist. Check workflow variable configuration
 
 ### 8.5 WF6 -- ML Model Drift Monitor
 
@@ -2236,10 +2236,10 @@ Top 10 Clusters (24h):
 
 **Manual execution:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -s -X POST "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/execute" \
+curl -s -X POST "http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID/execute" \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{}'
@@ -2248,7 +2248,7 @@ curl -s -X POST "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/execute" \
 **Pipeline steps:**
 
 1. Query OpenSearch for ~200 recent alerts
-2. POST each to ML Scorer (http://10.10.20.30:5002/score)
+2. POST each to ML Scorer (http://172.20.2.14:5002/score)
 3. Compute score distribution statistics (mean, p50, p95, malicious %)
 4. Compare against baseline distribution
 5. Ollama classifies drift level
@@ -2278,7 +2278,7 @@ Drift: Mean shift +0.02, within normal range.
 
 **Common failure modes:**
 
-- ML Scorer unhealthy: check `curl http://10.10.20.30:5002/health`. Restart container if needed
+- ML Scorer unhealthy: check `curl http://172.20.2.14:5002/health`. Restart container if needed
 - GPU contention: WF6 runs at 0900, 3 hours after WF5/WF2. If Ollama is still processing, scores may timeout
 - Baseline not set: on first run, the workflow establishes the baseline. Subsequent runs compare against it
 
@@ -2292,7 +2292,7 @@ Drift: Mean shift +0.02, within normal range.
 
 **Pipeline steps (reference):**
 
-1. Query ELK (https://10.10.30.25:9200) for `honeypot-credentials` index (last 7 days)
+1. Query ELK (https://172.20.3.16:9200) for `honeypot-credentials` index (last 7 days)
 2. Query ELK for `honeypot-access` index (last 7 days)
 3. Aggregate by attacker IP, credential pairs, access paths, user agents
 4. Ollama generates intelligence report with week-over-week comparison
@@ -2327,10 +2327,10 @@ MITRE Techniques: T1078 Valid Accounts, T1110.001 Password Guessing,
 
 **Manual execution:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -s -X POST "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/execute" \
+curl -s -X POST "http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID/execute" \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{}'
@@ -2365,11 +2365,11 @@ Internal Network Anomalies (3 found):
    Context: Base64-encoded command, not seen in last 30 days
    Action: Investigate for T1059.001
 
-2. MISCONFIG: smokehouse -- repeated Zeek DNS timeout warnings
-   114 events in 2 hours, resolver 10.10.10.1
+2. MISCONFIG: sensor-01 -- repeated Zeek DNS timeout warnings
+   114 events in 2 hours, resolver 172.20.1.1
    Action: Check OPNsense DNS settings
 
-3. TRANSIENT: brisket -- Docker container restart loop (3 restarts)
+3. TRANSIENT: soc-01 -- Docker container restart loop (3 restarts)
    Resolved at 13:45 EST
    Action: None, self-resolved
 ```
@@ -2390,24 +2390,24 @@ Internal Network Anomalies (3 found):
 **Common failure modes:**
 
 - IsolationForest produces too many anomalies: adjust contamination parameter in workflow
-- Ollama timeout due to GPU contention with Grafana dashboards or ML Scorer: check `nvidia-smi` on brisket
-- Zeek indices empty: verify Fluent Bit on smokehouse is shipping to OpenSearch
+- Ollama timeout due to GPU contention with Grafana dashboards or ML Scorer: check `nvidia-smi` on soc-01
+- Zeek indices empty: verify Fluent Bit on sensor-01 is shipping to OpenSearch
 
 ---
 
 ## 9. Adversary Simulation Operations
 
-All adversary simulation is conducted from **sear** (10.10.20.20, Kali Linux). Attacks **MUST** target VLAN 40 only (10.10.40.0/24) unless explicitly running authorized AD attacks on VLAN 30.
+All adversary simulation is conducted from **attack-01** (172.20.2.12, Kali Linux). Attacks **MUST** target VLAN 400 only (172.20.4.0/24) unless explicitly running authorized AD attacks on VLAN 300.
 
 ### 9.1 run_attack.sh Usage
 
 The `run_attack.sh` wrapper ensures ground-truth logging for every attack. It records timestamps, MITRE technique IDs, tools used, source/target IPs, and success status.
 
-**Location:** `~/attack-scripts/run_attack.sh` on sear.
+**Location:** `~/attack-scripts/run_attack.sh` on attack-01.
 
 **Syntax:**
 
-**SSH to sear first (`ssh <user>@10.10.20.20` from PITBOSS), then run from `~/attack-scripts/`:**
+**SSH to attack-01 first (`ssh <user>@172.20.2.12` from ADMIN-WS), then run from `~/attack-scripts/`:**
 
 ```bash
 ./run_attack.sh <attack_type> ["optional notes"]
@@ -2421,46 +2421,46 @@ The `run_attack.sh` wrapper ensures ground-truth logging for every attack. It re
 
 | Category | Example Attacks | Default Target |
 |----------|----------------|----------------|
-| Web | sqli_union, sqli_blind, xss_reflected, xss_stored, lfi, rfi, cmdi, path_traversal, log4shell, ssrf | DVWA (10.10.40.10) |
-| Credential | login_brute, wordpress_brute, xmlrpc_brute, credential_stuffing | WordPress (10.10.40.30), DVWA |
-| Recon | syn_scan, full_tcp, udp_scan, version_detection, os_fingerprinting, smb_enum | All VLAN 40 targets |
-| Brute Force | ssh_brute, ftp_brute, telnet_brute, mysql_brute, postgres_brute | Metasploitable (10.10.40.20) |
-| C2 Simulation | http_beacon, dns_beacon, http_exfiltration, dns_exfiltration | Metasploitable (10.10.40.20) |
-| API | crapi_bola, crapi_bfla, crapi_mass_assign, crapi_ssrf | crAPI (10.10.40.31) |
-| Metasploit | vsftpd_234, distcc_exec, ms17_010, tomcat_upload, java_rmi | Metasploitable (10.10.40.20/21) |
-| AD (restricted) | ldap_enum, kerberoast, password_spray, bloodhound, asreproast | DC01 (10.10.30.40), WS01 (10.10.30.41) |
+| Web | sqli_union, sqli_blind, xss_reflected, xss_stored, lfi, rfi, cmdi, path_traversal, log4shell, ssrf | DVWA (172.20.4.11) |
+| Credential | login_brute, wordpress_brute, xmlrpc_brute, credential_stuffing | WordPress (172.20.4.14), DVWA |
+| Recon | syn_scan, full_tcp, udp_scan, version_detection, os_fingerprinting, smb_enum | All VLAN 400 targets |
+| Brute Force | ssh_brute, ftp_brute, telnet_brute, mysql_brute, postgres_brute | Metasploitable (172.20.4.12) |
+| C2 Simulation | http_beacon, dns_beacon, http_exfiltration, dns_exfiltration | Metasploitable (172.20.4.12) |
+| API | crapi_bola, crapi_bfla, crapi_mass_assign, crapi_ssrf | crAPI (172.20.4.15) |
+| Metasploit | vsftpd_234, distcc_exec, ms17_010, tomcat_upload, java_rmi | Metasploitable (172.20.4.12/13) |
+| AD (restricted) | ldap_enum, kerberoast, password_spray, bloodhound, asreproast | DC01 (172.20.3.20), WS01 (172.20.3.21) |
 
-**AD attack safety:** AD attacks target VLAN 30 (10.10.30.40/41). The script requires typing `CONFIRM-AD` before execution.
+**AD attack safety:** AD attacks target VLAN 300 (172.20.3.20/21). The script requires typing `CONFIRM-AD` before execution.
 
 ### 9.2 Ground-Truth Logging
 
-Every `run_attack.sh` execution appends a line to `attack-scripts/attack_log.csv` on sear:
+Every `run_attack.sh` execution appends a line to `attack-scripts/attack_log.csv` on attack-01:
 
 ```
 attack_id,timestamp_start,timestamp_end,category,subcategory,technique_id,tool,source_ip,target_ip,target_port,target_service,success,notes
-ATK-20260304-001,2026-03-04T14:30:00Z,2026-03-04T14:30:45Z,web,sqli,T1190,sqlmap,10.10.20.20,10.10.40.10,80,dvwa,true,"UNION-based injection test"
+ATK-20260304-001,2026-03-04T14:30:00Z,2026-03-04T14:30:45Z,web,sqli,T1190,sqlmap,172.20.2.12,172.20.4.11,80,dvwa,true,"UNION-based injection test"
 ```
 
 This CSV is the ground truth for correlating attacks to detections. Every alert validation starts by matching the alert timestamp against this log.
 
 ### 9.3 Caldera Campaign Execution
 
-Caldera v5.3.0 runs on smoker (http://10.10.30.21:8888). Login: red / <PLATFORM_PASSWORD>.
+Caldera v5.3.0 runs on pve-02 (http://172.20.3.12:8888). Login: red / <PLATFORM_PASSWORD>.
 
 **4 Sandcat agents deployed:**
 
 | Agent | Host | IP | OS |
 |-------|------|----|----|
-| Sandcat-DC01 | DC01 | 10.10.30.40 | Windows Server 2022 |
-| Sandcat-WS01 | WS01 | 10.10.30.41 | Windows 10 |
-| Sandcat-DVWA | DVWA | 10.10.40.10 | Debian Linux |
-| Sandcat-Meta3 | Metasploitable 3 | 10.10.40.20 | Ubuntu Linux |
+| Sandcat-DC01 | DC01 | 172.20.3.20 | Windows Server 2022 |
+| Sandcat-WS01 | WS01 | 172.20.3.21 | Windows 10 |
+| Sandcat-DVWA | DVWA | 172.20.4.11 | Debian Linux |
+| Sandcat-Meta3 | Metasploitable 3 | 172.20.4.12 | Ubuntu Linux |
 
 **29 MITRE ATT&CK adversary profiles** are available for structured campaigns.
 
 **Creating a campaign via UI:**
 
-**Open in browser from PITBOSS:** Navigate to http://10.10.30.21:8888 (login: red / <PLATFORM_PASSWORD>).
+**Open in browser from ADMIN-WS:** Navigate to http://172.20.3.12:8888 (login: red / <PLATFORM_PASSWORD>).
 
 1. Log in as red
 2. Navigate to Operations > Create Operation
@@ -2471,21 +2471,21 @@ Caldera v5.3.0 runs on smoker (http://10.10.30.21:8888). Login: red / <PLATFORM_
 
 **Creating a campaign via API:**
 
-**Run from PITBOSS (Git Bash) -- all Caldera API calls target http://10.10.30.21:8888:**
+**Run from ADMIN-WS (Git Bash) -- all Caldera API calls target http://172.20.3.12:8888:**
 
 ```bash
 # List available adversary profiles
-curl -s http://10.10.30.21:8888/api/v2/adversaries \
+curl -s http://172.20.3.12:8888/api/v2/adversaries \
   -H "KEY: <CALDERA_API_KEY>" | \
   python -c "import sys,json; [print(f'{a[\"adversary_id\"]:40} {a[\"name\"]}') for a in json.load(sys.stdin)]"
 
 # List available agents
-curl -s http://10.10.30.21:8888/api/v2/agents \
+curl -s http://172.20.3.12:8888/api/v2/agents \
   -H "KEY: <CALDERA_API_KEY>" | \
   python -c "import sys,json; [print(f'{a[\"paw\"]:12} {a[\"host\"]:20} {a[\"platform\"]}') for a in json.load(sys.stdin)]"
 
 # Create and start an operation (use FULL adversary UUID -- truncated causes 0-link failures)
-curl -s -X POST http://10.10.30.21:8888/api/v2/operations \
+curl -s -X POST http://172.20.3.12:8888/api/v2/operations \
   -H "KEY: <CALDERA_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -2497,7 +2497,7 @@ curl -s -X POST http://10.10.30.21:8888/api/v2/operations \
   }'
 
 # Check operation status
-curl -s http://10.10.30.21:8888/api/v2/operations/OPERATION_ID \
+curl -s http://172.20.3.12:8888/api/v2/operations/OPERATION_ID \
   -H "KEY: <CALDERA_API_KEY>" | python -c "import sys,json; d=json.load(sys.stdin); print(f'State: {d[\"state\"]}, Links: {len(d.get(\"chain\",[]))}')"
 ```
 
@@ -2507,15 +2507,15 @@ After any attack (manual or Caldera campaign), follow this procedure:
 
 **Step 1: Wait for processing (2-5 minutes)**
 
-Suricata on smokehouse needs time to process SPAN traffic. Wazuh rules fire on log ingestion. Allow 2-5 minutes before querying for alerts.
+Suricata on sensor-01 needs time to process SPAN traffic. Wazuh rules fire on log ingestion. Allow 2-5 minutes before querying for alerts.
 
 **Step 2: Query Wazuh for alerts in the attack window**
 
-**Run from PITBOSS (Git Bash) -- all queries in Steps 2-4 can be run from PITBOSS:**
+**Run from ADMIN-WS (Git Bash) -- all queries in Steps 2-4 can be run from ADMIN-WS:**
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 100,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -2523,7 +2523,7 @@ curl -k -u admin:'PASSWORD' -X GET \
     "bool": {
       "must": [
         {"range": {"@timestamp": {"gte": "now-30m", "lte": "now"}}},
-        {"term": {"data.srcip": "10.10.20.20"}}
+        {"term": {"data.srcip": "172.20.2.12"}}
       ]
     }
   },
@@ -2533,11 +2533,11 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 **Step 3: Check Zeek network flows**
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/zeek-conn-*/_search" \
+  "https://172.20.2.14:9200/zeek-conn-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -2545,7 +2545,7 @@ curl -k -u admin:'PASSWORD' -X GET \
     "bool": {
       "must": [
         {"range": {"@timestamp": {"gte": "now-30m", "lte": "now"}}},
-        {"term": {"id.orig_h": "10.10.20.20"}}
+        {"term": {"id.orig_h": "172.20.2.12"}}
       ]
     }
   },
@@ -2555,10 +2555,10 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 **Step 4: Trigger WF3 detection gap analysis (for Caldera campaigns)**
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
-curl -s -X POST "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/execute" \
+curl -s -X POST "http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID/execute" \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -2584,17 +2584,17 @@ Each runbook follows the structure: **Trigger** (what initiates the runbook), **
 
 **Verify:**
 
-**Run from PITBOSS (Git Bash) -- all curl commands in runbooks can be run from PITBOSS unless noted otherwise:**
+**Run from ADMIN-WS (Git Bash) -- all curl commands in runbooks can be run from ADMIN-WS unless noted otherwise:**
 
 ```bash
 # Get JWT token
 TOKEN=$(curl -s -u wazuh-wui:'<WAZUH_API_PASSWORD>' -k -X POST \
-  "https://10.10.20.30:55000/security/user/authenticate" | \
+  "https://172.20.2.14:55000/security/user/authenticate" | \
   python -c "import sys,json; print(json.load(sys.stdin)['data']['token'])")
 
 # Query for SSH brute force alerts from the source IP
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "query": {
@@ -2610,11 +2610,11 @@ curl -k -u admin:'PASSWORD' -X GET \
 }'
 ```
 
-Check if the source IP is sear (10.10.20.20) running an authorized brute force test. Cross-reference `attack_log.csv` on sear (`ssh <user>@10.10.20.20` then `cat ~/attack-scripts/attack_log.csv`).
+Check if the source IP is attack-01 (172.20.2.12) running an authorized brute force test. Cross-reference `attack_log.csv` on attack-01 (`ssh <user>@172.20.2.12` then `cat ~/attack-scripts/attack_log.csv`).
 
 **Investigate:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # AbuseIPDB lookup
@@ -2623,7 +2623,7 @@ curl -s "https://api.abuseipdb.com/api/v2/check?ipAddress=SUSPECT_IP&maxAgeInDay
 
 # Check if IP appears in alerts on other agents
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {"term": {"data.srcip": "SUSPECT_IP"}},
@@ -2632,7 +2632,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 # Zeek connection metadata for the source IP
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/zeek-conn-*/_search" \
+  "https://172.20.2.14:9200/zeek-conn-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 20,
   "query": {
@@ -2651,7 +2651,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 
 If external and malicious (AbuseIPDB confidence >= 50 or multiple reports):
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # Block via Cloudflare (if honeypot mode allows)
@@ -2671,10 +2671,10 @@ If internal authorized testing: verify against `attack_log.csv`, acknowledge in 
 
 Create TheHive case with: source IP, failure count, targeted agents, country/ISP, AbuseIPDB score, block action taken, MITRE T1110.001.
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -X POST http://10.10.30.22:9000/api/case \
+curl -X POST http://172.20.3.13:9000/api/case \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -2693,12 +2693,12 @@ curl -X POST http://10.10.30.22:9000/api/case \
 
 **Verify:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # Query for SQL injection alerts
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "query": {
@@ -2716,23 +2716,23 @@ curl -k -u admin:'PASSWORD' -X GET \
 }'
 ```
 
-Check if the source IP is sear (10.10.20.20) running authorized testing against DVWA (10.10.40.10).
+Check if the source IP is attack-01 (172.20.2.12) running authorized testing against DVWA (172.20.4.11).
 
 **Investigate:**
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
 # Check Zeek HTTP logs for the actual payload
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/zeek-http-*/_search" \
+  "https://172.20.2.14:9200/zeek-http-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "query": {
     "bool": {
       "must": [
         {"term": {"id.orig_h": "SUSPECT_IP"}},
-        {"term": {"id.resp_h": "10.10.40.10"}},
+        {"term": {"id.resp_h": "172.20.4.11"}},
         {"range": {"@timestamp": {"gte": "now-1h"}}}
       ]
     }
@@ -2751,15 +2751,15 @@ Look for: `UNION SELECT` in URI, `' OR 1=1` patterns, encoded variants (`%27`, `
 
 **Document:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -X POST http://10.10.30.22:9000/api/case \
+curl -X POST http://172.20.3.13:9000/api/case \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "[RB-02] SQL Injection against DVWA from SUSPECT_IP",
-    "description": "SQL injection detected by Suricata/Wazuh.\nSource: SUSPECT_IP\nTarget: 10.10.40.10:80 (DVWA)\nPayload: [extracted URI]\nSuccess: [yes/no based on HTTP response]",
+    "description": "SQL injection detected by Suricata/Wazuh.\nSource: SUSPECT_IP\nTarget: 172.20.4.11:80 (DVWA)\nPayload: [extracted URI]\nSuccess: [yes/no based on HTTP response]",
     "severity": 3,
     "tlp": 2,
     "pap": 2,
@@ -2769,16 +2769,16 @@ curl -X POST http://10.10.30.22:9000/api/case \
 
 ### RB-03: Lateral Movement (AD Environment)
 
-**Trigger:** Alerts from DC01 (agent 007, 10.10.30.40) or WS01 (agent 021, 10.10.30.41) with MITRE techniques T1021 (Remote Services), T1047 (WMI), T1059 (Command/Scripting Interpreter), T1003 (Credential Dumping), or T1550 (Use Alternate Authentication Material).
+**Trigger:** Alerts from DC01 (agent 007, 172.20.3.20) or WS01 (agent 021, 172.20.3.21) with MITRE techniques T1021 (Remote Services), T1047 (WMI), T1059 (Command/Scripting Interpreter), T1003 (Credential Dumping), or T1550 (Use Alternate Authentication Material).
 
 **Verify:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # Check for lateral movement indicators on AD agents
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "query": {
@@ -2794,16 +2794,16 @@ curl -k -u admin:'PASSWORD' -X GET \
 }'
 
 # Check if a Caldera campaign is running
-curl -s http://10.10.30.21:8888/api/v2/operations \
+curl -s http://172.20.3.12:8888/api/v2/operations \
   -H "KEY: <CALDERA_API_KEY>" | \
   python -c "import sys,json; [print(f'{o[\"id\"]:40} {o[\"name\"]:30} {o[\"state\"]}') for o in json.load(sys.stdin) if o['state'] == 'running']"
 ```
 
 **Investigate:**
 
-**Open in browser from PITBOSS:** Navigate to https://10.10.20.30:8889 (login: admin / <PLATFORM_PASSWORD>). Run VQL queries on the affected endpoint:
+**Open in browser from ADMIN-WS:** Navigate to https://172.20.2.14:8889 (login: admin / <PLATFORM_PASSWORD>). Run VQL queries on the affected endpoint:
 
-**Run in Velociraptor GUI notebook (browser from PITBOSS):**
+**Run in Velociraptor GUI notebook (browser from ADMIN-WS):**
 
 ```
 -- Process listing (look for unusual processes)
@@ -2834,10 +2834,10 @@ If authorized Caldera campaign: document detection coverage per technique.
 
 **Document:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -X POST http://10.10.30.22:9000/api/case \
+curl -X POST http://172.20.3.13:9000/api/case \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -2856,12 +2856,12 @@ curl -X POST http://10.10.30.22:9000/api/case \
 
 **Verify:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # Query syscheck events on the affected agent
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 20,
   "query": {
@@ -2883,7 +2883,7 @@ Check if the file change corresponds to a known system update, package installat
 
 1. Collect the file via Velociraptor:
 
-**Run in Velociraptor GUI notebook (browser from PITBOSS at https://10.10.20.30:8889):**
+**Run in Velociraptor GUI notebook (browser from ADMIN-WS at https://172.20.2.14:8889):**
 
 ```
 -- Hash the file
@@ -2902,16 +2902,16 @@ SELECT * FROM Artifact.Windows.Sys.StartupItems()
 
 2. Run Cortex VirusTotal analyzer on the file hash:
 
-**Run from PITBOSS (Git Bash) -- calls the Cortex API:**
+**Run from ADMIN-WS (Git Bash) -- calls the Cortex API:**
 
 ```bash
-curl -X POST http://10.10.30.22:9001/api/analyzer/VirusTotal_GetReport_3_1/run \
+curl -X POST http://172.20.3.13:9001/api/analyzer/VirusTotal_GetReport_3_1/run \
   -H "Authorization: Bearer <CORTEX_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"data": "SHA256_HASH_HERE", "dataType": "hash", "tlp": 2}'
 
 # Check analyzer job status
-curl -s http://10.10.30.22:9001/api/job/JOB_ID \
+curl -s http://172.20.3.13:9001/api/job/JOB_ID \
   -H "Authorization: Bearer <CORTEX_API_KEY>"
 ```
 
@@ -2927,10 +2927,10 @@ If malicious:
 
 **Document:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -X POST http://10.10.30.22:9000/api/case \
+curl -X POST http://172.20.3.13:9000/api/case \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -2955,12 +2955,12 @@ Add file hash, filename, and path as observables in the TheHive case.
 
 Review the WF8 Discord output. Check the classification reasoning. Compare to baseline honeypot activity (SSH brute force and wp-login credential captures are expected).
 
-**Run from PITBOSS (Git Bash) -- queries ELK Elasticsearch on haccp:**
+**Run from ADMIN-WS (Git Bash) -- queries ELK Elasticsearch on elk-01:**
 
 ```bash
 # Query honeypot-wazuh for recent alerts from agent 009
 curl -sk -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/honeypot-wazuh/_search" \
+  "https://172.20.3.16:9200/honeypot-wazuh/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -2971,12 +2971,12 @@ curl -sk -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 **Investigate:**
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
 # Query honeypot-credentials for credential patterns
 curl -sk -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/honeypot-credentials/_search" \
+  "https://172.20.3.16:9200/honeypot-credentials/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -2992,7 +2992,7 @@ curl -sk -u elastic:'<PLATFORM_PASSWORD>' -X GET \
 
 # Query honeypot-access for unusual paths
 curl -sk -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/honeypot-access/_search" \
+  "https://172.20.3.16:9200/honeypot-access/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "query": {
@@ -3020,10 +3020,10 @@ Look for: admin panel access (/wp-admin), file uploads (/wp-content/uploads), sh
 
 **Document:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -X POST http://10.10.30.22:9000/api/case \
+curl -X POST http://172.20.3.13:9000/api/case \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -3042,12 +3042,12 @@ curl -X POST http://10.10.30.22:9000/api/case \
 
 **Verify:**
 
-**Run from PITBOSS (Git Bash) -- queries ELK on haccp:**
+**Run from ADMIN-WS (Git Bash) -- queries ELK on elk-01:**
 
 ```bash
 # Query ELK ml-drift index for drift metrics
 curl -sk -u elastic:'<PLATFORM_PASSWORD>' -X GET \
-  "https://10.10.30.25:9200/ml-drift/_search" \
+  "https://172.20.3.16:9200/ml-drift/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 7,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -3063,15 +3063,15 @@ Determine the cause:
 
 1. **New attack campaign?** Check Caldera operations, `attack_log.csv` for recent campaigns
 2. **Network topology change?** New agents added, services moved, VLAN changes
-3. **Zeek enrichment rate change?** Zeek join rate affects ~31 features. Check if Fluent Bit on smokehouse is functioning
+3. **Zeek enrichment rate change?** Zeek join rate affects ~31 features. Check if Fluent Bit on sensor-01 is functioning
 4. **Model input issues?** Check ML Scorer health and recent scoring errors
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # Sample recent high-scoring alerts manually
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 20,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -3080,7 +3080,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 }'
 
 # Score a sample alert manually
-curl -s -X POST http://10.10.20.30:5002/score \
+curl -s -X POST http://172.20.2.14:5002/score \
   -H "Content-Type: application/json" \
   -d '{"alert": ALERT_JSON_HERE}'
 ```
@@ -3091,15 +3091,15 @@ curl -s -X POST http://10.10.20.30:5002/score \
 |-------|--------|
 | New attack types | Initiate retraining with new labeled data from `attack_log.csv` |
 | Topology change | Update feature engineering pipeline, recompute baselines |
-| Zeek enrichment drop | Fix Fluent Bit on smokehouse, then reassess drift |
+| Zeek enrichment drop | Fix Fluent Bit on sensor-01, then reassess drift |
 | One-off anomaly | Acknowledge, monitor next day, no action if resolves |
 
 **Document:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -X POST http://10.10.30.22:9000/api/case \
+curl -X POST http://172.20.3.13:9000/api/case \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -3118,12 +3118,12 @@ curl -X POST http://10.10.30.22:9000/api/case \
 
 **Verify:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # Query vulnerability detection alerts
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 20,
   "query": {
@@ -3143,11 +3143,11 @@ curl -k -u admin:'PASSWORD' -X GET \
 1. Check CVE severity (CVSS score) via NVD or vendor advisory
 2. Identify all affected agents:
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {"term": {"data.vulnerability.cve": "CVE-YYYY-NNNNN"}},
@@ -3169,14 +3169,14 @@ curl -k -u admin:'PASSWORD' -X GET \
 | 4.0-6.9 | Any | Patch in next maintenance window |
 | < 4.0 | Any | Track, patch when convenient |
 
-If the CVE has a known Suricata signature, add it to the custom rules on smokehouse.
+If the CVE has a known Suricata signature, add it to the custom rules on sensor-01.
 
 **Document:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -X POST http://10.10.30.22:9000/api/case \
+curl -X POST http://172.20.3.13:9000/api/case \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -3195,16 +3195,16 @@ curl -X POST http://10.10.30.22:9000/api/case \
 
 **Verify:**
 
-**Run from PITBOSS (Git Bash) -- all commands in RB-08 can be run from PITBOSS:**
+**Run from ADMIN-WS (Git Bash) -- all commands in RB-08 can be run from ADMIN-WS:**
 
 ```bash
 # Confirm operation completed
-curl -s http://10.10.30.21:8888/api/v2/operations/OPERATION_ID \
+curl -s http://172.20.3.12:8888/api/v2/operations/OPERATION_ID \
   -H "KEY: <CALDERA_API_KEY>" | \
   python -c "import sys,json; d=json.load(sys.stdin); print(f'Name: {d[\"name\"]}\nState: {d[\"state\"]}\nLinks: {len(d.get(\"chain\",[]))}')"
 
 # Get operation time range
-curl -s http://10.10.30.21:8888/api/v2/operations/OPERATION_ID \
+curl -s http://172.20.3.12:8888/api/v2/operations/OPERATION_ID \
   -H "KEY: <CALDERA_API_KEY>" | \
   python -c "
 import sys,json
@@ -3223,10 +3223,10 @@ Step 1: Wait 2-5 minutes after campaign completion for alert processing.
 
 Step 2: Trigger WF3 detection gap analysis:
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
-curl -s -X POST "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/execute" \
+curl -s -X POST "http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID/execute" \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -3240,11 +3240,11 @@ Step 3: Review the WF3 Discord output for coverage percentage and gap list.
 
 Step 4: For each undetected technique, query Wazuh to confirm no alerts exist:
 
-**Same machine (PITBOSS):**
+**Same machine (ADMIN-WS):**
 
 ```bash
 curl -k -u admin:'PASSWORD' -X GET \
-  "https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search" \
+  "https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search" \
   -H 'Content-Type: application/json' -d '{
   "size": 10,
   "query": {
@@ -3271,10 +3271,10 @@ For each detection gap:
 
 **Document:**
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
-curl -X POST http://10.10.30.22:9000/api/case \
+curl -X POST http://172.20.3.13:9000/api/case \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -3299,26 +3299,26 @@ Track rule creation progress as tasks within the TheHive case.
 
 **Diagnose:**
 
-**Run from PITBOSS (Git Bash) -- queries the Wazuh API on brisket:**
+**Run from ADMIN-WS (Git Bash) -- queries the Wazuh API on soc-01:**
 
 ```bash
 # Get JWT token
 TOKEN=$(curl -s -u wazuh-wui:'<WAZUH_API_PASSWORD>' -k -X POST \
-  "https://10.10.20.30:55000/security/user/authenticate" | \
+  "https://172.20.2.14:55000/security/user/authenticate" | \
   python -c "import sys,json; print(json.load(sys.stdin)['data']['token'])")
 
 # List disconnected agents
-curl -s -k -X GET "https://10.10.20.30:55000/agents?status=disconnected&pretty=true" \
+curl -s -k -X GET "https://172.20.2.14:55000/agents?status=disconnected&pretty=true" \
   -H "Authorization: Bearer $TOKEN"
 
 # Check specific agent detail
-curl -s -k -X GET "https://10.10.20.30:55000/agents/AGENT_ID?pretty=true" \
+curl -s -k -X GET "https://172.20.2.14:55000/agents/AGENT_ID?pretty=true" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 **Fix:**
 
-**SSH to the affected host from PITBOSS (see Section 1.5 for SSH commands), then run on that host:**
+**SSH to the affected host from ADMIN-WS (see Section 1.5 for SSH commands), then run on that host:**
 
 ```bash
 # SSH to the affected host and check the agent service
@@ -3328,7 +3328,7 @@ sudo systemctl status wazuh-agent
 sudo systemctl restart wazuh-agent
 ```
 
-**On a Windows host, open an admin PowerShell on that machine (RDP to DC01/WS01 or run locally on PITBOSS):**
+**On a Windows host, open an admin PowerShell on that machine (RDP to DC01/WS01 or run locally on ADMIN-WS):**
 
 ```powershell
 # Windows (from admin PowerShell):
@@ -3337,10 +3337,10 @@ Restart-Service WazuhSvc
 
 # Check agent config points to correct manager
 # C:\Program Files (x86)\ossec-agent\ossec.conf
-# Verify <server><address>10.10.20.30</address></server>
+# Verify <server><address>172.20.2.14</address></server>
 ```
 
-**Verify:** Check firewall rules allow the agent to reach brisket on ports 1514 (events) and 1515 (enrollment). Confirm agent appears as `active` in the API response.
+**Verify:** Check firewall rules allow the agent to reach soc-01 on ports 1514 (events) and 1515 (enrollment). Confirm agent appears as `active` in the API response.
 
 ### 11.2 Shuffle Workflow Failed
 
@@ -3348,17 +3348,17 @@ Restart-Service WazuhSvc
 
 **Diagnose:**
 
-**Open in browser from PITBOSS:** Navigate to https://10.10.20.30:3443 (login: admin / <PLATFORM_PASSWORD>).
+**Open in browser from ADMIN-WS:** Navigate to https://172.20.2.14:3443 (login: admin / <PLATFORM_PASSWORD>).
 
 1. Go to Workflows > select the workflow > Executions
 2. Click the failed execution to see per-node status
 3. Check which node failed and read the error output
 
-**Run from PITBOSS (Git Bash):**
+**Run from ADMIN-WS (Git Bash):**
 
 ```bash
 # List recent executions via API
-curl -s http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/executions \
+curl -s http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID/executions \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>" | \
   python -c "import sys,json; [print(f'{e[\"execution_id\"][:12]} {e[\"status\"]:10} {e.get(\"started_at\",\"\")}') for e in json.load(sys.stdin)[:10]]"
 ```
@@ -3369,17 +3369,17 @@ curl -s http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/executions \
 |-------|---------|-----|
 | Ollama timeout | HTTP node timeout after 30s | Increase timeout to 120s in Shuffle HTTP action settings |
 | Variable resolution | `$varname` appears literally in request | Check workflow variable exists and name matches exactly |
-| Orborus down | All workflows fail, no workers spawning | `ssh <user>@10.10.20.30` then `docker restart shuffle-orborus` |
+| Orborus down | All workflows fail, no workers spawning | `ssh <user>@172.20.2.14` then `docker restart shuffle-orborus` |
 | OpenSearch auth | 401 on query nodes | Verify `$opensearch_user` and `$opensearch_pass` workflow variables |
 | Discord webhook invalid | 400/404 on Discord POST | Update `$discord_webhook` workflow variable with new webhook URL |
-| Cron not firing | Workflow never executes | Check brisket crontab: `crontab -l`. Re-add cron entry if missing |
+| Cron not firing | Workflow never executes | Check soc-01 crontab: `crontab -l`. Re-add cron entry if missing |
 
 **Fix Orborus:**
 
-**SSH to brisket first, then run:**
+**SSH to soc-01 first, then run:**
 
 ```bash
-ssh <user>@10.10.20.30
+ssh <user>@172.20.2.14
 docker ps | grep orborus
 docker restart shuffle-orborus
 docker logs --tail 50 shuffle-orborus
@@ -3387,44 +3387,44 @@ docker logs --tail 50 shuffle-orborus
 
 ### 11.3 ELK Containers Down
 
-**Symptoms:** ELK Kibana unreachable at http://10.10.30.25:5601. ELK Elasticsearch queries return connection refused. Fleet agents show offline.
+**Symptoms:** ELK Kibana unreachable at http://172.20.3.16:5601. ELK Elasticsearch queries return connection refused. Fleet agents show offline.
 
-**Root cause:** ELK containers on haccp do NOT auto-start on reboot. Any host restart (maintenance, power outage) requires manual container startup.
+**Root cause:** ELK containers on elk-01 do NOT auto-start on reboot. Any host restart (maintenance, power outage) requires manual container startup.
 
 **Diagnose:**
 
-**Run from PITBOSS (Git Bash) -- executes on haccp via SSH:**
+**Run from ADMIN-WS (Git Bash) -- executes on elk-01 via SSH:**
 
 ```bash
-# SSH to haccp and check ELK containers
-ssh <user>@10.10.30.25 'cd /opt/elk && docker compose ps'
+# SSH to elk-01 and check ELK containers
+ssh <user>@172.20.3.16 'cd /opt/elk && docker compose ps'
 ```
 
 **Fix:**
 
-**Same approach (PITBOSS, SSH to haccp):**
+**Same approach (ADMIN-WS, SSH to elk-01):**
 
 ```bash
 # Start all ELK containers
-ssh <user>@10.10.30.25 'cd /opt/elk && docker compose up -d'
+ssh <user>@172.20.3.16 'cd /opt/elk && docker compose up -d'
 
 # Wait 30-60 seconds for Elasticsearch to initialize, then verify
-ssh <user>@10.10.30.25 'curl -sk https://localhost:9200/_cluster/health -u elastic:'"'"'<PLATFORM_PASSWORD>'"'"''
+ssh <user>@172.20.3.16 'curl -sk https://localhost:9200/_cluster/health -u elastic:'"'"'<PLATFORM_PASSWORD>'"'"''
 ```
 
 **Verify:**
 
-**Run from PITBOSS (Git Bash) -- these query ELK directly over the network:**
+**Run from ADMIN-WS (Git Bash) -- these query ELK directly over the network:**
 
 ```bash
 # Check cluster health (should be green or yellow)
-curl -sk https://10.10.30.25:9200/_cluster/health -u elastic:'<PLATFORM_PASSWORD>'
+curl -sk https://172.20.3.16:9200/_cluster/health -u elastic:'<PLATFORM_PASSWORD>'
 
 # Check all expected indices exist
-curl -sk https://10.10.30.25:9200/_cat/indices?v -u elastic:'<PLATFORM_PASSWORD>' | head -20
+curl -sk https://172.20.3.16:9200/_cat/indices?v -u elastic:'<PLATFORM_PASSWORD>' | head -20
 
 # Check Fleet agents reconnected
-curl -sk https://10.10.30.25:9200/.fleet-agents/_search -u elastic:'<PLATFORM_PASSWORD>' \
+curl -sk https://172.20.3.16:9200/.fleet-agents/_search -u elastic:'<PLATFORM_PASSWORD>' \
   -H 'Content-Type: application/json' -d '{"size":10,"_source":["local_metadata.host.hostname","status"]}'
 ```
 
@@ -3432,14 +3432,14 @@ Expected indices: `.alerts-security.alerts-default`, `honeypot-credentials`, `ho
 
 ### 11.4 ML Scorer Unhealthy
 
-**Symptoms:** `curl http://10.10.20.30:5002/health` returns error or no response. WF1 enrichment completes without ML score. WF6 drift monitor fails.
+**Symptoms:** `curl http://172.20.2.14:5002/health` returns error or no response. WF1 enrichment completes without ML score. WF6 drift monitor fails.
 
 **Diagnose:**
 
-**SSH to brisket first, then run:**
+**SSH to soc-01 first, then run:**
 
 ```bash
-ssh <user>@10.10.20.30
+ssh <user>@172.20.2.14
 
 # Check if container is running
 docker ps | grep ml-scorer
@@ -3462,30 +3462,30 @@ nvidia-smi
 
 **Fix:**
 
-**SSH to brisket first, then run:**
+**SSH to soc-01 first, then run:**
 
 ```bash
-ssh <user>@10.10.20.30
+ssh <user>@172.20.2.14
 
 # Restart the ML scorer container
 docker restart ml-scorer
 
-# Verify health (can also run from PITBOSS without SSH)
-curl -s http://10.10.20.30:5002/health
+# Verify health (can also run from ADMIN-WS without SSH)
+curl -s http://172.20.2.14:5002/health
 ```
 
 **GPU contention:** The RTX A1000 (8GB VRAM) is shared between Ollama and ML Scorer. If both are active simultaneously, OOM can occur. The 3-hour stagger between Ollama-heavy workflows mitigates this, but manual Ollama queries during WF6 execution can cause contention. Check `nvidia-smi` to see current GPU memory usage.
 
 ### 11.5 Wazuh Dashboard Unreachable
 
-**Symptoms:** https://10.10.20.30:5601 returns connection refused or certificate error. Wazuh API (port 55000) may still respond.
+**Symptoms:** https://172.20.2.14:5601 returns connection refused or certificate error. Wazuh API (port 55000) may still respond.
 
 **Diagnose:**
 
-**SSH to brisket first, then run:**
+**SSH to soc-01 first, then run:**
 
 ```bash
-ssh <user>@10.10.20.30
+ssh <user>@172.20.2.14
 
 # Check dashboard container
 docker ps | grep wazuh-dashboard
@@ -3494,7 +3494,7 @@ docker ps | grep wazuh-dashboard
 docker logs --tail 50 wazuh-dashboard
 
 # Check if the indexer (OpenSearch) is healthy -- dashboard depends on it
-curl -sk https://10.10.20.30:9200/_cluster/health -u admin:'PASSWORD'
+curl -sk https://172.20.2.14:9200/_cluster/health -u admin:'PASSWORD'
 ```
 
 **Common issues:**
@@ -3508,10 +3508,10 @@ curl -sk https://10.10.20.30:9200/_cluster/health -u admin:'PASSWORD'
 
 **Fix:**
 
-**SSH to brisket first, then run:**
+**SSH to soc-01 first, then run:**
 
 ```bash
-ssh <user>@10.10.20.30
+ssh <user>@172.20.2.14
 
 # Restart the dashboard
 docker restart wazuh-dashboard
@@ -3522,7 +3522,7 @@ docker restart wazuh-indexer
 docker restart wazuh-dashboard
 ```
 
-**Verify:** Open https://10.10.20.30:5601 in a browser. Accept the self-signed certificate. Confirm the Wazuh dashboard loads and shows agent data.
+**Verify:** Open https://172.20.2.14:5601 in a browser. Accept the self-signed certificate. Confirm the Wazuh dashboard loads and shows agent data.
 
 ### 11.6 Query Failures (OpenSearch / ELK)
 
@@ -3530,21 +3530,21 @@ docker restart wazuh-dashboard
 
 **Diagnose:**
 
-**Run from PITBOSS (Git Bash) -- all diagnostic queries can be run directly from PITBOSS:**
+**Run from ADMIN-WS (Git Bash) -- all diagnostic queries can be run directly from ADMIN-WS:**
 
 ```bash
 # Check if the target index exists
 # OpenSearch (Wazuh):
-curl -sk https://10.10.20.30:9200/_cat/indices/wazuh-alerts-4.x-*?v -u admin:'PASSWORD'
+curl -sk https://172.20.2.14:9200/_cat/indices/wazuh-alerts-4.x-*?v -u admin:'PASSWORD'
 
 # ELK:
-curl -sk https://10.10.30.25:9200/_cat/indices?v -u elastic:'<PLATFORM_PASSWORD>' | grep -i honeypot
+curl -sk https://172.20.3.16:9200/_cat/indices?v -u elastic:'<PLATFORM_PASSWORD>' | grep -i honeypot
 
 # Check index mapping for field types
-curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_mapping/field/data.srcip -u admin:'PASSWORD'
+curl -sk https://172.20.2.14:9200/wazuh-alerts-4.x-*/_mapping/field/data.srcip -u admin:'PASSWORD'
 
 # Check cluster health
-curl -sk https://10.10.20.30:9200/_cluster/health -u admin:'PASSWORD'
+curl -sk https://172.20.2.14:9200/_cluster/health -u admin:'PASSWORD'
 ```
 
 **Common issues:**
@@ -3568,82 +3568,82 @@ Consolidated reference for all service APIs. All commands are copy-paste ready.
 
 ### 12.1 Wazuh REST API
 
-**Base URL:** https://10.10.20.30:55000
+**Base URL:** https://172.20.2.14:55000
 **Auth:** JWT token (obtain via POST to /security/user/authenticate)
 
-**Run from PITBOSS (Git Bash) -- all Wazuh API commands in this section query brisket over the network:**
+**Run from ADMIN-WS (Git Bash) -- all Wazuh API commands in this section query soc-01 over the network:**
 
 ```bash
 # Step 1: Get JWT token (valid for 900 seconds)
 TOKEN=$(curl -s -u wazuh-wui:'<WAZUH_API_PASSWORD>' -k -X POST \
-  "https://10.10.20.30:55000/security/user/authenticate" | \
+  "https://172.20.2.14:55000/security/user/authenticate" | \
   python -c "import sys,json; print(json.load(sys.stdin)['data']['token'])")
 
 # List all agents
-curl -s -k -X GET "https://10.10.20.30:55000/agents?pretty=true&select=id,name,status,ip,os.name" \
+curl -s -k -X GET "https://172.20.2.14:55000/agents?pretty=true&select=id,name,status,ip,os.name" \
   -H "Authorization: Bearer $TOKEN"
 
 # Get specific agent by ID
-curl -s -k -X GET "https://10.10.20.30:55000/agents/001?pretty=true" \
+curl -s -k -X GET "https://172.20.2.14:55000/agents/001?pretty=true" \
   -H "Authorization: Bearer $TOKEN"
 
 # List active agents only
-curl -s -k -X GET "https://10.10.20.30:55000/agents?status=active&pretty=true" \
+curl -s -k -X GET "https://172.20.2.14:55000/agents?status=active&pretty=true" \
   -H "Authorization: Bearer $TOKEN"
 
 # List disconnected agents
-curl -s -k -X GET "https://10.10.20.30:55000/agents?status=disconnected&pretty=true" \
+curl -s -k -X GET "https://172.20.2.14:55000/agents?status=disconnected&pretty=true" \
   -H "Authorization: Bearer $TOKEN"
 
 # Get agent summary (count by status)
-curl -s -k -X GET "https://10.10.20.30:55000/agents/summary/status?pretty=true" \
+curl -s -k -X GET "https://172.20.2.14:55000/agents/summary/status?pretty=true" \
   -H "Authorization: Bearer $TOKEN"
 
 # List rules (with optional search)
-curl -s -k -X GET "https://10.10.20.30:55000/rules?limit=20&pretty=true" \
+curl -s -k -X GET "https://172.20.2.14:55000/rules?limit=20&pretty=true" \
   -H "Authorization: Bearer $TOKEN"
 
 # Search rules by description
-curl -s -k -X GET "https://10.10.20.30:55000/rules?search=brute+force&pretty=true" \
+curl -s -k -X GET "https://172.20.2.14:55000/rules?search=brute+force&pretty=true" \
   -H "Authorization: Bearer $TOKEN"
 
 # Get specific rule by ID
-curl -s -k -X GET "https://10.10.20.30:55000/rules?rule_ids=5763&pretty=true" \
+curl -s -k -X GET "https://172.20.2.14:55000/rules?rule_ids=5763&pretty=true" \
   -H "Authorization: Bearer $TOKEN"
 
 # Restart a specific agent
-curl -s -k -X PUT "https://10.10.20.30:55000/agents/001/restart?pretty=true" \
+curl -s -k -X PUT "https://172.20.2.14:55000/agents/001/restart?pretty=true" \
   -H "Authorization: Bearer $TOKEN"
 
 # Get manager configuration
-curl -s -k -X GET "https://10.10.20.30:55000/manager/configuration?pretty=true" \
+curl -s -k -X GET "https://172.20.2.14:55000/manager/configuration?pretty=true" \
   -H "Authorization: Bearer $TOKEN"
 
 # Get manager logs (last 50)
-curl -s -k -X GET "https://10.10.20.30:55000/manager/logs?limit=50&pretty=true" \
+curl -s -k -X GET "https://172.20.2.14:55000/manager/logs?limit=50&pretty=true" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ### 12.2 OpenSearch (Wazuh Indexer)
 
-**Base URL:** https://10.10.20.30:9200
-**Auth:** Basic (admin:PASSWORD from .env on brisket)
+**Base URL:** https://172.20.2.14:9200
+**Auth:** Basic (admin:PASSWORD from .env on soc-01)
 **Primary indices:** `wazuh-alerts-4.x-*`, `zeek-conn-*`, `zeek-http-*`, `zeek-dns-*`, `zeek-ssl-*`, `zeek-files-*`, `zeek-notice-*`, `zeek-weird-*`
 
-**Run from PITBOSS (Git Bash) -- all OpenSearch commands in this section query brisket over the network:**
+**Run from ADMIN-WS (Git Bash) -- all OpenSearch commands in this section query soc-01 over the network:**
 
 ```bash
 # Cluster health
-curl -sk https://10.10.20.30:9200/_cluster/health?pretty -u admin:'PASSWORD'
+curl -sk https://172.20.2.14:9200/_cluster/health?pretty -u admin:'PASSWORD'
 
 # List all indices
-curl -sk https://10.10.20.30:9200/_cat/indices?v -u admin:'PASSWORD'
+curl -sk https://172.20.2.14:9200/_cat/indices?v -u admin:'PASSWORD'
 
 # Count documents in wazuh-alerts
-curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_count -u admin:'PASSWORD'
+curl -sk https://172.20.2.14:9200/wazuh-alerts-4.x-*/_count -u admin:'PASSWORD'
 
 # Last 10 alerts (most recent first)
-curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 10,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -3651,7 +3651,7 @@ curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD'
 }'
 
 # Alerts by rule level (high/critical)
-curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -3660,7 +3660,7 @@ curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD'
 }'
 
 # Top 10 source IPs (last 24h)
-curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {"range": {"@timestamp": {"gte": "now-24h"}}},
@@ -3668,7 +3668,7 @@ curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD'
 }'
 
 # Top 10 rules fired (last 24h)
-curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {"range": {"@timestamp": {"gte": "now-24h"}}},
@@ -3676,7 +3676,7 @@ curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD'
 }'
 
 # MITRE technique aggregation (last 24h)
-curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {"range": {"@timestamp": {"gte": "now-24h"}}},
@@ -3684,7 +3684,7 @@ curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD'
 }'
 
 # Alerts by agent (last 24h histogram)
-curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {"range": {"@timestamp": {"gte": "now-24h"}}},
@@ -3695,7 +3695,7 @@ curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD'
 }'
 
 # Authentication failures
-curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -3711,7 +3711,7 @@ curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD'
 }'
 
 # File integrity (syscheck) events
-curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 20,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -3727,7 +3727,7 @@ curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD'
 }'
 
 # Vulnerability detections
-curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 20,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -3736,16 +3736,16 @@ curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD'
 }'
 
 # Zeek HTTP requests by source IP
-curl -sk https://10.10.20.30:9200/zeek-http-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/zeek-http-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
-  "query": {"term": {"id.orig_h": "10.10.20.20"}},
+  "query": {"term": {"id.orig_h": "172.20.2.12"}},
   "_source": ["@timestamp", "id.orig_h", "id.resp_h", "method", "host", "uri", "status_code", "user_agent"]
 }'
 
 # Zeek DNS queries for a domain
-curl -sk https://10.10.20.30:9200/zeek-dns-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/zeek-dns-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 20,
   "query": {"match": {"query": "example.com"}},
@@ -3753,15 +3753,15 @@ curl -sk https://10.10.20.30:9200/zeek-dns-*/_search -u admin:'PASSWORD' \
 }'
 
 # Zeek connection flows between two IPs
-curl -sk https://10.10.20.30:9200/zeek-conn-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/zeek-conn-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
   "query": {
     "bool": {
       "must": [
-        {"term": {"id.orig_h": "10.10.20.20"}},
-        {"term": {"id.resp_h": "10.10.40.10"}}
+        {"term": {"id.orig_h": "172.20.2.12"}},
+        {"term": {"id.resp_h": "172.20.4.11"}}
       ]
     }
   },
@@ -3769,7 +3769,7 @@ curl -sk https://10.10.20.30:9200/zeek-conn-*/_search -u admin:'PASSWORD' \
 }'
 
 # Alerts with specific MITRE technique
-curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
+curl -sk https://172.20.2.14:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD' \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -3787,21 +3787,21 @@ curl -sk https://10.10.20.30:9200/wazuh-alerts-4.x-*/_search -u admin:'PASSWORD'
 
 ### 12.3 ELK Elasticsearch
 
-**Base URL:** https://10.10.30.25:9200 (ELK on haccp)
+**Base URL:** https://172.20.3.16:9200 (ELK on elk-01)
 **Auth:** Basic (elastic:<PLATFORM_PASSWORD>)
 **Key indices:** `.alerts-security.alerts-default`, `honeypot-credentials`, `honeypot-access`, `honeypot-wazuh` (historical -- campaign ended 2026-03-12), `apache-parsed-v2`, `ml-drift`, `logs-*`, `metrics-*`
 
-**Run from PITBOSS (Git Bash) -- all ELK commands in this section query haccp over the network:**
+**Run from ADMIN-WS (Git Bash) -- all ELK commands in this section query elk-01 over the network:**
 
 ```bash
 # Cluster health
-curl -sk https://10.10.30.25:9200/_cluster/health?pretty -u elastic:'<PLATFORM_PASSWORD>'
+curl -sk https://172.20.3.16:9200/_cluster/health?pretty -u elastic:'<PLATFORM_PASSWORD>'
 
 # List all indices
-curl -sk https://10.10.30.25:9200/_cat/indices?v -u elastic:'<PLATFORM_PASSWORD>'
+curl -sk https://172.20.3.16:9200/_cat/indices?v -u elastic:'<PLATFORM_PASSWORD>'
 
 # Detection rule alerts (last 24h)
-curl -sk https://10.10.30.25:9200/.alerts-security.alerts-default/_search -u elastic:'<PLATFORM_PASSWORD>' \
+curl -sk https://172.20.3.16:9200/.alerts-security.alerts-default/_search -u elastic:'<PLATFORM_PASSWORD>' \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -3810,7 +3810,7 @@ curl -sk https://10.10.30.25:9200/.alerts-security.alerts-default/_search -u ela
 }'
 
 # Alerts by MITRE tactic
-curl -sk https://10.10.30.25:9200/.alerts-security.alerts-default/_search -u elastic:'<PLATFORM_PASSWORD>' \
+curl -sk https://172.20.3.16:9200/.alerts-security.alerts-default/_search -u elastic:'<PLATFORM_PASSWORD>' \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {"range": {"@timestamp": {"gte": "now-7d"}}},
@@ -3818,7 +3818,7 @@ curl -sk https://10.10.30.25:9200/.alerts-security.alerts-default/_search -u ela
 }'
 
 # Alerts by host
-curl -sk https://10.10.30.25:9200/.alerts-security.alerts-default/_search -u elastic:'<PLATFORM_PASSWORD>' \
+curl -sk https://172.20.3.16:9200/.alerts-security.alerts-default/_search -u elastic:'<PLATFORM_PASSWORD>' \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {"range": {"@timestamp": {"gte": "now-24h"}}},
@@ -3826,7 +3826,7 @@ curl -sk https://10.10.30.25:9200/.alerts-security.alerts-default/_search -u ela
 }'
 
 # Windows security events by Event ID
-curl -sk https://10.10.30.25:9200/logs-*/_search -u elastic:'<PLATFORM_PASSWORD>' \
+curl -sk https://172.20.3.16:9200/logs-*/_search -u elastic:'<PLATFORM_PASSWORD>' \
   -H 'Content-Type: application/json' -d '{
   "size": 20,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -3842,7 +3842,7 @@ curl -sk https://10.10.30.25:9200/logs-*/_search -u elastic:'<PLATFORM_PASSWORD>
 }'
 
 # Linux auth events
-curl -sk https://10.10.30.25:9200/logs-*/_search -u elastic:'<PLATFORM_PASSWORD>' \
+curl -sk https://172.20.3.16:9200/logs-*/_search -u elastic:'<PLATFORM_PASSWORD>' \
   -H 'Content-Type: application/json' -d '{
   "size": 20,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -3858,14 +3858,14 @@ curl -sk https://10.10.30.25:9200/logs-*/_search -u elastic:'<PLATFORM_PASSWORD>
 }'
 
 # Fleet agent status
-curl -sk https://10.10.30.25:9200/.fleet-agents/_search -u elastic:'<PLATFORM_PASSWORD>' \
+curl -sk https://172.20.3.16:9200/.fleet-agents/_search -u elastic:'<PLATFORM_PASSWORD>' \
   -H 'Content-Type: application/json' -d '{
   "size": 10,
   "_source": ["local_metadata.host.hostname", "status", "last_checkin"]
 }'
 
 # Honeypot credential captures (historical -- campaign ended 2026-03-12)
-curl -sk https://10.10.30.25:9200/honeypot-credentials/_search -u elastic:'<PLATFORM_PASSWORD>' \
+curl -sk https://172.20.3.16:9200/honeypot-credentials/_search -u elastic:'<PLATFORM_PASSWORD>' \
   -H 'Content-Type: application/json' -d '{
   "size": 50,
   "sort": [{"@timestamp": {"order": "desc"}}],
@@ -3873,7 +3873,7 @@ curl -sk https://10.10.30.25:9200/honeypot-credentials/_search -u elastic:'<PLAT
 }'
 
 # Honeypot attacker IPs by country (historical)
-curl -sk https://10.10.30.25:9200/honeypot-access/_search -u elastic:'<PLATFORM_PASSWORD>' \
+curl -sk https://172.20.3.16:9200/honeypot-access/_search -u elastic:'<PLATFORM_PASSWORD>' \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "query": {"range": {"@timestamp": {"gte": "now-30d"}}},
@@ -3881,14 +3881,14 @@ curl -sk https://10.10.30.25:9200/honeypot-access/_search -u elastic:'<PLATFORM_
 }'
 
 # Honeypot Wazuh alerts with MITRE techniques (historical)
-curl -sk https://10.10.30.25:9200/honeypot-wazuh/_search -u elastic:'<PLATFORM_PASSWORD>' \
+curl -sk https://172.20.3.16:9200/honeypot-wazuh/_search -u elastic:'<PLATFORM_PASSWORD>' \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "aggs": {"mitre": {"terms": {"field": "rule.mitre.id", "size": 20}}}
 }'
 
 # Events by data stream dataset
-curl -sk https://10.10.30.25:9200/logs-*/_search -u elastic:'<PLATFORM_PASSWORD>' \
+curl -sk https://172.20.3.16:9200/logs-*/_search -u elastic:'<PLATFORM_PASSWORD>' \
   -H 'Content-Type: application/json' -d '{
   "size": 0,
   "aggs": {"by_dataset": {"terms": {"field": "data_stream.dataset", "size": 20}}}
@@ -3897,45 +3897,45 @@ curl -sk https://10.10.30.25:9200/logs-*/_search -u elastic:'<PLATFORM_PASSWORD>
 
 ### 12.4 Shuffle API
 
-**Base URL:** http://10.10.20.30:5001
+**Base URL:** http://172.20.2.14:5001
 **Auth:** Bearer token (<SHUFFLE_API_KEY>)
 
-**Run from PITBOSS (Git Bash) -- all Shuffle API commands in this section query brisket over the network:**
+**Run from ADMIN-WS (Git Bash) -- all Shuffle API commands in this section query soc-01 over the network:**
 
 ```bash
 # List all workflows
-curl -s http://10.10.20.30:5001/api/v1/workflows \
+curl -s http://172.20.2.14:5001/api/v1/workflows \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>"
 
 # Trigger a workflow execution
-curl -s -X POST "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/execute" \
+curl -s -X POST "http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID/execute" \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"key": "value"}'
 
 # Get execution status
-curl -s "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/executions" \
+curl -s "http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID/executions" \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>"
 
 # Get specific execution result
-curl -s "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/executions/EXECUTION_ID" \
+curl -s "http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID/executions/EXECUTION_ID" \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>"
 
 # Get workflow details
-curl -s "http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID" \
+curl -s "http://172.20.2.14:5001/api/v1/workflows/WORKFLOW_ID" \
   -H "Authorization: Bearer <SHUFFLE_API_KEY>"
 ```
 
 ### 12.5 TheHive API
 
-**Base URL:** http://10.10.30.22:9000 (TheHive on pitcrew LXC 200)
+**Base URL:** http://172.20.3.13:9000 (TheHive on pve-01 LXC 200)
 **Auth:** Bearer token (<THEHIVE_API_KEY>)
 
-**Run from PITBOSS (Git Bash) -- all TheHive API commands in this section query pitcrew LXC 200 over the network:**
+**Run from ADMIN-WS (Git Bash) -- all TheHive API commands in this section query pve-01 LXC 200 over the network:**
 
 ```bash
 # Create a case
-curl -s -X POST http://10.10.30.22:9000/api/case \
+curl -s -X POST http://172.20.3.13:9000/api/case \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -3948,13 +3948,13 @@ curl -s -X POST http://10.10.30.22:9000/api/case \
   }'
 
 # List cases (most recent first)
-curl -s -X POST http://10.10.30.22:9000/api/case/_search \
+curl -s -X POST http://172.20.3.13:9000/api/case/_search \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"query": {}, "range": "0-20", "sort": ["-createdAt"]}'
 
 # Search cases by status
-curl -s -X POST http://10.10.30.22:9000/api/case/_search \
+curl -s -X POST http://172.20.3.13:9000/api/case/_search \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -3964,19 +3964,19 @@ curl -s -X POST http://10.10.30.22:9000/api/case/_search \
   }'
 
 # Update case status (resolve as TruePositive)
-curl -s -X PATCH "http://10.10.30.22:9000/api/case/CASE_ID" \
+curl -s -X PATCH "http://172.20.3.13:9000/api/case/CASE_ID" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"status": "Resolved", "resolutionStatus": "TruePositive", "impactStatus": "WithImpact", "summary": "Confirmed incident, response complete."}'
 
 # Close as FalsePositive
-curl -s -X PATCH "http://10.10.30.22:9000/api/case/CASE_ID" \
+curl -s -X PATCH "http://172.20.3.13:9000/api/case/CASE_ID" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"status": "Resolved", "resolutionStatus": "FalsePositive", "summary": "Confirmed not an incident."}'
 
 # Add observable (IOC) to case
-curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/artifact" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/CASE_ID/artifact" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -3988,7 +3988,7 @@ curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/artifact" \
   }'
 
 # Create a task in a case
-curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/task" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/CASE_ID/task" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -3999,7 +3999,7 @@ curl -s -X POST "http://10.10.30.22:9000/api/case/CASE_ID/task" \
   }'
 
 # Add a log entry to a task
-curl -s -X POST "http://10.10.30.22:9000/api/case/task/TASK_ID/log" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/task/TASK_ID/log" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -4007,7 +4007,7 @@ curl -s -X POST "http://10.10.30.22:9000/api/case/task/TASK_ID/log" \
   }'
 
 # List observables for a case
-curl -s -X POST "http://10.10.30.22:9000/api/case/artifact/_search" \
+curl -s -X POST "http://172.20.3.13:9000/api/case/artifact/_search" \
   -H "Authorization: Bearer <THEHIVE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"query": {"_parent": {"_type": "case", "_query": {"_id": "CASE_ID"}}}}'
@@ -4015,57 +4015,57 @@ curl -s -X POST "http://10.10.30.22:9000/api/case/artifact/_search" \
 
 ### 12.6 Cortex API
 
-**Base URL:** http://10.10.30.22:9001 (Cortex on pitcrew LXC 200)
+**Base URL:** http://172.20.3.13:9001 (Cortex on pve-01 LXC 200)
 **Auth:** Bearer token (<CORTEX_API_KEY>)
 **Available analyzers:** AbuseIPDB_1_1, VirusTotal_GetReport_3_1, Shodan_DNSResolve_2_0, Abuse_Finder_3_0, GoogleDNS_resolve_1_0_0
 
-**Run from PITBOSS (Git Bash) -- all Cortex API commands in this section query pitcrew LXC 200 over the network:**
+**Run from ADMIN-WS (Git Bash) -- all Cortex API commands in this section query pve-01 LXC 200 over the network:**
 
 ```bash
 # List available analyzers
-curl -s http://10.10.30.22:9001/api/analyzer \
+curl -s http://172.20.3.13:9001/api/analyzer \
   -H "Authorization: Bearer <CORTEX_API_KEY>" | \
   python -c "import sys,json; [print(f'{a[\"id\"]:40} {a[\"name\"]:30} {a.get(\"dataTypeList\",[])}') for a in json.load(sys.stdin)]"
 
 # Run AbuseIPDB analyzer on an IP
-curl -s -X POST http://10.10.30.22:9001/api/analyzer/AbuseIPDB_1_1/run \
+curl -s -X POST http://172.20.3.13:9001/api/analyzer/AbuseIPDB_1_1/run \
   -H "Authorization: Bearer <CORTEX_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"data": "1.2.3.4", "dataType": "ip", "tlp": 2}'
 
 # Run VirusTotal on a hash
-curl -s -X POST http://10.10.30.22:9001/api/analyzer/VirusTotal_GetReport_3_1/run \
+curl -s -X POST http://172.20.3.13:9001/api/analyzer/VirusTotal_GetReport_3_1/run \
   -H "Authorization: Bearer <CORTEX_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"data": "SHA256_HASH", "dataType": "hash", "tlp": 2}'
 
 # Run GoogleDNS resolver
-curl -s -X POST http://10.10.30.22:9001/api/analyzer/GoogleDNS_resolve_1_0_0/run \
+curl -s -X POST http://172.20.3.13:9001/api/analyzer/GoogleDNS_resolve_1_0_0/run \
   -H "Authorization: Bearer <CORTEX_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"data": "example.com", "dataType": "domain", "tlp": 2}'
 
 # Run Abuse Finder
-curl -s -X POST http://10.10.30.22:9001/api/analyzer/Abuse_Finder_3_0/run \
+curl -s -X POST http://172.20.3.13:9001/api/analyzer/Abuse_Finder_3_0/run \
   -H "Authorization: Bearer <CORTEX_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"data": "1.2.3.4", "dataType": "ip", "tlp": 2}'
 
 # Check job status
-curl -s http://10.10.30.22:9001/api/job/JOB_ID \
+curl -s http://172.20.3.13:9001/api/job/JOB_ID \
   -H "Authorization: Bearer <CORTEX_API_KEY>"
 
 # Get job report (after status is "Success")
-curl -s http://10.10.30.22:9001/api/job/JOB_ID/report \
+curl -s http://172.20.3.13:9001/api/job/JOB_ID/report \
   -H "Authorization: Bearer <CORTEX_API_KEY>"
 ```
 
 ### 12.7 Velociraptor VQL Queries
 
-**Access:** https://10.10.20.30:8889 (admin / <PLATFORM_PASSWORD>)
+**Access:** https://172.20.2.14:8889 (admin / <PLATFORM_PASSWORD>)
 **Run via:** GUI > Notebooks (ad-hoc) or Hunt Manager (multi-client)
 
-**Open in browser from PITBOSS:** Navigate to https://10.10.20.30:8889. All VQL queries below are entered in the Velociraptor web GUI notebook.
+**Open in browser from ADMIN-WS:** Navigate to https://172.20.2.14:8889. All VQL queries below are entered in the Velociraptor web GUI notebook.
 
 ```sql
 -- List running processes (all clients)
@@ -4110,19 +4110,19 @@ WHERE StartMode = 'Auto'
 
 ### 12.8 Caldera API
 
-**Base URL:** http://10.10.30.21:8888 (Caldera on smoker)
+**Base URL:** http://172.20.3.12:8888 (Caldera on pve-02)
 **Auth:** Header `KEY: <CALDERA_API_KEY>`
 
-**Run from PITBOSS (Git Bash) -- all Caldera API commands in this section query smoker over the network:**
+**Run from ADMIN-WS (Git Bash) -- all Caldera API commands in this section query pve-02 over the network:**
 
 ```bash
 # List all operations
-curl -s http://10.10.30.21:8888/api/v2/operations \
+curl -s http://172.20.3.12:8888/api/v2/operations \
   -H "KEY: <CALDERA_API_KEY>" | \
   python -c "import sys,json; [print(f'{o[\"id\"]:40} {o[\"name\"]:30} {o[\"state\"]}') for o in json.load(sys.stdin)]"
 
 # Create a new operation
-curl -s -X POST http://10.10.30.21:8888/api/v2/operations \
+curl -s -X POST http://172.20.3.12:8888/api/v2/operations \
   -H "KEY: <CALDERA_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -4134,32 +4134,32 @@ curl -s -X POST http://10.10.30.21:8888/api/v2/operations \
   }'
 
 # Get operation details and results
-curl -s http://10.10.30.21:8888/api/v2/operations/OPERATION_ID \
+curl -s http://172.20.3.12:8888/api/v2/operations/OPERATION_ID \
   -H "KEY: <CALDERA_API_KEY>"
 
 # List all agents
-curl -s http://10.10.30.21:8888/api/v2/agents \
+curl -s http://172.20.3.12:8888/api/v2/agents \
   -H "KEY: <CALDERA_API_KEY>" | \
   python -c "import sys,json; [print(f'{a[\"paw\"]:12} {a[\"host\"]:20} {a[\"platform\"]:10} {a[\"last_seen\"]}') for a in json.load(sys.stdin)]"
 
 # List adversary profiles
-curl -s http://10.10.30.21:8888/api/v2/adversaries \
+curl -s http://172.20.3.12:8888/api/v2/adversaries \
   -H "KEY: <CALDERA_API_KEY>" | \
   python -c "import sys,json; [print(f'{a[\"adversary_id\"]:40} {a[\"name\"]}') for a in json.load(sys.stdin)]"
 
 # List abilities (individual techniques)
-curl -s http://10.10.30.21:8888/api/v2/abilities \
+curl -s http://172.20.3.12:8888/api/v2/abilities \
   -H "KEY: <CALDERA_API_KEY>" | \
   python -c "import sys,json; [print(f'{a[\"ability_id\"]:40} {a[\"name\"]:40} {a.get(\"technique_id\",\"\")}') for a in json.load(sys.stdin)[:20]]"
 
 # Stop a running operation
-curl -s -X PATCH "http://10.10.30.21:8888/api/v2/operations/OPERATION_ID" \
+curl -s -X PATCH "http://172.20.3.12:8888/api/v2/operations/OPERATION_ID" \
   -H "KEY: <CALDERA_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"state": "cleanup"}'
 
 # Health check
-curl -s http://10.10.30.21:8888/api/v2/health -H "KEY: <CALDERA_API_KEY>"
+curl -s http://172.20.3.12:8888/api/v2/health -H "KEY: <CALDERA_API_KEY>"
 ```
 
 ### 12.9 Cloudflare API
@@ -4167,7 +4167,7 @@ curl -s http://10.10.30.21:8888/api/v2/health -H "KEY: <CALDERA_API_KEY>"
 **Base URL:** https://api.cloudflare.com/client/v4
 **Auth:** Bearer token (stored as `$cf_api_token` in Shuffle workflow variables)
 
-**Run from PITBOSS (Git Bash) -- calls the external Cloudflare API:**
+**Run from ADMIN-WS (Git Bash) -- calls the external Cloudflare API:**
 
 ```bash
 # Block an IP
@@ -4193,23 +4193,23 @@ Note: Replace `CF_ACCOUNT_ID` and `CF_API_TOKEN` with the values from Shuffle wo
 
 ### 12.10 ML Scorer API
 
-**Base URL:** http://10.10.20.30:5002 (ML Scorer on brisket)
+**Base URL:** http://172.20.2.14:5002 (ML Scorer on soc-01)
 **Auth:** None required
 
-**Run from PITBOSS (Git Bash) -- queries the ML Scorer API on brisket over the network:**
+**Run from ADMIN-WS (Git Bash) -- queries the ML Scorer API on soc-01 over the network:**
 
 ```bash
 # Health check
-curl -s http://10.10.20.30:5002/health
+curl -s http://172.20.2.14:5002/health
 
 # Score a single alert
-curl -s -X POST http://10.10.20.30:5002/score \
+curl -s -X POST http://172.20.2.14:5002/score \
   -H "Content-Type: application/json" \
   -d '{
     "alert": {
       "rule": {"id": "5763", "level": 10, "description": "SSH brute force"},
       "agent": {"name": "DVWA", "id": "007"},
-      "data": {"srcip": "45.33.32.156", "dstip": "10.10.40.10"},
+      "data": {"srcip": "45.33.32.156", "dstip": "172.20.4.11"},
       "timestamp": "2026-03-04T14:30:00Z"
     }
   }'

@@ -56,7 +56,7 @@ def test_ipv6_range(cls):
 @pytest.mark.parametrize("cls", CHECKERS)
 def test_placeholder_and_garbage_entries_do_not_crash_or_match(cls):
     # The shipped config.yaml contains placeholders like these.
-    wl = make(cls, ips=["YOUR_HOME_IP_RANGE/24", "YOUR_HOME_IPV6_RANGE", "10.0.0.0/abc"])
+    wl = make(cls, ips=["YOUR_HOME_IP_RANGE/24", "YOUR_HOME_IPV6_RANGE", "192.0.2.0/abc"])
     assert not wl.is_whitelisted("203.0.113.7")
     assert not wl.is_whitelisted("not-an-ip")
 

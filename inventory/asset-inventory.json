@@ -1,45 +1,45 @@
 {
   "_meta": {
-    "description": "Asset inventory with criticality and normal role - grounding input for AI-augmented alert triage (MSAI515 project). Source of truth: this file. Deployed copy: soc-asset-inventory index on brisket OpenSearch.",
+    "description": "Asset inventory with criticality and normal role - grounding input for AI-augmented alert triage (MSAI515 project). Source of truth: this file. Deployed copy: soc-asset-inventory index on soc-01 OpenSearch.",
     "created": "2026-08-31",
     "review": "Roles for dojo/regscale and the opnsense IP operator-confirmed 2026-09-01; criticality tiers stand as drafted",
     "criticality_scale": "critical > high > medium > low; multiplier used by the turnover priority scorer"
   },
   "assets": [
     {
-      "host": "brisket",
-      "ip": "10.10.20.30",
+      "host": "soc-01",
+      "ip": "172.20.2.14",
       "criticality": "critical",
       "role": "SOC automation core: Shuffle SOAR, Ollama LLM, Grafana, Wazuh manager + indexer (OpenSearch). Ubuntu server. Normal: heavy localhost service traffic, OpenSearch queries, Discord webhook egress.",
       "notes": "If compromised, the whole response pipeline is compromised."
     },
     {
-      "host": "haccp",
-      "ip": "10.10.30.25",
+      "host": "elk-01",
+      "ip": "172.20.3.16",
       "criticality": "critical",
-      "role": "Telemetry store: ELK/OpenSearch (Zeek logs), Kibana, Arkime full-packet capture, Elastic detection engine. Normal: high-volume ingest from sensors, dashboard traffic from PITBOSS.",
+      "role": "Telemetry store: ELK/OpenSearch (Zeek logs), Kibana, Arkime full-packet capture, Elastic detection engine. Normal: high-volume ingest from sensors, dashboard traffic from ADMIN-WS.",
       "notes": "Network-plane detection alerts fire with this host.name (sensor view)."
     },
     {
-      "host": "pitcrew",
-      "ip": "10.10.30.20",
+      "host": "pve-01",
+      "ip": "172.20.3.11",
       "criticality": "critical",
       "role": "Proxmox hypervisor hosting lab VMs (DC01, WS01, thehive, and others). Normal: cluster/storage chatter, backup traffic to pbs.",
       "notes": "Same-hypervisor VM-to-VM traffic is invisible to the SPAN sensor."
     },
     {
       "host": "DC01",
-      "ip": "10.10.30.40",
+      "ip": "172.20.3.20",
       "criticality": "critical",
       "role": "Active Directory domain controller (lab domain). Windows Server, Elastic Defend endpoint. Normal: logon success/logoff, Kerberos, group policy - routine AD operation.",
       "notes": "Identity tier; scheduled background alert noise at :03 and :26 past the hour is a known noise job."
     },
     {
-      "host": "PITBOSS",
-      "ip": "10.10.10.100",
+      "host": "ADMIN-WS",
+      "ip": "172.20.1.12",
       "criticality": "high",
       "role": "Primary admin workstation (Windows 11 laptop, RTX 3060). Admin access to every SOC service. Normal: Kibana/Grafana/Shuffle UI sessions, RDP/SSH to lab hosts, WiFi Direct/Miracast discovery noise (T1092 false positives).",
-      "notes": "Second IP 192.168.50.34 on home segment."
+      "notes": "Second IP 172.21.2.12 on home segment."
     },
     {
       "host": "gcp-vm",
@@ -49,71 +49,71 @@
       "notes": "Only internet-exposed host; alerts here weight higher for exploit-class rules, lower for brute-force noise."
     },
     {
-      "host": "smokehouse",
-      "ip": "10.10.20.10",
+      "host": "sensor-01",
+      "ip": "172.20.2.11",
       "criticality": "high",
       "role": "SPAN-port network sensor running Suricata. Normal: high-volume protocol anomaly alerts (Ethertype unknown, STUN, unrecognized HTTP auth) that are capture noise, not attacks.",
       "notes": "Loss of this host = loss of network visibility."
     },
     {
       "host": "thehive",
-      "ip": "10.10.30.22",
+      "ip": "172.20.3.13",
       "criticality": "high",
-      "role": "Case management: TheHive + Cortex analyzers. Normal: API traffic from Shuffle workflows on brisket, analyzer egress (AbuseIPDB, Shodan, VirusTotal).",
+      "role": "Case management: TheHive + Cortex analyzers. Normal: API traffic from Shuffle workflows on soc-01, analyzer egress (AbuseIPDB, Shodan, VirusTotal).",
       "notes": ""
     },
     {
       "host": "pbs",
-      "ip": "10.10.30.24",
+      "ip": "172.20.3.15",
       "criticality": "high",
-      "role": "Proxmox Backup Server. Normal: nightly backup traffic from pitcrew.",
+      "role": "Proxmox Backup Server. Normal: nightly backup traffic from pve-01.",
       "notes": "Backup integrity target - ransomware would come here."
     },
     {
       "host": "WS01",
-      "ip": "10.10.30.41",
+      "ip": "172.20.3.21",
       "criticality": "medium",
       "role": "Windows 10/11 workstation in the AD lab, Elastic Defend endpoint. Normal: AD logons, Windows update, endpoint telemetry.",
       "notes": "Same hypervisor as DC01 - their mutual traffic is SPAN-dark."
     },
     {
-      "host": "sear",
-      "ip": "10.10.20.20",
+      "host": "attack-01",
+      "ip": "172.20.2.12",
       "criticality": "medium",
-      "role": "Linux laptop (GTX 1650 Ti): dev box and purple-team attacker platform. Normal: SSH to lab hosts, git sync; during exercises, attack traffic toward VLAN 30/40.",
-      "notes": "Alerts with sear as source during an exercise window are expected red activity."
+      "role": "Linux laptop (GTX 1650 Ti): dev box and purple-team attacker platform. Normal: SSH to lab hosts, git sync; during exercises, attack traffic toward VLAN 300/400.",
+      "notes": "Alerts with attack-01 as source during an exercise window are expected red activity."
     },
     {
-      "host": "smoker",
-      "ip": "10.10.30.21",
+      "host": "pve-02",
+      "ip": "172.20.3.12",
       "criticality": "medium",
       "role": "Caldera adversary-emulation server (port 8888). Normal: quiet outside exercises; sandcat agent beaconing during campaigns.",
-      "notes": "Traffic involving VLAN 40 targets or sandcat = campaign, not intrusion."
+      "notes": "Traffic involving VLAN 400 targets or sandcat = campaign, not intrusion."
     },
     {
       "host": "dojo",
-      "ip": "10.10.30.27",
+      "ip": "172.20.3.18",
       "criticality": "medium",
-      "role": "DefectDojo vulnerability management platform. Normal: scan-result imports, web UI sessions from PITBOSS, quiet otherwise.",
+      "role": "DefectDojo vulnerability management platform. Normal: scan-result imports, web UI sessions from ADMIN-WS, quiet otherwise.",
       "notes": "Operator-confirmed 2026-09-01."
     },
     {
       "host": "regscale",
-      "ip": "10.10.30.28",
+      "ip": "172.20.3.19",
       "criticality": "medium",
       "role": "RegScale GRC/compliance platform. Normal: compliance web UI and API traffic, quiet otherwise.",
       "notes": "Operator-confirmed 2026-09-01."
     },
     {
       "host": "wazuh.manager",
-      "ip": "10.10.20.30",
+      "ip": "172.20.2.14",
       "criticality": "high",
-      "role": "Wazuh manager pseudo-agent (runs on brisket): processes OPNsense firewall syslog. Normal: 'Brute Force' alerts from this agent are firewall WAN-block events, not attacks on Wazuh.",
-      "notes": "Shares fate with brisket."
+      "role": "Wazuh manager pseudo-agent (runs on soc-01): processes OPNsense firewall syslog. Normal: 'Brute Force' alerts from this agent are firewall WAN-block events, not attacks on Wazuh.",
+      "notes": "Shares fate with soc-01."
     },
     {
       "host": "opnsense",
-      "ip": "192.168.100.10",
+      "ip": "172.21.1.11",
       "criticality": "critical",
       "role": "Perimeter firewall/router (OPNsense), no Wazuh agent; visibility via syslog to wazuh.manager. Normal: WAN-side drop events from internet scanning.",
       "notes": "Unmanaged asset included for alert-context grounding. IP operator-confirmed 2026-09-01."

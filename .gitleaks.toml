@@ -23,7 +23,7 @@ tags = ["ssh", "key"]
 # Added 2026-08-05. Trigger: an outside account forked the three public repos,
 # prompting a full re-scan. Tailscale IPs were already covered by the rule above;
 # MAC addresses were not covered in ANY of the three configs, and that gap had
-# let haccp's real span0 NIC MAC sit public in the sibling homelab-fedramp-low
+# let elk-01's real span0 NIC MAC sit public in the sibling homelab-fedramp-low
 # repo. This repo and HomeLab-SOC scanned clean (zero MACs at HEAD and in full
 # history), so this rule is pure prevention here -- no allowlist is needed, and
 # any future hit is a REAL new leak.

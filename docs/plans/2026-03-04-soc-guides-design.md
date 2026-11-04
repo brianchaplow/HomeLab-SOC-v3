@@ -81,8 +81,8 @@ Two comprehensive reference documents for the HomeLab SOC v3, each serving a dis
 
 9. **Network Security Design**
    - 5 VLANs with inter-VLAN firewall policy
-   - VLAN 40 complete isolation model
-   - MokerLink ACL micro-segmentation (9-rule stateless ACL on sear)
+   - VLAN 400 complete isolation model
+   - MokerLink ACL micro-segmentation (9-rule stateless ACL on attack-01)
    - Defense-in-depth layers (perimeter -> segmentation -> ACL -> host -> detection -> AI/ML)
    - Tailscale overlay for external connectivity
 

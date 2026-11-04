@@ -82,8 +82,8 @@ C4-style container diagram showing:
 
 - **External perimeter:** GCP VM, Cloudflare (WAF/DNS)
 - **Detection layer:** Wazuh agents (12), Zeek, Suricata, Fleet agents
-- **Data pipeline:** Fluent Bit to Wazuh Indexer / haccp ELK Elasticsearch
-- **PCAP capture:** Arkime on haccp (full packet capture + session analysis)
+- **Data pipeline:** Fluent Bit to Wazuh Indexer / elk-01 ELK Elasticsearch
+- **PCAP capture:** Arkime on elk-01 (full packet capture + session analysis)
 - **Enrichment:** ML Scorer, Ollama, AbuseIPDB, OpenCTI
 - **Orchestration:** Shuffle SOAR (WF1-WF9)
 - **Response:** TheHive cases, Cortex analyzers, Cloudflare blocks, Wazuh Active Response
@@ -110,11 +110,11 @@ Arrows show data flow direction. Grouped by VLAN where relevant.
 
 Brief VLAN overview with emphasis on what the intern needs to know:
 
-- VLAN 40 is isolated targets — all attacks go there
-- VLAN 20 is SOC infrastructure — never attack it
-- VLAN 30 is lab/Proxmox
-- VLAN 10 is management
-- VLAN 50 is IoT
+- VLAN 400 is isolated targets — all attacks go there
+- VLAN 200 is SOC infrastructure — never attack it
+- VLAN 300 is lab/Proxmox
+- VLAN 100 is management
+- VLAN 500 is IoT
 - Family DMZ/LAN is out of scope
 
 Quick mental model, not a full network doc.
@@ -123,7 +123,7 @@ Quick mental model, not a full network doc.
 
 Explains GCP VM and Cloudflare roles in the SOC:
 
-- GCP VM hosts public-facing sites (brianchaplow.com, bytesbourbonbbq.com), runs Wazuh agent 009 reporting to brisket, was the honeypot research platform (campaign ended 2026-03-12)
+- GCP VM hosts public-facing sites (brianchaplow.com, bytesbourbonbbq.com), runs Wazuh agent 009 reporting to soc-01, was the honeypot research platform (campaign ended 2026-03-12)
 - Cloudflare provides WAF/DNS and is the enforcement point for Shuffle WF1 auto-blocks
 - Both are monitored by the SOC and generate alerts that flow through the standard pipeline
 
@@ -161,44 +161,44 @@ not just terms.
 | # | Tool | GUI Walkthrough | Notes |
 |---|------|----------------|-------|
 | 3.1 | Wazuh (SIEM/XDR) | Heavy — Dashboard, Modules, Agents, Rules | Manager + Indexer + Dashboard as one entry |
-| 3.2 | Elastic Stack | Heavy — Kibana Discover, Dashboards, Fleet, Detection Rules, ML Jobs | ES + Kibana + Fleet on haccp bare metal (10.10.30.25); includes Elastic ML anomaly detection (trial license) |
-| 3.3 | Zeek (Network Metadata) | CLI — Key Commands | Runs on smokehouse, data queried via OpenSearch/ELK |
-| 3.4 | Suricata (Network IDS) | CLI — Key Commands | Runs on smokehouse, eve.json shipped by Wazuh agent |
-| 3.5 | Fluent Bit (Log Shipping) | CLI — Key Commands | Config-driven, runs on smokehouse + GCP |
-| 3.6 | OpenCTI (Threat Intelligence) | Heavy — Platform, Connectors, Indicators, Reports | LXC 202 on pitcrew; IOC sync pipeline pushes to Wazuh CDB (every 6h) + haccp ELK (every 6h offset 15min) |
+| 3.2 | Elastic Stack | Heavy — Kibana Discover, Dashboards, Fleet, Detection Rules, ML Jobs | ES + Kibana + Fleet on elk-01 bare metal (172.20.3.16); includes Elastic ML anomaly detection (trial license) |
+| 3.3 | Zeek (Network Metadata) | CLI — Key Commands | Runs on sensor-01, data queried via OpenSearch/ELK |
+| 3.4 | Suricata (Network IDS) | CLI — Key Commands | Runs on sensor-01, eve.json shipped by Wazuh agent |
+| 3.5 | Fluent Bit (Log Shipping) | CLI — Key Commands | Config-driven, runs on sensor-01 + GCP |
+| 3.6 | OpenCTI (Threat Intelligence) | Heavy — Platform, Connectors, Indicators, Reports | LXC 202 on pve-01; IOC sync pipeline pushes to Wazuh CDB (every 6h) + elk-01 ELK (every 6h offset 15min) |
 
 **Enrichment & Orchestration (3.7-3.10)**
 
 | # | Tool | GUI Walkthrough | Notes |
 |---|------|----------------|-------|
 | 3.7 | Shuffle (SOAR) | Heavy — Workflow Editor, Execution History, Variables | 9 active workflows |
-| 3.8 | ML Scorer (XGBoost) | CLI — Key Commands (API health, score requests) | REST API on brisket:5002 |
-| 3.9 | Ollama / qwen3 (LLM) | CLI — Key Commands (model list, generate, health) | Host process on brisket:11434 |
+| 3.8 | ML Scorer (XGBoost) | CLI — Key Commands (API health, score requests) | REST API on soc-01:5002 |
+| 3.9 | Ollama / qwen3 (LLM) | CLI — Key Commands (model list, generate, health) | Host process on soc-01:11434 |
 | 3.10 | Cortex (Automated Analysis) | Heavy — Analyzers, Jobs, Reports | On TheHive LXC 200 |
 
 **Investigation & Response (3.11-3.14)**
 
 | # | Tool | GUI Walkthrough | Notes |
 |---|------|----------------|-------|
-| 3.11 | Velociraptor (DFIR) | Heavy — Clients, Hunts, Notebooks, VQL | brisket:8889 |
-| 3.12 | TheHive (Case Management) | Heavy — Cases, Tasks, Observables, Dashboards | LXC 200 on pitcrew |
-| 3.13 | Caldera (Adversary Emulation) | Heavy — Operations, Agents, Abilities, Adversaries | smoker:8888 |
-| 3.14 | Arkime (Full PCAP) | Heavy — Sessions, SPI Graph, SPI View, Connections | haccp:8005, reads SPAN capture from SFP+ |
+| 3.11 | Velociraptor (DFIR) | Heavy — Clients, Hunts, Notebooks, VQL | soc-01:8889 |
+| 3.12 | TheHive (Case Management) | Heavy — Cases, Tasks, Observables, Dashboards | LXC 200 on pve-01 |
+| 3.13 | Caldera (Adversary Emulation) | Heavy — Operations, Agents, Abilities, Adversaries | pve-02:8888 |
+| 3.14 | Arkime (Full PCAP) | Heavy — Sessions, SPI Graph, SPI View, Connections | elk-01:8005, reads SPAN capture from SFP+ |
 
 **Monitoring (3.15-3.16)**
 
 | # | Tool | GUI Walkthrough | Notes |
 |---|------|----------------|-------|
-| 3.15 | Prometheus (Metrics) | Light — Targets, Graph, Alerts | brisket:9090 |
-| 3.16 | Grafana (Dashboards) | Heavy — SOC v3 Overview, Data Sources, Panels | brisket:3000 |
+| 3.15 | Prometheus (Metrics) | Light — Targets, Graph, Alerts | soc-01:9090 |
+| 3.16 | Grafana (Dashboards) | Heavy — SOC v3 Overview, Data Sources, Panels | soc-01:3000 |
 
 **Infrastructure (3.17-3.22)**
 
 | # | Tool | GUI Walkthrough | Notes |
 |---|------|----------------|-------|
-| 3.17 | OPNsense (Firewall) | Heavy — Dashboard, Rules, Aliases, Logs | 10.10.10.1 |
-| 3.18 | Docker (Container Runtime) | CLI — Key Commands | Runs on brisket, smokehouse, smoker, haccp |
-| 3.19 | Proxmox (Virtualization) | Heavy — VMs, LXCs, Storage, Backups | pitcrew + smoker |
+| 3.17 | OPNsense (Firewall) | Heavy — Dashboard, Rules, Aliases, Logs | 172.20.1.1 |
+| 3.18 | Docker (Container Runtime) | CLI — Key Commands | Runs on soc-01, sensor-01, pve-02, elk-01 |
+| 3.19 | Proxmox (Virtualization) | Heavy — VMs, LXCs, Storage, Backups | pve-01 + pve-02 |
 | 3.20 | Tailscale (VPN) | Light — CLI + admin console | Mesh VPN for remote access |
 | 3.21 | GCP VM (External Presence) | Light — Console overview, Wazuh agent status | External, Tailscale-connected |
 | 3.22 | Cloudflare (WAF/DNS/Enforcement) | Heavy — Firewall Rules, WAF, DNS, Access Rules | WF1 auto-block target |
@@ -390,7 +390,7 @@ No other pipeline changes are needed.
 - The Mermaid diagram in Section 2 follows C4 conventions
 - GUI walkthroughs are written as precise navigation instructions suitable for Chrome Claude extension prompting
 - Tool entries in Section 3 reference the specific IPs, ports, and credentials from Section 1
-- **ELK runs on haccp bare metal** (10.10.30.25), not LXC 201 (destroyed). All ELK references must use haccp.
+- **ELK runs on elk-01 bare metal** (172.20.3.16), not LXC 201 (destroyed). All ELK references must use elk-01.
 - **Code block headings:** The AAR template in Section 9 (new numbering) contains markdown headings inside a fenced code block. During renumbering, do NOT renumber headings inside code blocks — they are template content, not playbook sections.
 - **Decommissioned items:** WF7 (Honeypot Intel Report) and RB-05 (Honeypot Anomaly) are historical. Mark these with a `> **DECOMMISSIONED** — Honeypot campaign ended 2026-03-12. Preserved for reference.` callout block. They still get interpretation blocks but no dead-end recovery (since they cannot be run).
 - **WF9 and WF4:** WF9 (5-minute cron) exists in production and needs a subsection added in Section 10 (SOAR Operations). WF4 (Velociraptor triage) is a planned but unimplemented workflow — mention it as a roadmap item in the Shuffle tool entry (3.7), not as an operational section.

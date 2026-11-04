@@ -1,6 +1,6 @@
 # Shuffle SOAR
 
-Shuffle SOAR platform running on **brisket** (10.10.20.30) with 9 active automation workflows (plus 1 decommissioned). The platform integrates with Wazuh, TheHive, Cortex, OpenCTI, the ML Scorer, ELK, Caldera, and Ollama (qwen3:8b) to provide automated enrichment, triage, response, and intelligence reporting.
+Shuffle SOAR platform running on **soc-01** (172.20.2.14) with 9 active automation workflows (plus 1 decommissioned). The platform integrates with Wazuh, TheHive, Cortex, OpenCTI, the ML Scorer, ELK, Caldera, and Ollama (qwen3:8b) to provide automated enrichment, triage, response, and intelligence reporting.
 
 ## Workflow Inventory
 
@@ -45,9 +45,9 @@ WF1 also integrates with **OpenCTI** for IOC enrichment via workflow variables `
 
 ## Scheduling Architecture
 
-Shuffle's on-premises scheduler is interval-based, not cron-based. The `frequency` field in schedule documents must be an integer (seconds); cron strings fail at parse time. To achieve precise time-anchored execution, all scheduled workflows use **system cron on brisket** that triggers the workflow via a curl POST to the Shuffle API.
+Shuffle's on-premises scheduler is interval-based, not cron-based. The `frequency` field in schedule documents must be an integer (seconds); cron strings fail at parse time. To achieve precise time-anchored execution, all scheduled workflows use **system cron on soc-01** that triggers the workflow via a curl POST to the Shuffle API.
 
-Trigger scripts are located in [`trigger-scripts/`](trigger-scripts/) and are registered in brisket's crontab.
+Trigger scripts are located in [`trigger-scripts/`](trigger-scripts/) and are registered in soc-01's crontab.
 
 ## Workflow Variable Convention
 

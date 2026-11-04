@@ -46,8 +46,8 @@ def sample_alerts():
 def full_alert(**over):
     a = {
         "@timestamp": "2026-01-09T14:30:45Z", "src_ip": "203.0.113.9", "src_port": 51515,
-        "dest_ip": "10.10.40.10", "dest_port": 443, "proto": "TCP", "direction": "to_server",
-        "vlan": 20, "flow": {"bytes_toserver": 600, "bytes_toclient": 400,
+        "dest_ip": "172.20.4.11", "dest_port": 443, "proto": "TCP", "direction": "to_server",
+        "vlan": 200, "flow": {"bytes_toserver": 600, "bytes_toclient": 400,
                              "pkts_toserver": 5, "pkts_toclient": 4},
     }
     a.update(over)
@@ -62,7 +62,7 @@ def test_engineer_features_basic_values():
     assert f["is_internal_src"] == 0 and f["is_internal_dest"] == 1 and f["is_inbound"] == 1
     assert f["hour_of_day"] == 14
     assert f["bytes_total"] == 1000
-    assert f["vlan"] == 20 and f["vlan_20"] == 1
+    assert f["vlan"] == 200 and f["vlan_20"] == 1  # 2nd segment (SOC)
 
 
 def test_unknown_feature_names_are_zero_filled():
@@ -72,9 +72,9 @@ def test_unknown_feature_names_are_zero_filled():
 
 
 def test_suricata_vlan_list_is_unwrapped():
-    # Suricata EVE JSON emits vlan as a list, e.g. "vlan": [20].
-    f = make_scorer().engineer_features(pd.DataFrame([full_alert(vlan=[20])])).iloc[0]
-    assert f["vlan"] == 20
+    # Suricata EVE JSON emits vlan as a list, e.g. "vlan": [200].
+    f = make_scorer().engineer_features(pd.DataFrame([full_alert(vlan=[200])])).iloc[0]
+    assert f["vlan"] == 200
     assert f["vlan_20"] == 1
 
 
@@ -117,3 +117,12 @@ def test_scoring_failure_does_not_label_alerts_benign():
 
 def test_empty_batch():
     assert make_scorer().score_alerts([]) == []
+
+
+def test_network_specifics_are_configurable(monkeypatch):
+    monkeypatch.setattr(ml_scorer, "INTERNAL_PREFIX", "192.0.2.")
+    monkeypatch.setattr(ml_scorer, "VLAN_IDS", [1, 2, 3, 4, 5])
+    f = make_scorer().engineer_features(
+        pd.DataFrame([full_alert(src_ip="192.0.2.9", dest_ip="198.51.100.1", vlan=2)])).iloc[0]
+    assert f["is_internal_src"] == 1 and f["is_internal_dest"] == 0
+    assert f["vlan_20"] == 1

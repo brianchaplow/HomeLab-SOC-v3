@@ -1,6 +1,6 @@
 #!/bin/bash
-# Trigger WF-HACCP-1.1 (Cortex Enrichment on Tier1 Cases) via Shuffle API
-# Called by the service user crontab every 5 min (offset 2 min from WF-HACCP-1)
+# Trigger WF-ELK-1.1 (Cortex Enrichment on Tier1 Cases) via Shuffle API
+# Called by the service user crontab every 5 min (offset 2 min from WF-ELK-1)
 # No Ollama calls; queries TheHive for new cases, creates observables, submits Cortex jobs
 
 SHUFFLE_API="http://localhost:5001"
@@ -17,4 +17,4 @@ RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST \
 HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_CODE:" | cut -d: -f2)
 BODY=$(echo "$RESPONSE" | grep -v "HTTP_CODE:")
 
-echo "$(date -u '+%Y-%m-%d %H:%M:%S UTC') | WF-HACCP-1.1 | HTTP ${HTTP_CODE} | ${BODY}"
+echo "$(date -u '+%Y-%m-%d %H:%M:%S UTC') | WF-ELK-1.1 | HTTP ${HTTP_CODE} | ${BODY}"

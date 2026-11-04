@@ -1,7 +1,7 @@
 #!/bin/bash
-# Trigger WF-HACCP-2 (Tier2 Novel-Entity Digest) via Shuffle API
+# Trigger WF-ELK-2 (Tier2 Novel-Entity Digest) via Shuffle API
 # Called by system cron once daily at 0730 ET
-# No Ollama calls; reads haccp-entities-seen + ES ingest-geoip
+# No Ollama calls; reads elk-01-entities-seen + ES ingest-geoip
 
 SHUFFLE_API="http://localhost:5001"
 API_KEY="YOUR_SHUFFLE_API_KEY"

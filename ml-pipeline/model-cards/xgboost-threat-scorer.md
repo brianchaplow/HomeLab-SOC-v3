@@ -14,8 +14,8 @@
 | **Name** | XGBoost Threat Scorer |
 | **Type** | Binary classifier (gradient-boosted decision trees) |
 | **Framework** | XGBoost via scikit-learn API |
-| **Training Hardware** | NVIDIA GTX 1650 Ti (4 GB VRAM) on sear (Kali Linux) |
-| **Inference Hardware** | NVIDIA RTX A1000 (8 GB VRAM) on brisket (Ubuntu 24.04) |
+| **Training Hardware** | NVIDIA GTX 1650 Ti (4 GB VRAM) on attack-01 (Kali Linux) |
+| **Inference Hardware** | NVIDIA RTX A1000 (8 GB VRAM) on soc-01 (Ubuntu 24.04) |
 | **Serving** | FastAPI REST API in Docker container (port 5002) |
 | **Model Artifact** | `soc-ml/models/v3_20260213_173915/` |
 | **Input** | Wazuh SIEM alert enriched with Zeek network connection data |
@@ -87,13 +87,13 @@ The model is evaluated across the full alert population without disaggregation b
 
 ### Source
 
-Production Wazuh alerts from HomeLab SOC v3, indexed in OpenSearch (`wazuh-alerts-4.x-*` on brisket:9200), enriched with Zeek network connection metadata from the `zeek-conn` index.
+Production Wazuh alerts from HomeLab SOC v3, indexed in OpenSearch (`wazuh-alerts-4.x-*` on soc-01:9200), enriched with Zeek network connection metadata from the `zeek-conn` index.
 
 ### Ground Truth Labeling
 
 | Method | Description |
 |--------|-------------|
-| **Caldera campaigns** | 13 adversary simulation campaigns using 4 Sandcat agents on VLAN 30/40 targets. Caldera's operation API provides technique-level execution timestamps, correlated to Wazuh alerts by time window and target IP. |
+| **Caldera campaigns** | 13 adversary simulation campaigns using 4 Sandcat agents on VLAN 300/400 targets. Caldera's operation API provides technique-level execution timestamps, correlated to Wazuh alerts by time window and target IP. |
 | **Manual attack logging** | `run_attack.sh` wrapper logs every manual red-team exercise to `attack_log.csv` with timestamp, attack type, source IP, target IP, and MITRE ATT&CK technique. |
 | **Negative class** | All alerts not correlated to a known attack event within the temporal correlation window are labeled as benign. |
 
@@ -285,7 +285,7 @@ The model should be retrained when:
 
 | Component | Detail |
 |-----------|--------|
-| Container | `ml-scorer` (Docker on brisket, port 5002) |
+| Container | `ml-scorer` (Docker on soc-01, port 5002) |
 | API framework | FastAPI |
 | GPU sharing | RTX A1000 shared with Ollama; `OLLAMA_KEEP_ALIVE=5m` releases VRAM when idle; XGBoost falls back to CPU (Ultra 9 285) if GPU is occupied |
 | SOAR integration | Shuffle WF1 calls `POST /score` with alert JSON |

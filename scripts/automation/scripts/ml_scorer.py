@@ -34,6 +34,14 @@ logger = logging.getLogger(__name__)
 # Configuration
 MODEL_DIR = os.getenv('ML_MODEL_DIR', '/app/models/ground_truth_v2_xgb_20260127_171501')
 SCORE_THRESHOLD = 0.75
+
+# Network specifics come from the environment (see scripts/automation/env.example);
+# the defaults are documentation placeholders. The feature *names* vlan_10..vlan_50
+# are fixed by the trained model and stand for the five segments in this order:
+# management, SOC, lab, targets, IoT.
+INTERNAL_PREFIX = os.getenv('SOC_INTERNAL_PREFIX', '172.20.')
+VLAN_FEATURES = ['vlan_10', 'vlan_20', 'vlan_30', 'vlan_40', 'vlan_50']
+VLAN_IDS = [int(v) for v in os.getenv('SOC_VLAN_IDS', '100,200,300,400,500').split(',')]
 SCORE_THRESHOLD_HIGH = 0.90
 LOOKBACK_MINUTES = 10
 BATCH_SIZE = 1000
@@ -185,18 +193,15 @@ class MLScorer:
         # VLAN features
         vlan = pd.to_numeric(_column(df, 'vlan', 0).map(_first_if_list), errors='coerce').fillna(0).astype(int)
         features['vlan'] = vlan
-        features['vlan_10'] = (vlan == 10).astype(int)
-        features['vlan_20'] = (vlan == 20).astype(int)
-        features['vlan_30'] = (vlan == 30).astype(int)
-        features['vlan_40'] = (vlan == 40).astype(int)
-        features['vlan_50'] = (vlan == 50).astype(int)
+        for name, vlan_id in zip(VLAN_FEATURES, VLAN_IDS):
+            features[name] = (vlan == vlan_id).astype(int)
         
         # IP-based features
         src_ip = _column(df, 'src_ip', '').fillna('').astype(str)
         dest_ip = _column(df, 'dest_ip', '').fillna('').astype(str)
         
-        features['is_internal_src'] = src_ip.str.startswith('10.10.').astype(int)
-        features['is_internal_dest'] = dest_ip.str.startswith('10.10.').astype(int)
+        features['is_internal_src'] = src_ip.str.startswith(INTERNAL_PREFIX).astype(int)
+        features['is_internal_dest'] = dest_ip.str.startswith(INTERNAL_PREFIX).astype(int)
         features['is_private_src'] = (src_ip.str.startswith('10.') | src_ip.str.startswith('192.168.') | src_ip.str.startswith('172.')).astype(int)
         features['is_private_dest'] = (dest_ip.str.startswith('10.') | dest_ip.str.startswith('192.168.') | dest_ip.str.startswith('172.')).astype(int)
         features['is_internal_traffic'] = (features['is_internal_src'] & features['is_internal_dest']).astype(int)

@@ -21,7 +21,7 @@
 <!-- Suppress noisy AppArmor denials from Docker target containers -->
 <group name="local,syslog,apparmor,">
 
-  <!-- exim4 SMTP target container (VLAN 40) fires hundreds of socket denials daily -->
+  <!-- exim4 SMTP target container (VLAN 400) fires hundreds of socket denials daily -->
   <rule id="100002" level="0">
     <if_sid>52002</if_sid>
     <match>comm="exim4"</match>
