@@ -2,9 +2,9 @@ host: 0.0.0.0
 port: 8888
 api_key_blue: YOUR_CALDERA_BLUE_KEY
 api_key_red: YOUR_CALDERA_RED_KEY
-app.contact.http: http://10.10.30.21:8888
-app.contact.tcp: 10.10.30.21:7010
-app.contact.udp: 10.10.30.21:7011
+app.contact.http: http://172.20.3.12:8888
+app.contact.tcp: 172.20.3.12:7010
+app.contact.udp: 172.20.3.12:7011
 app.contact.websocket: 0.0.0.0:7012
 crypt_salt: YOUR_CRYPT_SALT
 encryption_key: YOUR_ENCRYPTION_KEY

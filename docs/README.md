@@ -7,7 +7,7 @@ Architecture documentation, network topology, migration narrative, and visual as
 | Document | Description |
 |----------|-------------|
 | `architecture.md` | High-level SOC v3 architecture -- component relationships, data flows, and design rationale |
-| `phases.md` | 11-phase migration narrative covering the build-out from bare metal to fully operational SOC |
+| `phases.md` | Phase-by-phase migration narrative (phases 1-12) covering the build-out from bare metal to fully operational SOC |
 | `network-topology.md` | VLAN design, firewall rules, switch ACLs, and inter-host connectivity map |
 | [`guides/portfolio-overview.md`](guides/portfolio-overview.md) | Narrative guide for portfolio reviewers -- architecture, detection engineering, ML, IR, and more |
 | [`guides/soc-playbook.md`](guides/soc-playbook.md) | Operational SOC handbook -- daily checklists, alert triage, runbooks, API reference, troubleshooting |
@@ -24,7 +24,7 @@ The [`screenshots/`](screenshots/) directory contains annotated screenshots of t
 
 ### Diagrams
 
-The [`diagrams/`](diagrams/) directory is reserved for architecture and data flow diagrams (Mermaid source files, exported PNGs).
+Architecture and data-flow diagrams are written inline as Mermaid in the Markdown files (see the top-level README, `architecture.md` and `network-topology.md`), so GitHub renders them directly.
 
 ## Related Documentation
 

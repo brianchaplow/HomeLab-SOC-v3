@@ -9,7 +9,7 @@ import os
 import urllib.request
 import base64
 
-KIBANA_URL = "http://10.10.30.25:5601"  # haccp (migrated from LXC 201)
+KIBANA_URL = "http://172.20.3.16:5601"  # elk-01 (migrated from LXC 201)
 KIBANA_USER = "elastic"
 KIBANA_PASS = os.environ.get("ELK_PASS", "your_elastic_password")
 

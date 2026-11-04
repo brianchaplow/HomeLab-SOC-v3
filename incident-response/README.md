@@ -4,7 +4,7 @@ Case management and digital forensics tooling for the HomeLab SOC, comprising Th
 
 ## TheHive 4 -- Case Management
 
-Deployed on **pitcrew LXC 200** (10.10.30.22, 4 CPU cores, 8 GB RAM). TheHive receives automated case creation from Shuffle WF1 when alerts exceed the combined threat score threshold. Cases include enrichment context from AbuseIPDB, ML scorer output, and LLM-generated triage summaries.
+Deployed on **pve-01 LXC 200** (172.20.3.13, 4 CPU cores, 8 GB RAM). TheHive receives automated case creation from Shuffle WF1 when alerts exceed the combined threat score threshold. Cases include enrichment context from AbuseIPDB, ML scorer output, and LLM-generated triage summaries.
 
 Shuffle workflows WF1, WF2, WF3, and WF5 all interact with TheHive via its REST API using a workflow variable for the API key.
 
@@ -28,15 +28,15 @@ Analyzer configuration is exported in [`thehive/cortex-analyzers.json`](thehive/
 
 ## Velociraptor v0.75.3 -- DFIR
 
-Velociraptor provides endpoint visibility and forensic collection across the SOC. The server runs as a Docker container on **brisket** (ports 8889 for GUI, 8000/8001 for client communication).
+Velociraptor provides endpoint visibility and forensic collection across the SOC. The server runs as a Docker container on **soc-01** (ports 8889 for GUI, 8000/8001 for client communication).
 
 ### Enrolled Clients
 
 | Client | Host | OS |
 |--------|------|----|
-| 1 | brisket | Ubuntu 24.04 |
-| 2 | smokehouse | QTS (QNAP) |
-| 3 | sear | Kali Linux |
+| 1 | soc-01 | Ubuntu 24.04 |
+| 2 | sensor-01 | QTS (QNAP) |
+| 3 | attack-01 | Kali Linux |
 | 4 | DC01 | Windows Server 2022 |
 | 5 | WS01 | Windows 10 |
 | 6 | DVWA | Debian |

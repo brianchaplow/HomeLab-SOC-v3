@@ -220,32 +220,32 @@ graph TB
         CF["Cloudflare<br/>WAF / DNS"]
     end
 
-    subgraph VLAN10["VLAN 10 — Management"]
-        OPN["OPNsense<br/>Firewall<br/>10.10.10.1"]
-        PITBOSS["PITBOSS<br/>Analyst Workstation<br/>10.10.10.100"]
+    subgraph VLAN100["VLAN 100 — Management"]
+        OPN["OPNsense<br/>Firewall<br/>172.20.1.1"]
+        ADMINWS["ADMINWS<br/>Analyst Workstation<br/>172.20.1.12"]
     end
 
-    subgraph VLAN20["VLAN 20 — SOC Infrastructure"]
-        BRISKET["brisket<br/>SOC Platform<br/>10.10.20.30"]
-        SMOKEHOUSE["smokehouse<br/>Zeek + Suricata + Fluent Bit<br/>10.10.20.10"]
-        SEAR["sear<br/>Kali Attack Box<br/>10.10.20.20"]
+    subgraph VLAN200["VLAN 200 — SOC Infrastructure"]
+        SOC01["soc-01<br/>SOC Platform<br/>172.20.2.14"]
+        SENSOR01["sensor-01<br/>Zeek + Suricata + Fluent Bit<br/>172.20.2.11"]
+        ATTACK01["attack-01<br/>Kali Attack Box<br/>172.20.2.12"]
     end
 
-    subgraph VLAN30["VLAN 30 — Lab / Proxmox"]
-        HACCP["haccp<br/>ELK + Arkime<br/>10.10.30.25"]
-        PITCREW["pitcrew (Proxmox)<br/>10.10.30.20"]
-        SMOKER["smoker (Proxmox)<br/>10.10.30.21"]
-        THEHIVE["TheHive + Cortex<br/>LXC 200<br/>10.10.30.22"]
-        OPENCTI["OpenCTI<br/>LXC 202<br/>10.10.30.26"]
-        DC01["DC01<br/>AD Domain Controller<br/>10.10.30.40"]
-        WS01["WS01<br/>AD Workstation<br/>10.10.30.41"]
+    subgraph VLAN300["VLAN 300 — Lab / Proxmox"]
+        ELK01["elk-01<br/>ELK + Arkime<br/>172.20.3.16"]
+        PVE01["pve-01 (Proxmox)<br/>172.20.3.11"]
+        PVE02["pve-02 (Proxmox)<br/>172.20.3.12"]
+        THEHIVE["TheHive + Cortex<br/>LXC 200<br/>172.20.3.13"]
+        OPENCTI["OpenCTI<br/>LXC 202<br/>172.20.3.17"]
+        DC01["DC01<br/>AD Domain Controller<br/>172.20.3.20"]
+        WS01["WS01<br/>AD Workstation<br/>172.20.3.21"]
     end
 
-    subgraph VLAN40["VLAN 40 — Targets (ISOLATED)"]
+    subgraph VLAN400["VLAN 400 — Targets (ISOLATED)"]
         TARGETS["DVWA / Juice Shop<br/>Metasploitable 3<br/>WordPress / crAPI<br/>FTP / SMTP / SNMP"]
     end
 
-    subgraph BrisketServices["brisket Services"]
+    subgraph Soc01Services["soc-01 Services"]
         WAZUH["Wazuh Manager<br/>+ Indexer + Dashboard"]
         SHUFFLE["Shuffle SOAR<br/>WF1-WF9"]
         VELOCIRAPTOR["Velociraptor<br/>DFIR"]
@@ -254,7 +254,7 @@ graph TB
         PROMETHEUS["Prometheus<br/>+ Grafana"]
     end
 
-    subgraph HaccpServices["haccp Services"]
+    subgraph Elk01Services["elk-01 Services"]
         ELK["Elasticsearch<br/>+ Kibana + Fleet"]
         ARKIME["Arkime<br/>Full PCAP"]
     end
@@ -262,10 +262,10 @@ graph TB
     %% Data Flow
     GCP -->|Wazuh agent| WAZUH
     OPN -->|syslog 514/UDP| WAZUH
-    SMOKEHOUSE -->|Zeek JSON via Fluent Bit| WAZUH
-    SMOKEHOUSE -->|Zeek JSON via Fluent Bit| ELK
-    SMOKEHOUSE -->|eve.json via Wazuh agent| WAZUH
-    SMOKEHOUSE -->|SPAN traffic| ARKIME
+    SENSOR01 -->|Zeek JSON via Fluent Bit| WAZUH
+    SENSOR01 -->|Zeek JSON via Fluent Bit| ELK
+    SENSOR01 -->|eve.json via Wazuh agent| WAZUH
+    SENSOR01 -->|SPAN traffic| ARKIME
 
     WAZUH -->|level 8+ alerts via webhook| SHUFFLE
     SHUFFLE -->|enrichment request| MLSCORER
@@ -281,12 +281,12 @@ graph TB
     DC01 -->|Fleet agent| ELK
     WS01 -->|Fleet agent| ELK
 
-    SEAR -->|attacks| TARGETS
-    SMOKER -->|Caldera C2| TARGETS
+    ATTACK01 -->|attacks| TARGETS
+    PVE02 -->|Caldera C2| TARGETS
 
-    PITBOSS -->|browser / curl / SSH| BRISKET
-    PITBOSS -->|browser / curl / SSH| HACCP
-    PITBOSS -->|browser| THEHIVE
+    ADMINWS -->|browser / curl / SSH| SOC01
+    ADMINWS -->|browser / curl / SSH| ELK01
+    ADMINWS -->|browser| THEHIVE
 ```
 ```
 
@@ -316,17 +316,17 @@ Every alert flows through these phases. The table maps each phase to the tools i
 ```markdown
 ### 2.3 Network Context
 
-The SOC monitors 5 VLANs. The key thing to remember: **VLAN 40 is the only place attacks should happen.** If you see attack traffic on any other VLAN, that is a real incident.
+The SOC monitors 5 VLANs. The key thing to remember: **VLAN 400 is the only place attacks should happen.** If you see attack traffic on any other VLAN, that is a real incident.
 
 | VLAN | Subnet | What Lives There | Your Interaction |
 |------|--------|-----------------|-----------------|
-| 10 | 10.10.10.0/24 | OPNsense firewall, MokerLink switch, PITBOSS | You sit here. Management traffic. |
-| 20 | 10.10.20.0/24 | brisket (SOC core), smokehouse (sensors), sear (Kali) | Most of your API calls hit this VLAN. |
-| 30 | 10.10.30.0/24 | Proxmox hosts, TheHive, ELK/Arkime (haccp), OpenCTI, AD lab | Investigation and case management tools. |
-| 40 | 10.10.40.0/24 | DVWA, Metasploitable, WordPress, crAPI, FTP, SMTP, SNMP | **ISOLATED.** All attacks target here. Never on other VLANs. |
-| 50 | 10.10.50.0/24 | IoT devices | Internet-only. Monitored but rarely investigated. |
+| 100 | 172.20.1.0/24 | OPNsense firewall, MokerLink switch, ADMIN-WS | You sit here. Management traffic. |
+| 200 | 172.20.2.0/24 | soc-01 (SOC core), sensor-01 (sensors), attack-01 (Kali) | Most of your API calls hit this VLAN. |
+| 300 | 172.20.3.0/24 | Proxmox hosts, TheHive, ELK/Arkime (elk-01), OpenCTI, AD lab | Investigation and case management tools. |
+| 400 | 172.20.4.0/24 | DVWA, Metasploitable, WordPress, crAPI, FTP, SMTP, SNMP | **ISOLATED.** All attacks target here. Never on other VLANs. |
+| 500 | 172.20.5.0/24 | IoT devices | Internet-only. Monitored but rarely investigated. |
 
-The family network (192.168.100.0/24 DMZ, 192.168.50.0/24 WiFi) is behind the ASUS router and out of SOC scope.
+The family network (172.21.1.0/24 DMZ, 172.21.2.0/24 WiFi) is behind the ASUS router and out of SOC scope.
 ```
 
 - [ ] **Step 4: Write Section 2.4 — External Perimeter**
@@ -336,7 +336,7 @@ The family network (192.168.100.0/24 DMZ, 192.168.50.0/24 WiFi) is behind the AS
 
 Two external assets are monitored by the SOC:
 
-**GCP VM** — Hosts the public websites (brianchaplow.com, bytesbourbonbbq.com). Runs Wazuh agent 009, which reports alerts back to brisket over Tailscale. Previously hosted the WordPress honeypot (campaign ended 2026-03-12). Historical honeypot data is preserved in ELK indices on haccp.
+**GCP VM** — Hosts the public websites (brianchaplow.com, bytesbourbonbbq.com). Runs Wazuh agent 009, which reports alerts back to soc-01 over Tailscale. Previously hosted the WordPress honeypot (campaign ended 2026-03-12). Historical honeypot data is preserved in ELK indices on elk-01.
 
 **Cloudflare** — Provides WAF (Web Application Firewall) and DNS for the public sites. When Shuffle WF1 identifies a confirmed malicious external IP (AbuseIPDB confidence >= 90, reports >= 5, not whitelisted), it automatically creates a Cloudflare firewall block rule via the API. You can also manually block IPs — see Section 8.1.
 
@@ -383,8 +383,8 @@ The tools are grouped by their role in the alert lifecycle (see Section 2.2):
 
 Write the full 6-point entry for Wazuh. This is the largest entry — Wazuh is the core SIEM. Cover:
 - **What it is:** Open-source SIEM/XDR platform (Security Information and Event Management / Extended Detection and Response)
-- **What it does in this SOC:** Central detection engine. 12 agents ship logs to the Wazuh Manager on brisket. Manager runs custom + built-in rules against incoming events. Alerts stored in the Wazuh Indexer (OpenSearch). Dashboard provides search, visualization, and agent management.
-- **Where it runs:** brisket (10.10.20.30). Manager on ports 1514/1515 (agent registration), 514/UDP (syslog from OPNsense), 55000 (REST API). Indexer on 9200. Dashboard on 5601 (HTTPS). Login: admin / YOUR_PASSWORD.
+- **What it does in this SOC:** Central detection engine. 12 agents ship logs to the Wazuh Manager on soc-01. Manager runs custom + built-in rules against incoming events. Alerts stored in the Wazuh Indexer (OpenSearch). Dashboard provides search, visualization, and agent management.
+- **Where it runs:** soc-01 (172.20.2.14). Manager on ports 1514/1515 (agent registration), 514/UDP (syslog from OPNsense), 55000 (REST API). Indexer on 9200. Dashboard on 5601 (HTTPS). Login: admin / YOUR_PASSWORD.
 - **How it fits in the pipeline:** Collection + Detection phases. Agents and syslog feed in. Level 8+ alerts trigger Shuffle WF1 via webhook. Zeek data also stored in the Indexer (queried as `zeek-*` indices). OpenCTI pushes IOCs to Wazuh CDB lists every 6 hours for rule matching.
 - **GUI Walkthrough:** Step-by-step for: (1) Login and landing page, (2) Security Events module — how to filter by time range, agent, rule level, (3) Agents tab — viewing individual agent status and events, (4) Rules management — viewing active rules, custom rules (group: local), (5) Management > Configuration — viewing ossec.conf.
 - **Key Concepts:** Agent (software running on each monitored host that ships logs), Decoder (parses raw log lines into structured fields), Rule (pattern matching on decoded fields — fires an alert when matched), Rule Level (0-15 severity scale), Rule ID (unique identifier per rule, custom rules start at 9000001+), CDB List (Constant Database list — flat file of IOCs for rule matching), Active Response (automated actions like firewall-drop triggered by rules), FIM/Syscheck (File Integrity Monitoring — detects file changes on agents).
@@ -392,7 +392,7 @@ Write the full 6-point entry for Wazuh. This is the largest entry — Wazuh is t
 - [ ] **Step 3: Write 3.2 — Elastic Stack**
 
 Full 6-point entry. Cover:
-- ES 8.17 + Kibana + Fleet + Logstash on haccp bare metal (10.10.30.25)
+- ES 8.17 + Kibana + Fleet + Logstash on elk-01 bare metal (172.20.3.16)
 - Kibana HTTP on 5601, ES HTTPS on 9200 (self-signed CA)
 - 4 Fleet agents (DC01, WS01 via Windows Security integration), 214 detection rules
 - Elastic ML anomaly detection (trial license, auth-anomalies job on Windows Security events)
@@ -403,18 +403,18 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - Network metadata analyzer (not full PCAP — that is Arkime)
-- Runs on smokehouse (10.10.20.10), monitors SPAN port eth4
+- Runs on sensor-01 (172.20.2.11), monitors SPAN port eth4
 - Produces structured JSON logs: conn, http, dns, ssl, files, x509
-- Shipped to brisket Wazuh Indexer AND haccp ELK via Fluent Bit
-- CLI Key Commands: check Zeek is running (`ssh bchaplow@10.10.20.10` then `sudo zeekctl status`), view recent logs
+- Shipped to soc-01 Wazuh Indexer AND elk-01 ELK via Fluent Bit
+- CLI Key Commands: check Zeek is running (`ssh <user>@172.20.2.11` then `sudo zeekctl status`), view recent logs
 - Key Concepts: conn.log (connection records), uid (unique connection ID linking logs together), conn_state (see Appendix D), community_id (cross-tool correlation hash)
 
 - [ ] **Step 5: Write 3.4 — Suricata**
 
 Full 6-point entry. Cover:
 - Network IDS (Intrusion Detection System) — rule-based signature matching
-- Runs on smokehouse alongside Zeek, monitors same SPAN port
-- Produces eve.json (alert events), shipped to Wazuh via the smokehouse Wazuh agent
+- Runs on sensor-01 alongside Zeek, monitors same SPAN port
+- Produces eve.json (alert events), shipped to Wazuh via the sensor-01 Wazuh agent
 - CLI Key Commands: check status, view alert stats
 - Key Concepts: Signature (pattern matching rule), SID (Signature ID), Alert vs. Drop vs. Pass actions, eve.json (unified JSON log format)
 
@@ -422,7 +422,7 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - Lightweight log shipper / pipeline processor
-- Runs on smokehouse (ships Zeek logs to both brisket Wazuh Indexer and haccp ELK) and GCP VM (ships honeypot data to haccp ELK)
+- Runs on sensor-01 (ships Zeek logs to both soc-01 Wazuh Indexer and elk-01 ELK) and GCP VM (ships honeypot data to elk-01 ELK)
 - Configuration-driven (no GUI) — `fluent-bit.conf` defines inputs, parsers, filters, outputs
 - CLI Key Commands: check service status, view config, check output health
 - Key Concepts: Input plugin (where logs come from), Output plugin (where logs go), Filter (transform or enrich in-flight), Parser (extract structured fields from raw text)
@@ -431,9 +431,9 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - Open-source threat intelligence platform (STIX/TAXII)
-- Runs on pitcrew LXC 202 (10.10.30.26:8080). Login: admin@opencti.local / YOUR_PASSWORD
+- Runs on pve-01 LXC 202 (172.20.3.17:8080). Login: admin@opencti.local / YOUR_PASSWORD
 - 6 connectors: MITRE ATT&CK, CVE (NVD), AbuseIPDB, CISA KEV, Malpedia, AlienVault OTX
-- IOC sync pipeline: cron on brisket pushes indicators to Wazuh CDB lists (every 6h) and to haccp ELK (every 6h offset 15min)
+- IOC sync pipeline: cron on soc-01 pushes indicators to Wazuh CDB lists (every 6h) and to elk-01 ELK (every 6h offset 15min)
 - GUI Walkthrough: Dashboard, Threats > Indicators (IOCs), Data > Connectors (status, last run), Analysis > Reports
 - Key Concepts: STIX (Structured Threat Information Expression — standard format for threat intel), Indicator (IOC — IP, domain, hash, URL), Connector (plugin that imports data from external sources), Observable (raw data point before it becomes an indicator)
 
@@ -453,7 +453,7 @@ Open the HTML. Verify all 6 tool entries appear in the sidebar and render correc
 
 Full 6-point entry. Cover:
 - Security Orchestration, Automation, and Response platform
-- Runs on brisket (10.10.20.30). UI on 3443 (HTTPS), API on 5001 (HTTP). Login: admin / YOUR_PASSWORD
+- Runs on soc-01 (172.20.2.14). UI on 3443 (HTTPS), API on 5001 (HTTP). Login: admin / YOUR_PASSWORD
 - 9 active workflows (WF1 through WF9, WF4 planned). All credentials use `$varname` workflow variables — never hardcoded.
 - WF4 (Velociraptor auto-triage) is planned but not yet implemented — roadmap item
 - GUI Walkthrough: Workflows list (enabled/disabled toggle), Workflow Editor (drag-and-drop nodes, action configuration), Execution History (per-workflow, expandable steps, success/failure), Workflow Variables (Settings > Variables — where all credentials live)
@@ -463,28 +463,28 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - REST API serving an XGBoost binary classifier for threat detection
-- Runs on brisket:5002 as a Docker container (`ml-scorer`)
+- Runs on soc-01:5002 as a Docker container (`ml-scorer`)
 - Trained on labeled Caldera attack data, PR-AUC 0.9998
 - Takes alert fields (src_ip, dst_ip, dst_port, protocol, rule_level, rule_id) and returns a threat probability (0.0-1.0)
 - Called by Shuffle WF1 during enrichment and WF6 for drift monitoring
-- CLI Key Commands: `curl http://10.10.20.30:5002/health`, `curl -X POST http://10.10.20.30:5002/score -H 'Content-Type: application/json' -d '{...}'`
+- CLI Key Commands: `curl http://172.20.2.14:5002/health`, `curl -X POST http://172.20.2.14:5002/score -H 'Content-Type: application/json' -d '{...}'`
 - Key Concepts: PR-AUC (Precision-Recall Area Under Curve — primary evaluation metric, better than ROC-AUC for imbalanced datasets), Feature (input variable the model uses), Threshold (0.7 default escalation cutoff), Drift (model performance degradation over time as data distribution changes — monitored by WF6)
 
 - [ ] **Step 3: Write 3.9 — Ollama / qwen3 (LLM)**
 
 Full 6-point entry. Cover:
 - Local LLM inference server running the qwen3:8b model
-- Runs as a host process on brisket:11434 (not in Docker)
+- Runs as a host process on soc-01:11434 (not in Docker)
 - Used by 7 Shuffle workflows for natural-language triage summaries, alert classification, and report generation
 - Prompts use `/no_think` prefix to suppress qwen3's thinking tokens; `<think>` tags are stripped from responses
-- CLI Key Commands: `curl http://10.10.20.30:11434/api/tags` (list models), `curl http://10.10.20.30:11434/api/generate -d '{"model":"qwen3:8b","prompt":"/no_think Summarize this alert..."}'` (generate)
+- CLI Key Commands: `curl http://172.20.2.14:11434/api/tags` (list models), `curl http://172.20.2.14:11434/api/generate -d '{"model":"qwen3:8b","prompt":"/no_think Summarize this alert..."}'` (generate)
 - Key Concepts: Inference (running a prompt through the model to get output), Model (qwen3:8b — 8 billion parameter model from Alibaba), `/no_think` (prefix that suppresses the model's chain-of-thought reasoning tokens), Temperature (randomness control — lower = more deterministic), Context Window (how much text the model can consider at once)
 
 - [ ] **Step 4: Write 3.10 — Cortex (Automated Analysis)**
 
 Full 6-point entry. Cover:
 - Analysis engine paired with TheHive — runs automated analyzers on observables
-- Runs on TheHive LXC 200 (10.10.30.22:9001). Login: socadmin@SOC / YOUR_PASSWORD
+- Runs on TheHive LXC 200 (172.20.3.13:9001). Login: socadmin@SOC / YOUR_PASSWORD
 - 5 analyzers configured (detail which ones from the playbook's existing Section 5.3)
 - Called from TheHive (click "Run Analyzers" on an observable) or via API
 - GUI Walkthrough: Organization > Analyzers (list, enable/disable, configure), Jobs (execution history, status, reports), navigate from TheHive observable to Cortex report
@@ -501,7 +501,7 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - Digital Forensics and Incident Response platform — real-time endpoint visibility
-- Runs on brisket:8889 (HTTPS). Login: admin / YOUR_PASSWORD. 7 clients enrolled.
+- Runs on soc-01:8889 (HTTPS). Login: admin / YOUR_PASSWORD. 7 clients enrolled.
 - GUI Walkthrough: Client Search (find hosts by name/IP), Client View (overview, VFS browser, collected artifacts), Hunt Manager (run queries across all/selected clients), Notebook (interactive VQL query interface), Server Artifacts
 - Key Concepts: Client (Velociraptor agent on an endpoint), VQL (Velociraptor Query Language — SQL-like for querying endpoint state), Hunt (query run across multiple clients simultaneously), Artifact (pre-built VQL query template for common tasks — e.g., process listing, autoruns, file search), Notebook (interactive query workspace — paste VQL, see results), VFS (Virtual File System — browse files on a remote client through the GUI)
 
@@ -509,7 +509,7 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - Incident response case management platform aligned with NIST 800-61
-- Runs on pitcrew LXC 200 (10.10.30.22:9000). Login: socadmin@thehive.local / YOUR_PASSWORD
+- Runs on pve-01 LXC 200 (172.20.3.13:9000). Login: socadmin@thehive.local / YOUR_PASSWORD
 - Receives cases from Shuffle WF1 (auto-created for high-scoring alerts) and manual creation
 - GUI Walkthrough: Case List (filter by status: New/InProgress, sort by severity), Case Detail (description, tasks, observables, logs), Tasks tab (NIST IR phases — Identification through Lessons Learned), Observables tab (add IPs/hashes/domains, run Cortex analyzers), Dashboard (case metrics)
 - Key Concepts: Case (incident record with severity, TLP, PAP, description, tasks, observables), Task (work item within a case — e.g., "Containment: block source IP"), Observable (artifact attached to a case — IP, hash, domain, URL), TLP (Traffic Light Protocol — data sharing restriction: WHITE/GREEN/AMBER/RED), PAP (Permissible Actions Protocol — what you can do with the data), Severity (1=Low, 2=Medium, 3=High, 4=Critical)
@@ -518,8 +518,8 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - MITRE ATT&CK-based adversary emulation framework
-- Runs on smoker (10.10.30.21:8888). Login: red / YOUR_PASSWORD (red team) or blue / YOUR_PASSWORD (blue team). API key: YOUR_CALDERA_API_KEY (header `KEY: YOUR_CALDERA_API_KEY`).
-- 4 Sandcat agents deployed on VLAN 40 targets, Wazuh detection validated
+- Runs on pve-02 (172.20.3.12:8888). Login: red / YOUR_PASSWORD (red team) or blue / YOUR_PASSWORD (blue team). API key: YOUR_CALDERA_API_KEY (header `KEY: YOUR_CALDERA_API_KEY`).
+- 4 Sandcat agents deployed on VLAN 400 targets, Wazuh detection validated
 - GUI Walkthrough: Operations (create/run/view attack campaigns), Agents (enrolled Sandcat agents and their status), Abilities (individual ATT&CK techniques available), Adversaries (profiles — collections of abilities forming an attack chain), Plugins
 - Key Concepts: Operation (execution of an adversary profile against selected agents), Agent/Sandcat (implant running on target host that executes abilities), Ability (single ATT&CK technique implementation — e.g., T1059.001 PowerShell), Adversary Profile (ordered set of abilities representing an attack scenario), Fact (data discovered during an operation that can be used by subsequent abilities)
 
@@ -527,7 +527,7 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - Full packet capture and indexed session analysis
-- Runs on haccp (10.10.30.25:8005). Login: admin / YOUR_PASSWORD
+- Runs on elk-01 (172.20.3.16:8005). Login: admin / YOUR_PASSWORD
 - Captures all traffic from SPAN port (SFP+ transceivers on MokerLink switch)
 - Complements Zeek (metadata) — Arkime stores the actual packet data so you can reconstruct sessions
 - GUI Walkthrough: Sessions (search by IP, port, protocol, time range — the main investigation view), SPI Graph (traffic distribution over time), SPI View (breakdown by source/destination), Connections (network graph showing which IPs talked to which), Session Detail (click a session to see full packet decode, download PCAP)
@@ -544,17 +544,17 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - Time-series metrics collection and alerting system
-- Runs on brisket:9090. No authentication. Scrapes 7 targets (exporters on brisket, smokehouse, etc.)
+- Runs on soc-01:9090. No authentication. Scrapes 7 targets (exporters on soc-01, sensor-01, etc.)
 - GUI Walkthrough: Targets (list of scrape targets and their status — UP/DOWN), Graph (PromQL query interface — type a query, see time-series chart), Alerts (active alerting rules if configured)
-- Key Concepts: Metric (named time-series — e.g., `node_cpu_seconds_total`), Target (endpoint Prometheus scrapes for metrics — e.g., `10.10.20.30:9100`), Exporter (service that exposes metrics in Prometheus format — e.g., node_exporter for OS metrics), PromQL (Prometheus Query Language — e.g., `rate(node_cpu_seconds_total{mode="idle"}[5m])`)
+- Key Concepts: Metric (named time-series — e.g., `node_cpu_seconds_total`), Target (endpoint Prometheus scrapes for metrics — e.g., `172.20.2.14:9100`), Exporter (service that exposes metrics in Prometheus format — e.g., node_exporter for OS metrics), PromQL (Prometheus Query Language — e.g., `rate(node_cpu_seconds_total{mode="idle"}[5m])`)
 
 - [ ] **Step 2: Write 3.16 — Grafana**
 
 Full 6-point entry. Cover:
 - Dashboard and visualization platform
-- Runs on brisket:3000. Login: admin / (same password as OpenSearch .env on brisket)
+- Runs on soc-01:3000. Login: admin / (same password as OpenSearch .env on soc-01)
 - SOC v3 Overview dashboard is the primary monitoring view
-- 4 data sources: Prometheus (infra metrics), Wazuh-Alerts (OpenSearch), OpenSearch-Zeek, haccp-ES (native Elasticsearch — NOT OpenSearch plugin, which doesn't work with ES 8.x data streams)
+- 4 data sources: Prometheus (infra metrics), Wazuh-Alerts (OpenSearch), OpenSearch-Zeek, elk-01-ES (native Elasticsearch — NOT OpenSearch plugin, which doesn't work with ES 8.x data streams)
 - GUI Walkthrough: Dashboards > Browse (find SOC v3 Overview), Dashboard View (time range picker, auto-refresh, panel drill-down), Data Sources (Settings > Data Sources — verify connectivity), Explore (ad-hoc queries against any data source)
 - Key Concepts: Dashboard (collection of panels showing metrics/logs), Panel (single visualization — graph, table, stat, gauge), Data Source (connection to a backend — Prometheus, OpenSearch, Elasticsearch), Query (each panel has a query that pulls data from its data source)
 
@@ -569,7 +569,7 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - Open-source firewall and router (runs on Protectli VP2420)
-- 10.10.10.1 (HTTPS web UI). Login: root / (standard password). Also SSH: admin@10.10.10.1 port 22.
+- 172.20.1.1 (HTTPS web UI). Login: root / (standard password). Also SSH: admin@172.20.1.1 port 22.
 - Manages inter-VLAN routing, NAT, firewall rules. Sends syslog to Wazuh on 514/UDP.
 - GUI Walkthrough: Dashboard (system info, interfaces, traffic), Firewall > Rules (per-interface rule lists), Firewall > Aliases (named IP/port groups), Firewall > Log Files (live firewall log), Interfaces (VLAN assignments)
 - Key Concepts: Rule (allow/block traffic matching criteria — source, dest, port, protocol), Alias (named group of IPs or ports for use in rules), NAT (Network Address Translation), VLAN Interface (virtual interface bound to a VLAN tag), Syslog (log forwarding protocol — OPNsense sends to Wazuh)
@@ -578,7 +578,7 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - Container runtime — most SOC services run as Docker containers
-- Runs on brisket (Wazuh stack, Shuffle, ML Scorer, Velociraptor, monitoring), smokehouse (legacy), smoker (Caldera, VLAN 40 targets), haccp (ELK stack, Arkime)
+- Runs on soc-01 (Wazuh stack, Shuffle, ML Scorer, Velociraptor, monitoring), sensor-01 (legacy), pve-02 (Caldera, VLAN 400 targets), elk-01 (ELK stack, Arkime)
 - CLI Key Commands: `docker ps` (list running containers), `docker compose ps` (list compose stack), `docker logs <container>` (view logs), `docker restart <container>` (restart), `docker compose up -d` (start stack)
 - Key Concepts: Container (isolated process running a service), Image (template for containers — pulled from Docker Hub or built locally), Docker Compose (YAML file defining multi-container applications — `docker-compose.yml`), Volume (persistent storage that survives container restarts), Network (virtual network connecting containers)
 
@@ -586,7 +586,7 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - Hypervisor / virtualization platform (Type 1)
-- Runs on pitcrew (10.10.30.20:8006) and smoker (10.10.30.21:8006). Login: root@pam / SSH key.
+- Runs on pve-01 (172.20.3.11:8006) and pve-02 (172.20.3.12:8006). Login: root@pam / SSH key.
 - Hosts VMs (DC01, WS01, DVWA/Juice Shop, Metasploitable) and LXCs (TheHive LXC 200, OpenCTI LXC 202, PBS LXC 300)
 - GUI Walkthrough: Node view (CPU/RAM/storage overview), VM list (start/stop/console), LXC list (same), Storage (local, NFS mounts), Backup (PBS integration)
 - Key Concepts: VM (Virtual Machine — full OS with emulated hardware), LXC (Linux Container — lightweight, shares host kernel), Node (physical Proxmox server), Storage (where VM disks and backups live), Snapshot (point-in-time save of VM state)
@@ -595,7 +595,7 @@ Full 6-point entry. Cover:
 
 Full 6-point entry. Cover:
 - Mesh VPN for secure remote access (WireGuard-based)
-- Installed on brisket, sear, smokehouse, haccp, GCP VM, PITBOSS
+- Installed on soc-01, attack-01, sensor-01, elk-01, GCP VM, ADMIN-WS
 - Enables SSH and web UI access from anywhere (travel/remote) using 100.x.x.x addresses
 - CLI Key Commands: `tailscale status` (list connected nodes), `tailscale ip` (show own Tailscale IP)
 - Key Concepts: Tailnet (your private mesh network), Node (device on the tailnet), MagicDNS (optional hostname resolution), Exit Node (route all traffic through a specific node)
@@ -605,9 +605,9 @@ Full 6-point entry. Cover:
 Full 6-point entry. Cover:
 - Google Cloud Platform virtual machine hosting external-facing services
 - Runs brianchaplow.com and bytesbourbonbbq.com (Astro 5 sites behind Cloudflare)
-- Wazuh agent 009 reports to brisket. Connected to tailnet.
+- Wazuh agent 009 reports to soc-01. Connected to tailnet.
 - Previously hosted honeypot research (WordPress + Apache, campaign ended 2026-03-12). Historical data preserved in ELK.
-- Key Commands: SSH via Tailscale (`ssh bchaplow@<gcp-tailscale-ip>`), check Wazuh agent status
+- Key Commands: SSH via Tailscale (`ssh <user>@<gcp-tailscale-ip>`), check Wazuh agent status
 - Key Concepts: Instance (GCP term for a VM), Tailscale connector (how GCP VM reaches the lab network), Wazuh agent (ships GCP logs to the SOC for monitoring)
 
 - [ ] **Step 6: Write 3.22 — Cloudflare**
@@ -684,7 +684,7 @@ The existing section tells you to go to the dashboard but doesn't walk through i
 ```markdown
 > **GUI Walkthrough — Wazuh Dashboard Security Events:**
 >
-> 1. Open https://10.10.20.30:5601 in Chrome. Login: admin / YOUR_PASSWORD
+> 1. Open https://172.20.2.14:5601 in Chrome. Login: admin / YOUR_PASSWORD
 > 2. From the left menu, click **Modules** > **Security Events**
 > 3. Set the **time range** (top-right) to the period you are investigating (e.g., "Last 24 hours")
 > 4. The main view shows a timeline histogram at top and event table below
@@ -702,17 +702,17 @@ After the first query group (alert filtering by severity/agent/time), add:
 ```markdown
 > **Reading the output:**
 > - `Timestamp` — when the alert fired (UTC). Convert to EST by subtracting 5 hours (or 4 during daylight saving).
-> - `Agent` — which host generated the event. If you see alerts from unexpected agents (e.g., a VLAN 40 target generating outbound alerts), investigate immediately.
+> - `Agent` — which host generated the event. If you see alerts from unexpected agents (e.g., a VLAN 400 target generating outbound alerts), investigate immediately.
 > - `Lvl` — rule level. Focus on 10+ first.
 > - `Rule` — rule ID. Cross-reference with Appendix B (Wazuh Rule Levels & IDs) for context.
-> - `Src IP` — where the traffic came from. Internal (10.10.x.x) vs. external makes a big difference — see Section 6.2 (AbuseIPDB) for external IP lookup.
+> - `Src IP` — where the traffic came from. Internal (172.20.x.x) vs. external makes a big difference — see Section 6.2 (AbuseIPDB) for external IP lookup.
 > - `Description` — short description of what the rule detected. Read this first to understand the alert type.
 >
 > **No results?**
 > - Verify your time range — alerts older than the index retention period may have been rolled over.
 > - Check the agent name spelling (case-sensitive in term queries).
 > - Try broadening: remove the `rule.level` filter, or use `match` instead of `term` for partial matches.
-> - If the index pattern itself returns zero, verify the Wazuh Indexer is running: `curl -sk https://10.10.20.30:9200/_cluster/health`
+> - If the index pattern itself returns zero, verify the Wazuh Indexer is running: `curl -sk https://172.20.2.14:9200/_cluster/health`
 ```
 
 After the aggregation queries (top rules, auth failures), add:
@@ -728,7 +728,7 @@ After the aggregation queries (top rules, auth failures), add:
 
 Apply the same pattern to the ELK query section. Add:
 - Interpretation block after the first group explaining ELK-specific fields (`event.action`, `event.outcome`, `source.ip`, `destination.ip`)
-- Dead-end block: "If ELK returns no results, verify containers are running (Section 13.3), check the index exists (`curl -sk https://10.10.30.25:9200/_cat/indices`), and verify the time range overlaps with when Fleet agents started shipping data."
+- Dead-end block: "If ELK returns no results, verify containers are running (Section 13.3), check the index exists (`curl -sk https://172.20.3.16:9200/_cat/indices`), and verify the time range overlaps with when Fleet agents started shipping data."
 
 - [ ] **Step 5: Add context to 5.5 Reading Shuffle WF1 Execution History**
 
@@ -758,25 +758,25 @@ After the existing matrix table and action definitions, add:
 ```markdown
 > **Quick decision guide — for when you have enrichment results and need to decide what to do:**
 >
-> **External IP (not 10.10.x.x)?**
+> **External IP (not 172.20.x.x)?**
 > - ML Score >= 0.7 AND AbuseIPDB >= 80 → Confirmed external threat. Block IP (Section 8.1). Create TheHive case (Section 6.5). Document in case.
 > - ML Score >= 0.7 AND AbuseIPDB < 30 → High ML score but clean reputation. Possible novel threat or false positive. Do NOT auto-block. Investigate with Zeek (Section 7.1) and Arkime (Section 7, tool 3.14). If confirmed malicious, block manually.
 > - ML Score < 0.4 AND rule_level < 8 → Likely noise. Log and move on. It will appear in the next WF5 daily triage for review.
 > - ML Score 0.4-0.7 → Gray zone. Run Cortex analyzers (Section 7.3) for more context. Check Zeek flows (Section 7.1) for connection patterns.
 >
-> **Internal IP (10.10.x.x)?**
-> - From sear (10.10.20.20) targeting VLAN 40 → Likely an authorized attack test. Cross-reference `attack_log.csv` on sear. If logged, close as purple team exercise.
-> - From any other VLAN 20/30 host targeting VLAN 40 → Expected if Caldera is running an operation. Check Caldera UI (Section 3.13).
-> - From any host targeting a non-VLAN-40 address → **This should not happen.** Investigate immediately. Check for lateral movement (Section 12, RB-03).
+> **Internal IP (172.20.x.x)?**
+> - From attack-01 (172.20.2.12) targeting VLAN 400 → Likely an authorized attack test. Cross-reference `attack_log.csv` on attack-01. If logged, close as purple team exercise.
+> - From any other VLAN 200/300 host targeting VLAN 400 → Expected if Caldera is running an operation. Check Caldera UI (Section 3.13).
+> - From any host targeting a non-VLAN-400 address → **This should not happen.** Investigate immediately. Check for lateral movement (Section 12, RB-03).
 ```
 
 - [ ] **Step 2: Add interpretation context to ML Score and AbuseIPDB sections**
 
 After 6.1 (ML Score) table, add:
 ```markdown
-> **What drives the score:** The XGBoost model weighs features like destination port (unusual ports score higher), rule level, protocol, and whether the source/destination IP pair has been seen in previous attacks. A score of 0.92 on a SQL injection attempt targeting port 80 on DVWA is expected — that matches training data. The same score on port 443 traffic to brisket would be more concerning because it is unusual.
+> **What drives the score:** The XGBoost model weighs features like destination port (unusual ports score higher), rule level, protocol, and whether the source/destination IP pair has been seen in previous attacks. A score of 0.92 on a SQL injection attempt targeting port 80 on DVWA is expected — that matches training data. The same score on port 443 traffic to soc-01 would be more concerning because it is unusual.
 >
-> **Known false positive patterns:** Legitimate vulnerability scanners (if running), Wazuh self-monitoring alerts, and high-frequency FIM events on brisket (Docker overlay changes) can occasionally score 0.4-0.6.
+> **Known false positive patterns:** Legitimate vulnerability scanners (if running), Wazuh self-monitoring alerts, and high-frequency FIM events on soc-01 (Docker overlay changes) can occasionally score 0.4-0.6.
 ```
 
 After 6.2 (AbuseIPDB) table, add:
@@ -815,8 +815,8 @@ After the Zeek conn query, add:
 > **No results?**
 > - Widen the time range to 24h (`"gte": "now-24h"`)
 > - Verify the IP format — Zeek uses `id.orig_h` and `id.resp_h`, not `src_ip` / `data.srcip`
-> - If the traffic is between VLAN 40 targets only, it may not cross the SPAN port (depends on switch mirroring config). Try Arkime (Section 3.14) or check Suricata eve.json instead.
-> - If the host is on VLAN 30 (pitcrew, smoker, TheHive), Zeek may not see it — the SPAN port only mirrors specific switch ports. Fall back to Wazuh agent logs or Velociraptor endpoint data.
+> - If the traffic is between VLAN 400 targets only, it may not cross the SPAN port (depends on switch mirroring config). Try Arkime (Section 3.14) or check Suricata eve.json instead.
+> - If the host is on VLAN 300 (pve-01, pve-02, TheHive), Zeek may not see it — the SPAN port only mirrors specific switch ports. Fall back to Wazuh agent logs or Velociraptor endpoint data.
 ```
 
 After each Zeek index-specific query (http, dns, ssl, files), add similar interpretation blocks relevant to that log type.
@@ -832,7 +832,7 @@ After each VQL template, add an interpretation block. Example for the process li
 > - `CommandLine` often reveals the intent — look for encoded PowerShell (`-enc`), curl/wget to external IPs, or known attack tool names.
 >
 > **No results?**
-> - Verify the client is online in Velociraptor (https://10.10.20.30:8889 > search for the hostname).
+> - Verify the client is online in Velociraptor (https://172.20.2.14:8889 > search for the hostname).
 > - If the client shows "Last seen" more than 15 minutes ago, the Velociraptor agent may be down. SSH to the host and check the service.
 > - For historical data (process already exited), use the `Windows.EventLogs.Evtx` artifact to search Windows Event ID 4688 (process creation), or the `Linux.Sys.LastLog` artifact for Linux.
 ```
@@ -840,7 +840,7 @@ After each VQL template, add an interpretation block. Example for the process li
 For the network connections VQL template, add:
 ```markdown
 > **Reading the output:**
-> - `RemoteAddress` outside 10.10.x.x ranges = external connection. Check if expected (e.g., Tailscale 100.x.x.x, cloud services).
+> - `RemoteAddress` outside 172.20.x.x ranges = external connection. Check if expected (e.g., Tailscale 100.x.x.x, cloud services).
 > - `Pid` maps to process — cross-reference with the process listing to identify what made the connection.
 > - Persistent connections to unusual ports or IPs = potential C2 callback. Check Zeek (Section 7.1) for the same flow.
 ```
@@ -866,7 +866,7 @@ After the Cortex API call examples, add:
 > - Multiple analyzers returning `malicious` for the same observable = high confidence. A single `suspicious` + others `safe` = investigate further but do not escalate on Cortex alone.
 >
 > **No results / analyzer failed?**
-> - Check the analyzer is enabled in Cortex (http://10.10.30.22:9001 > Organization > Analyzers).
+> - Check the analyzer is enabled in Cortex (http://172.20.3.13:9001 > Organization > Analyzers).
 > - API key issues will show as 401 errors in the job details.
 > - Some analyzers have rate limits (especially AbuseIPDB on the free tier). Wait and retry, or use the manual curl command in Section 7.1 instead.
 ```
@@ -881,7 +881,7 @@ After the FIM query examples, add:
 > - `syscheck.event` = what happened: `added` (new file), `modified` (content changed), `deleted` (removed).
 > - `syscheck.md5_after` / `syscheck.sha256_after` = hash after the change. Compare with known-good hashes or submit to VirusTotal.
 > - `syscheck.uname_after` = user who made the change. Root/SYSTEM changes are expected for system updates; other users modifying system files = suspicious.
-> - **High FIM volume on brisket:** Docker overlay filesystem changes generate frequent FIM events. This is expected noise — filter by `agent.name != brisket` for investigation-focused queries.
+> - **High FIM volume on soc-01:** Docker overlay filesystem changes generate frequent FIM events. This is expected noise — filter by `agent.name != soc-01` for investigation-focused queries.
 >
 > **No FIM data for a host?**
 > - FIM must be configured in the agent's `ossec.conf` (`<syscheck>` section). Not all agents monitor the same directories.
@@ -904,7 +904,7 @@ After the ELK detection rule cross-reference queries, add:
 > **No matching ELK alerts?**
 > - ELK detection rules may not cover the same techniques as Wazuh. This is a detection gap — note it for the next WF3 analysis.
 > - Verify Fleet agents are shipping data: Kibana > Fleet > Agents — all 4 agents should show "Healthy."
-> - If the data involves Linux hosts (brisket, smokehouse, sear), ELK may not have it — Fleet agents are only on DC01, WS01, and selected hosts. Wazuh is the primary SIEM for Linux.
+> - If the data involves Linux hosts (soc-01, sensor-01, attack-01), ELK may not have it — Fleet agents are only on DC01, WS01, and selected hosts. Wazuh is the primary SIEM for Linux.
 ```
 
 ---
@@ -932,8 +932,8 @@ After the section intro, before 8.1, add:
 > → For full isolation: OPNsense rule to block the host's IP from all VLANs.
 > → For forensic preservation: Velociraptor — collect artifacts BEFORE isolating (Section 7.2).
 >
-> **Purple team / authorized test from sear?**
-> → No blocking needed. Verify in `attack_log.csv` on sear and close.
+> **Purple team / authorized test from attack-01?**
+> → No blocking needed. Verify in `attack_log.csv` on attack-01 and close.
 ```
 
 - [ ] **Step 2: Add interpretation to Section 9 (TheHive Case Management)**
@@ -959,7 +959,7 @@ For each workflow (10.1-10.7), add a block after the pipeline steps explaining w
 
 - [ ] **Step 4: Add WF9 subsection to Section 10**
 
-Add a new `### 10.8 WF9 -- Infrastructure Health Monitor` subsection. WF9 runs every 5 minutes via cron (`*/5 * * * *` on brisket). Document:
+Add a new `### 10.8 WF9 -- Infrastructure Health Monitor` subsection. WF9 runs every 5 minutes via cron (`*/5 * * * *` on soc-01). Document:
 
 **Trigger:** Cron every 5 minutes.
 
@@ -967,7 +967,7 @@ Add a new `### 10.8 WF9 -- Infrastructure Health Monitor` subsection. WF9 runs e
 1. Query Wazuh API for agent status (all 12 agents)
 2. Query ML Scorer health endpoint
 3. Query Ollama health endpoint
-4. Check ELK cluster health via haccp ES API
+4. Check ELK cluster health via elk-01 ES API
 5. Compare current status against last-known-good baseline
 6. If any service is degraded or agent is disconnected, post Discord alert with details
 
@@ -979,7 +979,7 @@ Status: DEGRADED
 - ML Scorer: healthy
 - Ollama: healthy
 - ELK cluster: green
-Action: Check TheHive LXC 200 on pitcrew
+Action: Check TheHive LXC 200 on pve-01
 ```
 
 **Interpretation block:**
@@ -988,19 +988,19 @@ Action: Check TheHive LXC 200 on pitcrew
 > - If all services show healthy and all agents are active, no notification is sent (silent success).
 > - Notifications only appear when something is wrong.
 > - **Agent disconnected:** The Wazuh agent on that host stopped reporting. SSH to the host and restart (Section 13.1).
-> - **ML Scorer / Ollama unhealthy:** The container or process is down. Restart per Section 13.4 or check Docker on brisket.
-> - **ELK cluster yellow/red:** Elasticsearch has shard issues. Check haccp per Section 13.3.
+> - **ML Scorer / Ollama unhealthy:** The container or process is down. Restart per Section 13.4 or check Docker on soc-01.
+> - **ELK cluster yellow/red:** Elasticsearch has shard issues. Check elk-01 per Section 13.3.
 > - Multiple consecutive WF9 alerts for the same service = the issue is persistent, not a momentary blip.
 ```
 
-**Note:** The exact WF9 behavior may differ from this template. The implementer should verify WF9's actual pipeline by checking the Shuffle workflow editor (https://10.10.20.30:3443 > Workflows > WF9) and adjust the documentation to match the real implementation.
+**Note:** The exact WF9 behavior may differ from this template. The implementer should verify WF9's actual pipeline by checking the Shuffle workflow editor (https://172.20.2.14:3443 > Workflows > WF9) and adjust the documentation to match the real implementation.
 
 - [ ] **Step 5: Mark decommissioned items in Section 10 and Section 12**
 
 In Section 10.6 (WF7 — Honeypot Intelligence Report), **replace** any existing "DECOMMISSIONED" or "decommissioned" text with the standardized callout block format:
 
 ```markdown
-> **DECOMMISSIONED** — Honeypot campaign ended 2026-03-12. GCP honeypot services stopped. Historical data preserved in ELK indices on haccp. This section is preserved for reference.
+> **DECOMMISSIONED** — Honeypot campaign ended 2026-03-12. GCP honeypot services stopped. Historical data preserved in ELK indices on elk-01. This section is preserved for reference.
 ```
 
 The existing playbook already marks WF7 as decommissioned (in the heading at line ~2765). Replace that inline note with the blockquote format above, placed immediately after the heading. Do NOT duplicate — remove the old decommissioned note and replace with the new blockquote.
@@ -1041,9 +1041,9 @@ For each of the 6 troubleshooting subsections (13.1-13.6), ensure every diagnost
 
 ```markdown
 > **Still not connecting after restart?**
-> - Check if the host can reach brisket: `ping 10.10.20.30` and `nc -zv 10.10.20.30 1514`
-> - Check Wazuh agent config: `cat /var/ossec/etc/ossec.conf | grep address` — should point to `10.10.20.30`
-> - Check firewall: OPNsense may be blocking the agent's VLAN from reaching VLAN 20. Verify OPNsense rules.
+> - Check if the host can reach soc-01: `ping 172.20.2.14` and `nc -zv 172.20.2.14 1514`
+> - Check Wazuh agent config: `cat /var/ossec/etc/ossec.conf | grep address` — should point to `172.20.2.14`
+> - Check firewall: OPNsense may be blocking the agent's VLAN from reaching VLAN 200. Verify OPNsense rules.
 > - Check disk space: `df -h` — if the host is at 100% disk, the agent cannot write logs and will fail to start.
 > - If the agent is on a VM/LXC, verify the VM is actually running in Proxmox.
 ```
@@ -1183,16 +1183,16 @@ Logon type sub-table:
 Common auth log patterns with what they mean:
 
 ```
-Pattern: "Accepted publickey for bchaplow from 10.10.10.100 port 54321 ssh2"
-Meaning: Successful SSH login with SSH key. Normal for PITBOSS → brisket.
+Pattern: "Accepted publickey for <user> from 172.20.1.12 port 54321 ssh2"
+Meaning: Successful SSH login with SSH key. Normal for ADMIN-WS → soc-01.
 
 Pattern: "Failed password for root from 203.0.113.50 port 22 ssh2"
 Meaning: Failed SSH password attempt. External IP = brute force attempt.
 
-Pattern: "pam_unix(sudo:session): session opened for user root by bchaplow(uid=1000)"
-Meaning: bchaplow ran a sudo command. Expected for SOC operations.
+Pattern: "pam_unix(sudo:session): session opened for user root by <user>(uid=1000)"
+Meaning: the admin user ran a sudo command. Expected for SOC operations.
 
-Pattern: "FAILED su for root by bchaplow"
+Pattern: "FAILED su for root by <user>"
 Meaning: Failed su (switch user) attempt. May be typo or unauthorized access attempt.
 ```
 
@@ -1203,20 +1203,20 @@ Common ports seen in Zeek/Suricata, mapped to services, with VLAN expectations:
 | Port | Protocol | Service | Expected On |
 |------|----------|---------|-------------|
 | 22 | TCP | SSH | All VLANs (management) |
-| 80 | TCP | HTTP | VLAN 40 targets, GCP VM |
-| 443 | TCP | HTTPS | brisket (Wazuh Dashboard, Shuffle), GCP VM |
-| 514 | UDP | Syslog | VLAN 10→20 (OPNsense → Wazuh) |
-| 1514/1515 | TCP | Wazuh agent | All agents → brisket |
-| 3000 | TCP | Grafana | brisket |
-| 3443 | TCP | Shuffle UI | brisket |
-| 5601 | TCP | Kibana / Wazuh Dashboard | haccp (HTTP), brisket (HTTPS) |
-| 8888 | TCP | Caldera | smoker |
-| 8889 | TCP | Velociraptor | brisket |
-| 9090 | TCP | Prometheus | brisket |
-| 9200 | TCP | Elasticsearch / OpenSearch | brisket (HTTPS), haccp (HTTPS) |
+| 80 | TCP | HTTP | VLAN 400 targets, GCP VM |
+| 443 | TCP | HTTPS | soc-01 (Wazuh Dashboard, Shuffle), GCP VM |
+| 514 | UDP | Syslog | VLAN 100→200 (OPNsense → Wazuh) |
+| 1514/1515 | TCP | Wazuh agent | All agents → soc-01 |
+| 3000 | TCP | Grafana | soc-01 |
+| 3443 | TCP | Shuffle UI | soc-01 |
+| 5601 | TCP | Kibana / Wazuh Dashboard | elk-01 (HTTP), soc-01 (HTTPS) |
+| 8888 | TCP | Caldera | pve-02 |
+| 8889 | TCP | Velociraptor | soc-01 |
+| 9090 | TCP | Prometheus | soc-01 |
+| 9200 | TCP | Elasticsearch / OpenSearch | soc-01 (HTTPS), elk-01 (HTTPS) |
 | ... | ... | ... | ... |
 
-Add note: "Traffic on unexpected ports for a VLAN should be investigated. For example, port 8888 traffic from VLAN 40 would be suspicious — Caldera should only reach VLAN 40 targets, not the reverse."
+Add note: "Traffic on unexpected ports for a VLAN should be investigated. For example, port 8888 traffic from VLAN 400 would be suspicious — Caldera should only reach VLAN 400 targets, not the reverse."
 
 - [ ] **Step 3: Write Table J (TheHive Severity / TLP / PAP)**
 
@@ -1284,7 +1284,7 @@ Detail the model's input features, output format, and interpretation:
 | Feature | Description | Impact on Score |
 |---------|-------------|----------------|
 | src_ip | Source IP (hashed internally) | Known-attack IPs score higher |
-| dst_ip | Destination IP | VLAN 40 targets score higher (expected attack targets) |
+| dst_ip | Destination IP | VLAN 400 targets score higher (expected attack targets) |
 | dst_port | Destination port | Unusual ports (not 80/443/22) score higher |
 | protocol | TCP/UDP/ICMP | TCP dominates training data |
 | rule_level | Wazuh rule level | Higher levels = higher score |

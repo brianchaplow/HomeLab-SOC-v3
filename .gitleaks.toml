@@ -14,6 +14,12 @@ description = "Tailscale CGNAT IP literal (100.64.0.0/10) -- admin-tier; do not 
 regex = '''\b100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.\d+\.\d+\b'''
 tags = ["tailscale", "privacy"]
 
+# The CGNAT network base itself (100.64.0.0/10) appears in range definitions,
+# e.g. the public-exposure test; real Tailscale host addresses are still flagged.
+[[rules.allowlists]]
+regexTarget = "match"
+regexes = ['''^100\.64\.0\.0$''']
+
 [[rules]]
 id = "multiline-openssh-private-key"
 description = "Multi-line OpenSSH private key block (closes the 2026-04-11 single-line-scrub blind spot that produced a 38-day public leak)"
@@ -23,7 +29,7 @@ tags = ["ssh", "key"]
 # Added 2026-08-05. Trigger: an outside account forked the three public repos,
 # prompting a full re-scan. Tailscale IPs were already covered by the rule above;
 # MAC addresses were not covered in ANY of the three configs, and that gap had
-# let haccp's real span0 NIC MAC sit public in the sibling homelab-fedramp-low
+# let elk-01's real span0 NIC MAC sit public in the sibling homelab-fedramp-low
 # repo. This repo and HomeLab-SOC scanned clean (zero MACs at HEAD and in full
 # history), so this rule is pure prevention here -- no allowlist is needed, and
 # any future hit is a REAL new leak.
@@ -34,7 +40,16 @@ regex = '''\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b'''
 tags = ["network", "privacy"]
 
 [allowlist]
-description = "Inert detection-rule regex patterns + self-reference"
+description = "Inert detection-rule regex patterns + self-reference + documentation placeholders"
+# Docs show credentials as angle-bracket placeholders, e.g.
+#   curl -u elastic:'<PLATFORM_PASSWORD>' ...   or   curl -u admin:'PASSWORD' ...
+# A matched secret containing such a placeholder is not a real credential.
+regexTarget = "secret"
+regexes = [
+    '''<[A-Z][A-Z0-9_]*>''',
+    # ...or the literal word, e.g. curl -u admin:'PASSWORD'
+    '''(^|:)'?PASSWORD'?$''',
+]
 paths = [
     '''\.gitleaks\.toml$''',
     '''\.pre-commit-config\.yaml$''',

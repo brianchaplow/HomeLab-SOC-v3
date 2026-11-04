@@ -12,14 +12,14 @@ from datetime import datetime, timezone
 STATE_FILE = os.path.expanduser("~/honeypot-wazuh-sync.state")
 BATCH_SIZE = 500
 
-# Wazuh Indexer on brisket (localhost)
+# Wazuh Indexer on soc-01 (localhost)
 WAZUH_HOST = os.environ.get("WAZUH_HOST", "https://127.0.0.1:9200")
 WAZUH_USER = os.environ.get("WAZUH_USER", "admin")
 WAZUH_PASS = os.environ.get("WAZUH_PASS", "YOUR_WAZUH_PASSWORD")
 
-# ELK on haccp bare metal (migrated from pitcrew LXC 201, March 2026)
+# ELK on elk-01 bare metal (migrated from pve-01 LXC 201, March 2026)
 # NOTE: Honeypot sync decommissioned 2026-03-12. Script retained for reference.
-ELK_HOST = os.environ.get("ELK_HOST", "https://10.10.30.25:9200")
+ELK_HOST = os.environ.get("ELK_HOST", "https://172.20.3.16:9200")
 ELK_USER = os.environ.get("ELK_USER", "elastic")
 ELK_PASS = os.environ.get("ELK_PASS", "YOUR_ELK_PASSWORD")
 

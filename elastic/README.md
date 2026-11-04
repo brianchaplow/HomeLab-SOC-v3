@@ -1,13 +1,13 @@
 # Elastic Stack
 
-Elasticsearch 8.17, Kibana, Fleet Server, and Logstash deployed as a Docker stack on **haccp** bare metal (10.10.30.25). Migrated from pitcrew LXC 201 in March 2026. Serves as the detection engine, honeypot research archive, and packet capture platform for the HomeLab SOC. Arkime v6.0.1 runs on the same host for full packet capture and session analysis.
+Elasticsearch 8.17, Kibana, Fleet Server, and Logstash deployed as a Docker stack on **elk-01** bare metal (172.20.3.16). Migrated from pve-01 LXC 201 in March 2026. Serves as the detection engine, honeypot research archive, and packet capture platform for the HomeLab SOC. Arkime v6.0.1 runs on the same host for full packet capture and session analysis.
 
 ## Deployment
 
-The stack runs on haccp bare metal (32 GB RAM, 12 GB ES heap) using Docker Compose at `/opt/elk/docker-compose.yml`. Tailscale provides overlay connectivity for log ingestion from the GCP VM. ELK containers on haccp do not auto-start on reboot and must be brought up manually:
+The stack runs on elk-01 bare metal (32 GB RAM, 12 GB ES heap) using Docker Compose at `/opt/elk/docker-compose.yml`. Tailscale provides overlay connectivity for log ingestion from the GCP VM. ELK containers on elk-01 do not auto-start on reboot and must be brought up manually:
 
 ```bash
-ssh bchaplow@10.10.30.25 'cd /opt/elk && docker compose up -d'
+ssh <user>@172.20.3.16 'cd /opt/elk && docker compose up -d'
 ```
 
 ## Detection Rules
@@ -22,13 +22,13 @@ Rule categories span MITRE ATT&CK tactics including Initial Access, Execution, P
 
 ## Fleet Agent Policies
 
-Four Fleet agent policies manage endpoint telemetry collection across the SOC. Fleet Server and all agents connect to haccp (10.10.30.25):
+Four Fleet agent policies manage endpoint telemetry collection across the SOC. Fleet Server and all agents connect to elk-01 (172.20.3.16):
 
 | Policy | Purpose |
 |--------|---------|
-| SOC Endpoints | Core SOC infrastructure (brisket, sear) |
+| SOC Endpoints | Core SOC infrastructure (soc-01, attack-01) |
 | Windows Endpoints | Active Directory lab machines (DC01, WS01) |
-| Sensors | Network sensors (smokehouse) |
+| Sensors | Network sensors (sensor-01) |
 | Fleet Server | Self-monitoring policy for the Fleet Server |
 
 Policy definitions are exported in [`fleet-policies/agent-policies.json`](fleet-policies/agent-policies.json).

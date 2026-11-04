@@ -1,7 +1,7 @@
 #!/bin/bash
-# Trigger WF-HACCP-3 (Nightly Wazuh Cross-Correlator) via Shuffle API
-# Called by bchaplow crontab at 0200 ET nightly
-# No Ollama calls; queries brisket OpenSearch + haccp ES, correlates on IP
+# Trigger WF-ELK-3 (Nightly Wazuh Cross-Correlator) via Shuffle API
+# Called by the service user crontab at 0200 ET nightly
+# No Ollama calls; queries soc-01 OpenSearch + elk-01 ES, correlates on IP
 
 SHUFFLE_API="http://localhost:5001"
 API_KEY="YOUR_SHUFFLE_API_KEY"
@@ -17,4 +17,4 @@ RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST \
 HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_CODE:" | cut -d: -f2)
 BODY=$(echo "$RESPONSE" | grep -v "HTTP_CODE:")
 
-echo "$(date -u '+%Y-%m-%d %H:%M:%S UTC') | WF-HACCP-3 | HTTP ${HTTP_CODE} | ${BODY}"
+echo "$(date -u '+%Y-%m-%d %H:%M:%S UTC') | WF-ELK-3 | HTTP ${HTTP_CODE} | ${BODY}"

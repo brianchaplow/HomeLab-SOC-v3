@@ -407,7 +407,7 @@
       "description": "ELK Elasticsearch URL",
       "id": "c4d8e4af-94b0-46dc-b509-2f83ef97f361",
       "name": "elk_url",
-      "value": "https://10.10.30.25:9200"
+      "value": "https://172.20.3.16:9200"
     },
     {
       "description": "ELK username",

@@ -1,5 +1,5 @@
 # HomeLab SOC Stack - Docker Compose (v2)
-# Originally deployed on QNAP NAS (smokehouse)
+# Originally deployed on QNAP NAS (sensor-01)
 #
 # IMPORTANT: Before running, ensure you've created a .env file with:
 #   OPENSEARCH_INITIAL_ADMIN_PASSWORD=YourPasswordHere

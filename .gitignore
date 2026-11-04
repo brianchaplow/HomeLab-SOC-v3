@@ -54,3 +54,11 @@ CLAUDE.md
 docs/guides/soc-playbook.html
 docs/guides/soc-playbook.pdf
 docs/guides/build-playbook.py
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Real network values for tools/render_local_values.py (never commit)
+network.local.json

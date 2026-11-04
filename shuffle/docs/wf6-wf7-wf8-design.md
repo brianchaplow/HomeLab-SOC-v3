@@ -10,7 +10,7 @@ Three new Shuffle SOAR workflows extending the SOC platform with AI/ML-powered a
 
 ## Suite Schedule
 
-All triggered via system cron on brisket (same proven pattern as WF2/WF5).
+All triggered via system cron on soc-01 (same proven pattern as WF2/WF5).
 
 | Workflow | Cadence | Schedule (EST) | Cron (UTC) | Purpose |
 |----------|---------|---------------|------------|---------|
@@ -31,10 +31,10 @@ Minimum 3-hour gap between Ollama-heavy runs. No contention risk.
 ## Shared Infrastructure
 
 - All use workflow variables (`$opensearch_url`, `$ollama_url`, etc.) per established convention
-- New shared variables: `$elk_url` (https://10.10.30.25:9200 on haccp), `$elk_user`, `$elk_pass` for writing to ELK indices
+- New shared variables: `$elk_url` (https://172.20.3.16:9200 on elk-01), `$elk_user`, `$elk_pass` for writing to ELK indices
 - New ELK indices: `ml-drift`, `honeypot-intel`, `log-anomalies`
 - All post to `$discord_webhook`
-- All triggered via system cron on brisket with trigger scripts in `/home/bchaplow/`
+- All triggered via system cron on soc-01 with trigger scripts in `~/`
 
 ## Output Strategy
 
@@ -112,7 +112,7 @@ Discord for immediate notification, ELK for structured historical data enabling 
 
 **Goal:** Hunt the long tail of rare, unusual log patterns that never trigger enough volume for attention but might be genuinely interesting. Complement to WF5 which covers the noisiest clusters.
 
-**Architecture note (2026-02-20):** Candidates are split into internal network (PITBOSS, DC01, WS01, smokehouse, sear) and honeypot (gcp-vm) groups. Each group gets a tailored Ollama system prompt and its own Discord channel, preventing honeypot SSH brute force noise from drowning internal findings.
+**Architecture note (2026-02-20):** Candidates are split into internal network (ADMIN-WS, DC01, WS01, sensor-01, attack-01) and honeypot (gcp-vm) groups. Each group gets a tailored Ollama system prompt and its own Discord channel, preventing honeypot SSH brute force noise from drowning internal findings.
 
 ```
 query_rare_patterns -> classify_anomalies -> write_elk -> discord_internal (unconditional)
@@ -124,7 +124,7 @@ query_rare_patterns -> classify_anomalies -> write_elk -> discord_internal (unco
 **1. `query_rare_patterns`** (execute_python)
 - Query OpenSearch for last 24h, targeting the unusual:
   - **Rare rules:** Bottom 20 rules by count (fired 1-5 times)
-  - **Off-hours:** Alerts 0100-0500 EST on non-server agents (PITBOSS, WS01, DC01)
+  - **Off-hours:** Alerts 0100-0500 EST on non-server agents (ADMIN-WS, WS01, DC01)
   - **New rules:** Rules that fired today with zero hits in prior 7 days
 - Pull sample alert with full `_source` for each candidate
 - Cap at 15 candidates total
@@ -132,7 +132,7 @@ query_rare_patterns -> classify_anomalies -> write_elk -> discord_internal (unco
 
 **2. `classify_anomalies`** (execute_python)
 - Two sequential Ollama calls with different system prompts:
-  - **Internal prompt:** SOC analyst context — smokehouse SPAN noise, PITBOSS WiFi/T1092, AD lab VMs. Focus on lateral movement, privilege escalation, persistence.
+  - **Internal prompt:** SOC analyst context — sensor-01 SPAN noise, ADMIN-WS WiFi/T1092, AD lab VMs. Focus on lateral movement, privilege escalation, persistence.
   - **Honeypot prompt:** Internet-facing WordPress honeypot context — SSH brute force and scanning are EXPECTED baseline (classify as TRANSIENT). Only flag ANOMALOUS for novel TTPs, post-auth activity, web shells, or targeted enumeration.
 - Classification categories: `ANOMALOUS`, `MISCONFIG`, `TRANSIENT`, `BLIND_SPOT`
 - Builds separate Discord reports for each group

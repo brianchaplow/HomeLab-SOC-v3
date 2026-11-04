@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Trim redundant tooling (v2 metrics stack), deploy haccp as bare-metal ELK + Arkime PCAP node, add OpenCTI threat intelligence platform on pitcrew, establish Sigma/YARA operational practices, and re-enable Cloudflare auto-blocking.
+**Goal:** Trim redundant tooling (v2 metrics stack), deploy elk-01 as bare-metal ELK + Arkime PCAP node, add OpenCTI threat intelligence platform on pve-01, establish Sigma/YARA operational practices, and re-enable Cloudflare auto-blocking.
 
-**Architecture:** Five phases executed during rack migration downtime. Phase A (cleanup) can run now. Phase B (haccp standup) requires Computrace clearance + physical access. Phases C-E build sequentially on prior phases. No seamless cutover needed — personal SOC with no active campaigns.
+**Architecture:** Five phases executed during rack migration downtime. Phase A (cleanup) can run now. Phase B (elk-01 standup) requires Computrace clearance + physical access. Phases C-E build sequentially on prior phases. No seamless cutover needed — personal SOC with no active campaigns.
 
 **Tech Stack:** Ubuntu 24.04, Docker Compose, Elasticsearch 8.17, Kibana, Fleet Server, Logstash, Arkime, OpenCTI, NVIDIA driver, Tailscale, Wazuh, Velociraptor, Shuffle SOAR, Prometheus, Sigma, YARA
 
@@ -12,19 +12,19 @@
 
 ---
 
-## Chunk 1: Phase A — Pre-haccp Cleanup (Can Do Now)
+## Chunk 1: Phase A — Pre-elk-01 Cleanup (Can Do Now)
 
 > **Note:** Tasks 1-5 are independent and can be executed in any order or in parallel.
 
 ### Task 1: Re-enable Cloudflare Auto-Block in Shuffle WF1
 
-**Context:** WF1 on brisket has a `HONEYPOT_DISABLED` branch condition that bypasses Cloudflare IP blocking. The honeypot campaign ended 2026-03-12. Re-enable auto-blocking.
+**Context:** WF1 on soc-01 has a `HONEYPOT_DISABLED` branch condition that bypasses Cloudflare IP blocking. The honeypot campaign ended 2026-03-12. Re-enable auto-blocking.
 
-**Where:** Shuffle UI at `https://10.10.20.30:3443` → Workflows → WF1
+**Where:** Shuffle UI at `https://172.20.2.14:3443` → Workflows → WF1
 
 - [ ] **Step 1: Open WF1 in Shuffle UI**
 
-Navigate to `https://10.10.20.30:3443`, login (admin / see credentials), open WF1 (enrichment + block + dedup workflow).
+Navigate to `https://172.20.2.14:3443`, login (admin / see credentials), open WF1 (enrichment + block + dedup workflow).
 
 - [ ] **Step 2: Find and remove the HONEYPOT_DISABLED branch condition**
 
@@ -42,14 +42,14 @@ Save the workflow. Trigger a test execution (manual or via webhook) and verify t
 
 Confirm the Discord notification from WF1 includes blocking information (not skipped).
 
-### Task 2: Prune Dead Containers on brisket
+### Task 2: Prune Dead Containers on soc-01
 
-**Context:** 6 exited Shuffle worker containers on brisket are consuming disk space.
+**Context:** 6 exited Shuffle worker containers on soc-01 are consuming disk space.
 
-- [ ] **Step 1: SSH to brisket and list dead containers**
+- [ ] **Step 1: SSH to soc-01 and list dead containers**
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@172.20.2.14
 docker ps -a --filter "status=exited" --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
 ```
 
@@ -71,14 +71,14 @@ docker ps -a --format "table {{.Names}}\t{{.Status}}" | sort
 
 Expected: All remaining containers show `Up` status. No exited containers. Active containers: wazuh stack (3), shuffle stack (4), velociraptor, ml-scorer, grafana, prometheus, capitol-signals, tenzir-node.
 
-### Task 3: Decommission v2 Metrics Stack on smokehouse
+### Task 3: Decommission v2 Metrics Stack on sensor-01
 
-**Context:** InfluxDB v2, Grafana, and Telegraf containers on smokehouse served the honeypot campaign and legacy Proxmox metrics. Campaign is over, Prometheus/Grafana on brisket covers metrics. Decommission all three.
+**Context:** InfluxDB v2, Grafana, and Telegraf containers on sensor-01 served the honeypot campaign and legacy Proxmox metrics. Campaign is over, Prometheus/Grafana on soc-01 covers metrics. Decommission all three.
 
-- [ ] **Step 1: SSH to smokehouse and list metrics containers**
+- [ ] **Step 1: SSH to sensor-01 and list metrics containers**
 
 ```bash
-ssh -p 2222 bchaplow@10.10.20.10
+ssh -p 2222 <user>@172.20.2.11
 /share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(influx|grafana|telegraf)"
 ```
 
@@ -104,22 +104,22 @@ Expected: `influxdb`, `grafana`, `telegraf` all showing `Up`.
 
 Expected: Only `elastic-agent`, `fluent-bit-zeek`, `wazuh-agent`, `zeek`, `suricata-live` remain running.
 
-- [ ] **Step 5: Verify brisket Prometheus still scrapes smokehouse node-exporter**
+- [ ] **Step 5: Verify soc-01 Prometheus still scrapes sensor-01 node-exporter**
 
 ```bash
-ssh bchaplow@10.10.20.30 "curl -s http://localhost:9090/api/v1/targets | python3 -c \"import sys,json; targets=json.load(sys.stdin)['data']['activeTargets']; [print(t['scrapeUrl'], t['health']) for t in targets]\""
+ssh <user>@172.20.2.14 "curl -s http://localhost:9090/api/v1/targets | python3 -c \"import sys,json; targets=json.load(sys.stdin)['data']['activeTargets']; [print(t['scrapeUrl'], t['health']) for t in targets]\""
 ```
 
-Expected: All targets show `up`, including smokehouse (if it has a node-exporter). The decommissioned services should NOT affect Prometheus scraping.
+Expected: All targets show `up`, including sensor-01 (if it has a node-exporter). The decommissioned services should NOT affect Prometheus scraping.
 
-### Task 4: Decommission Telegraf on pitcrew
+### Task 4: Decommission Telegraf on pve-01
 
-**Context:** Telegraf on pitcrew ships Proxmox metrics to smokehouse InfluxDB (now decommissioned). Remove it entirely.
+**Context:** Telegraf on pve-01 ships Proxmox metrics to sensor-01 InfluxDB (now decommissioned). Remove it entirely.
 
-- [ ] **Step 1: SSH to pitcrew and stop Telegraf**
+- [ ] **Step 1: SSH to pve-01 and stop Telegraf**
 
 ```bash
-ssh root@10.10.30.20
+ssh root@172.20.3.11
 systemctl stop telegraf
 systemctl disable telegraf
 ```
@@ -150,14 +150,14 @@ systemctl status telegraf
 
 Expected: `Unit telegraf.service could not be found.`
 
-### Task 5: Decommission Telegraf on smoker
+### Task 5: Decommission Telegraf on pve-02
 
-**Context:** Same as pitcrew — Telegraf ships to now-dead InfluxDB.
+**Context:** Same as pve-01 — Telegraf ships to now-dead InfluxDB.
 
-- [ ] **Step 1: SSH to smoker and stop Telegraf**
+- [ ] **Step 1: SSH to pve-02 and stop Telegraf**
 
 ```bash
-ssh root@10.10.30.21
+ssh root@172.20.3.12
 systemctl stop telegraf
 systemctl disable telegraf
 ```
@@ -168,7 +168,7 @@ systemctl disable telegraf
 apt remove --purge telegraf -y
 ```
 
-Note: smoker does not have an influxdata apt repo in `/etc/apt/sources.list.d/` (it uses tailscale, wazuh, and pve-no-subscription repos). No repo cleanup needed.
+Note: pve-02 does not have an influxdata apt repo in `/etc/apt/sources.list.d/` (it uses tailscale, wazuh, and pve-no-subscription repos). No repo cleanup needed.
 
 - [ ] **Step 3: Verify clean**
 
@@ -188,7 +188,7 @@ Expected: No errors. No InfluxData repo references.
 
 ---
 
-## Chunk 2: Phase B — haccp Standup (After Computrace Clears)
+## Chunk 2: Phase B — elk-01 Standup (After Computrace Clears)
 
 > **Hardware pre-requisites with lead time:**
 > - 2x 10GBase-T SFP+ RJ45 transceivers (order before Phase B — needed for Task 10)
@@ -197,16 +197,16 @@ Expected: No errors. No InfluxData repo references.
 >
 > Tasks 6-9 (OS, network, Docker, ELK) can proceed without the SFP+ transceivers. Task 10 (Arkime SPAN capture) requires the hardware.
 
-### Task 6: Install Ubuntu 24.04 on haccp (Physical Access Required)
+### Task 6: Install Ubuntu 24.04 on elk-01 (Physical Access Required)
 
-**Context:** haccp is a ThinkStation P340 Tiny with 2TB WD SN720 NVMe + 1TB Vansuny NVMe. Currently on VLAN 20 (10.10.20.25) for Computrace deactivation. Will move to VLAN 30 (10.10.30.25).
+**Context:** elk-01 is a ThinkStation P340 Tiny with 2TB WD SN720 NVMe + 1TB Vansuny NVMe. Currently on VLAN 200 (172.20.2.13) for Computrace deactivation. Will move to VLAN 300 (172.20.3.16).
 
 **Prerequisites:** Computrace cleared. Ubuntu 24.04 Server ISO on USB stick.
 
 - [ ] **Step 1: Boot from USB installer**
 
-- Hostname: `haccp`
-- User: `bchaplow`
+- Hostname: `elk-01`
+- User: `<user>` (non-root admin account)
 - During partitioning: install on the **2TB WD SN720** as `/`, ext4, full disk, no LVM
 - Do NOT partition the 1TB Vansuny during install
 - Install OpenSSH server
@@ -247,15 +247,15 @@ Expected: 2TB mounted at `/`, 1TB mounted at `/opt/arkime/raw`.
 
 ### Task 7: Network Configuration
 
-**Context:** Change haccp from temporary VLAN 20 to permanent VLAN 30.
+**Context:** Change elk-01 from temporary VLAN 200 to permanent VLAN 300.
 
 - [ ] **Step 1: Change TE8 VLAN on MokerLink**
 
-Login to MokerLink switch web UI at `10.10.10.2`. Navigate to VLAN settings for port TE8. Change PVID from VLAN 20 to VLAN 30.
+Login to MokerLink switch web UI at `172.20.1.11`. Navigate to VLAN settings for port TE8. Change PVID from VLAN 200 to VLAN 300.
 
-- [ ] **Step 2: Configure static IP on haccp**
+- [ ] **Step 2: Configure static IP on elk-01**
 
-Edit netplan config on haccp:
+Edit netplan config on elk-01:
 
 ```bash
 sudo nano /etc/netplan/01-netcfg.yaml
@@ -268,12 +268,12 @@ network:
     # Identify the onboard NIC name with `ip link show`
     enp0s31f6:  # adjust if different
       addresses:
-        - 10.10.30.25/24
+        - 172.20.3.16/24
       routes:
         - to: default
-          via: 10.10.30.1
+          via: 172.20.3.1
       nameservers:
-        addresses: [10.10.10.1, 8.8.8.8]
+        addresses: [172.20.1.1, 8.8.8.8]
 ```
 
 ```bash
@@ -283,14 +283,14 @@ sudo netplan apply
 - [ ] **Step 3: Verify connectivity**
 
 ```bash
-# From haccp
-ping -c 3 10.10.30.1        # OPNsense VLAN 30 gateway
-ping -c 3 10.10.20.30       # brisket (cross-VLAN)
-ping -c 3 10.10.30.20       # pitcrew (same VLAN)
+# From elk-01
+ping -c 3 172.20.3.1        # OPNsense VLAN 300 gateway
+ping -c 3 172.20.2.14       # soc-01 (cross-VLAN)
+ping -c 3 172.20.3.11       # pve-01 (same VLAN)
 ping -c 3 8.8.8.8           # internet
 ```
 
-All should succeed. If cross-VLAN fails, check OPNsense rules (should work — same rules that LXC 201 at 10.10.30.23 uses).
+All should succeed. If cross-VLAN fails, check OPNsense rules (should work — same rules that LXC 201 at 172.20.3.14 uses).
 
 ### Task 8: Install Docker and NVIDIA Driver
 
@@ -302,7 +302,7 @@ sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list
 sudo apt update && sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-sudo usermod -aG docker bchaplow
+sudo usermod -aG docker "$USER"
 ```
 
 Log out and back in for group change.
@@ -349,7 +349,7 @@ cd /opt/elk
 Create `/opt/elk/docker-compose.yml`. Reference the existing compose file on LXC 201 for the exact image versions and configuration patterns:
 
 ```bash
-ssh root@10.10.30.20 "pct exec 201 -- cat /opt/elk/docker-compose.yml" > /tmp/elk-reference.yml
+ssh root@172.20.3.11 "pct exec 201 -- cat /opt/elk/docker-compose.yml" > /tmp/elk-reference.yml
 ```
 
 Key configuration points:
@@ -368,7 +368,7 @@ Key configuration points:
 cat > /opt/elk/.env << 'EOF'
 ELASTIC_PASSWORD=<PLATFORM_PASSWORD>
 KIBANA_PASSWORD=<PLATFORM_PASSWORD>
-CLUSTER_NAME=haccp-elk
+CLUSTER_NAME=elk-01-elk
 LICENSE=basic
 ES_PORT=9200
 KIBANA_PORT=5601
@@ -403,7 +403,7 @@ Expected: All containers running. ES shows `healthy`.
 curl -k -u elastic:<PLATFORM_PASSWORD> https://localhost:9200
 ```
 
-Expected: JSON response with cluster name `haccp-elk`, version `8.17.0`.
+Expected: JSON response with cluster name `elk-01-elk`, version `8.17.0`.
 
 ```bash
 curl -s http://localhost:5601/api/status | python3 -c "import sys,json; print(json.load(sys.stdin)['status']['overall']['level'])"
@@ -419,9 +419,9 @@ Expected: `available`
 
 - [ ] **Step 1: Install SFP+ transceiver and configure mirror session**
 
-Physical: Insert 10GBase-T SFP+ RJ45 transceiver into MokerLink TE11. Connect ethernet cable from haccp USB 2.5GbE adapter to the transceiver.
+Physical: Insert 10GBase-T SFP+ RJ45 transceiver into MokerLink TE11. Connect ethernet cable from elk-01 USB 2.5GbE adapter to the transceiver.
 
-On MokerLink switch web UI (`10.10.10.2`):
+On MokerLink switch web UI (`172.20.1.11`):
 
 ```
 mirror session 2 source interface te1-te9 both
@@ -559,28 +559,28 @@ sudo apt update && sudo apt install -y wazuh-agent
 Configure manager IP:
 
 ```bash
-sudo sed -i 's/MANAGER_IP/10.10.20.30/' /var/ossec/etc/ossec.conf
+sudo sed -i 's/MANAGER_IP/172.20.2.14/' /var/ossec/etc/ossec.conf
 sudo systemctl enable wazuh-agent
 sudo systemctl start wazuh-agent
 ```
 
-Verify on brisket:
+Verify on soc-01:
 
 ```bash
-ssh bchaplow@10.10.20.30 "sudo /var/ossec/bin/agent_control -l" | grep haccp
+ssh <user>@172.20.2.14 "sudo /var/ossec/bin/agent_control -l" | grep elk-01
 ```
 
 - [ ] **Step 2: Install Velociraptor client**
 
-Download the client package from brisket. The Velociraptor server stores client installers that can be downloaded from the GUI or copied from an existing enrolled Linux host:
+Download the client package from soc-01. The Velociraptor server stores client installers that can be downloaded from the GUI or copied from an existing enrolled Linux host:
 
 ```bash
-# Option 1: Copy the client config from an existing enrolled Linux host (e.g., pitcrew)
-ssh root@10.10.30.20 "cat /etc/velociraptor/client.config.yaml" > /tmp/client.config.yaml
-scp /tmp/client.config.yaml bchaplow@10.10.30.25:/tmp/
+# Option 1: Copy the client config from an existing enrolled Linux host (e.g., pve-01)
+ssh root@172.20.3.11 "cat /etc/velociraptor/client.config.yaml" > /tmp/client.config.yaml
+scp /tmp/client.config.yaml <user>@172.20.3.16:/tmp/
 
-# On haccp — install the Velociraptor client package
-# Download the matching version from GitHub releases (check brisket version: v0.75.3)
+# On elk-01 — install the Velociraptor client package
+# Download the matching version from GitHub releases (check soc-01 version: v0.75.3)
 wget https://github.com/Velocidex/velociraptor/releases/download/v0.75.3/velociraptor_0.75.3_linux_amd64.deb
 sudo dpkg -i velociraptor_0.75.3_linux_amd64.deb
 sudo cp /tmp/client.config.yaml /etc/velociraptor/client.config.yaml
@@ -588,7 +588,7 @@ sudo systemctl enable velociraptor-client
 sudo systemctl start velociraptor-client
 ```
 
-Verify enrollment in Velociraptor GUI — should show haccp as a new client.
+Verify enrollment in Velociraptor GUI — should show elk-01 as a new client.
 
 - [ ] **Step 3: Install Tailscale**
 
@@ -603,9 +603,9 @@ Authenticate via the URL provided. Verify:
 tailscale status
 ```
 
-Expected: haccp appears in the Tailscale mesh with a 100.x.x.x address.
+Expected: elk-01 appears in the Tailscale mesh with a 100.x.x.x address.
 
-**Record haccp's Tailscale IP** — you'll need it in Task 16 when repointing GCP Fluent Bit.
+**Record elk-01's Tailscale IP** — you'll need it in Task 16 when repointing GCP Fluent Bit.
 
 - [ ] **Step 4: Install Prometheus node-exporter**
 
@@ -620,22 +620,22 @@ Verify:
 curl -s http://localhost:9100/metrics | head -5
 ```
 
-- [ ] **Step 5: Add haccp to Prometheus scrape targets on brisket**
+- [ ] **Step 5: Add elk-01 to Prometheus scrape targets on soc-01**
 
-SSH to brisket and edit the Prometheus config:
+SSH to soc-01 and edit the Prometheus config:
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@172.20.2.14
 # Find Prometheus config — likely in a Docker volume or bind mount
 docker inspect prometheus --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}'
 ```
 
-Add haccp to the scrape targets:
+Add elk-01 to the scrape targets:
 
 ```yaml
-- targets: ['10.10.30.25:9100']
+- targets: ['172.20.3.16:9100']
   labels:
-    instance: 'haccp'
+    instance: 'elk-01'
 ```
 
 Reload Prometheus:
@@ -645,19 +645,19 @@ docker exec prometheus kill -SIGHUP 1
 # Or: curl -X POST http://localhost:9090/-/reload
 ```
 
-Verify at `http://10.10.20.30:9090/targets` — haccp should show `UP`.
+Verify at `http://172.20.2.14:9090/targets` — elk-01 should show `UP`.
 
 ### Task 12: Set Up PCAP Archival Cron
 
-- [ ] **Step 1: Create the archival script on haccp**
+- [ ] **Step 1: Create the archival script on elk-01**
 
 ```bash
 sudo cat > /opt/arkime/pcap-archive.sh << 'SCRIPT'
 #!/bin/bash
-# Archive Arkime PCAPs to smokehouse NFS before auto-expiry
+# Archive Arkime PCAPs to sensor-01 NFS before auto-expiry
 # Runs weekly via cron. Uses tar + zstd compression per spec.
 
-ARCHIVE_DIR="/mnt/smokehouse-nfs/pcap-archive"
+ARCHIVE_DIR="/mnt/sensor-01-nfs/pcap-archive"
 PCAP_DIR="/opt/arkime/raw"
 DATE=$(date +%Y-%m-%d)
 ARCHIVE_FILE="${ARCHIVE_DIR}/pcap-${DATE}.tar.zst"
@@ -682,22 +682,22 @@ Install zstd if not present:
 sudo apt install -y zstd
 ```
 
-- [ ] **Step 2: Mount smokehouse NFS share**
+- [ ] **Step 2: Mount sensor-01 NFS share**
 
 ```bash
 sudo apt install -y nfs-common
-sudo mkdir -p /mnt/smokehouse-nfs
-# Verify actual NFS export path on smokehouse first:
-# ssh -p 2222 bchaplow@10.10.20.10 "showmount -e localhost" or check QNAP Shared Folders
-echo "10.10.20.10:/share/SOC /mnt/smokehouse-nfs nfs defaults,noatime 0 0" | sudo tee -a /etc/fstab
+sudo mkdir -p /mnt/sensor-01-nfs
+# Verify actual NFS export path on sensor-01 first:
+# ssh -p 2222 <user>@172.20.2.11 "showmount -e localhost" or check QNAP Shared Folders
+echo "172.20.2.11:/share/SOC /mnt/sensor-01-nfs nfs defaults,noatime 0 0" | sudo tee -a /etc/fstab
 sudo mount -a
-ls /mnt/smokehouse-nfs/
+ls /mnt/sensor-01-nfs/
 ```
 
 Expected: NFS share contents visible.
 
 ```bash
-sudo mkdir -p /mnt/smokehouse-nfs/pcap-archive
+sudo mkdir -p /mnt/sensor-01-nfs/pcap-archive
 ```
 
 - [ ] **Step 3: Add weekly cron**
@@ -709,7 +709,7 @@ sudo crontab -e
 Add:
 
 ```
-# PCAP archival to smokehouse - Sunday 03:00 UTC
+# PCAP archival to sensor-01 - Sunday 03:00 UTC
 0 3 * * 0 /opt/arkime/pcap-archive.sh
 ```
 
@@ -719,51 +719,51 @@ Add:
 
 ### Task 13: Export from LXC 201
 
-**Context:** Export all Kibana saved objects, detection rules, Fleet policies, and dashboards from the existing ELK on pitcrew LXC 201 before migrating to haccp.
+**Context:** Export all Kibana saved objects, detection rules, Fleet policies, and dashboards from the existing ELK on pve-01 LXC 201 before migrating to elk-01.
 
 - [ ] **Step 1: Export Kibana saved objects**
 
 ```bash
-ssh root@10.10.30.20 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_PASSWORD> https://localhost:5601/api/saved_objects/_export -H \"kbn-xsrf: true\" -H \"Content-Type: application/json\" -d \"{\\\"type\\\": [\\\"dashboard\\\", \\\"visualization\\\", \\\"index-pattern\\\", \\\"search\\\", \\\"lens\\\", \\\"map\\\"], \\\"includeReferencesDeep\\\": true}\" > /tmp/kibana-export.ndjson'"
+ssh root@172.20.3.11 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_PASSWORD> https://localhost:5601/api/saved_objects/_export -H \"kbn-xsrf: true\" -H \"Content-Type: application/json\" -d \"{\\\"type\\\": [\\\"dashboard\\\", \\\"visualization\\\", \\\"index-pattern\\\", \\\"search\\\", \\\"lens\\\", \\\"map\\\"], \\\"includeReferencesDeep\\\": true}\" > /tmp/kibana-export.ndjson'"
 ```
 
-Copy to PITBOSS or haccp:
+Copy to ADMIN-WS or elk-01:
 
 ```bash
-ssh root@10.10.30.20 "pct pull 201 /tmp/kibana-export.ndjson /tmp/kibana-export.ndjson"
-scp root@10.10.30.20:/tmp/kibana-export.ndjson /tmp/
+ssh root@172.20.3.11 "pct pull 201 /tmp/kibana-export.ndjson /tmp/kibana-export.ndjson"
+scp root@172.20.3.11:/tmp/kibana-export.ndjson /tmp/
 ```
 
 - [ ] **Step 2: Export Elastic detection rules**
 
 ```bash
-ssh root@10.10.30.20 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_PASSWORD> https://localhost:5601/api/detection_engine/rules/_export -H \"kbn-xsrf: true\" > /tmp/detection-rules.ndjson'"
-scp root@10.10.30.20:/tmp/detection-rules.ndjson /tmp/
+ssh root@172.20.3.11 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_PASSWORD> https://localhost:5601/api/detection_engine/rules/_export -H \"kbn-xsrf: true\" > /tmp/detection-rules.ndjson'"
+scp root@172.20.3.11:/tmp/detection-rules.ndjson /tmp/
 ```
 
 - [ ] **Step 3: Snapshot honeypot indices for reference**
 
 ```bash
-ssh root@10.10.30.20 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_PASSWORD> -X PUT https://localhost:9200/_snapshot/local_backup -H \"Content-Type: application/json\" -d \"{\\\"type\\\": \\\"fs\\\", \\\"settings\\\": {\\\"location\\\": \\\"/tmp/es-snapshots\\\"}}'"
+ssh root@172.20.3.11 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_PASSWORD> -X PUT https://localhost:9200/_snapshot/local_backup -H \"Content-Type: application/json\" -d \"{\\\"type\\\": \\\"fs\\\", \\\"settings\\\": {\\\"location\\\": \\\"/tmp/es-snapshots\\\"}}'"
 
-ssh root@10.10.30.20 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_PASSWORD> -X PUT \"https://localhost:9200/_snapshot/local_backup/honeypot-final?wait_for_completion=true\" -H \"Content-Type: application/json\" -d \"{\\\"indices\\\": \\\"honeypot-*,apache-parsed-v2\\\"}'"
+ssh root@172.20.3.11 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_PASSWORD> -X PUT \"https://localhost:9200/_snapshot/local_backup/honeypot-final?wait_for_completion=true\" -H \"Content-Type: application/json\" -d \"{\\\"indices\\\": \\\"honeypot-*,apache-parsed-v2\\\"}'"
 ```
 
 - [ ] **Step 4: Document Fleet agent enrollment tokens and policies**
 
 ```bash
-ssh root@10.10.30.20 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_PASSWORD> https://localhost:5601/api/fleet/enrollment_api_keys -H \"kbn-xsrf: true\"'" | python3 -m json.tool > /tmp/fleet-enrollment-keys.json
+ssh root@172.20.3.11 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_PASSWORD> https://localhost:5601/api/fleet/enrollment_api_keys -H \"kbn-xsrf: true\"'" | python3 -m json.tool > /tmp/fleet-enrollment-keys.json
 
-ssh root@10.10.30.20 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_PASSWORD> https://localhost:5601/api/fleet/agent_policies -H \"kbn-xsrf: true\"'" | python3 -m json.tool > /tmp/fleet-policies.json
+ssh root@172.20.3.11 "pct exec 201 -- bash -c 'curl -s -k -u elastic:<PLATFORM_PASSWORD> https://localhost:5601/api/fleet/agent_policies -H \"kbn-xsrf: true\"'" | python3 -m json.tool > /tmp/fleet-policies.json
 ```
 
-### Task 14: Import to haccp ELK
+### Task 14: Import to elk-01 ELK
 
 - [ ] **Step 1: Import Kibana saved objects**
 
 ```bash
-scp /tmp/kibana-export.ndjson bchaplow@10.10.30.25:/tmp/
-ssh bchaplow@10.10.30.25 "curl -s -k -u elastic:<PLATFORM_PASSWORD> -X POST https://localhost:5601/api/saved_objects/_import?overwrite=true -H 'kbn-xsrf: true' -F file=@/tmp/kibana-export.ndjson"
+scp /tmp/kibana-export.ndjson <user>@172.20.3.16:/tmp/
+ssh <user>@172.20.3.16 "curl -s -k -u elastic:<PLATFORM_PASSWORD> -X POST https://localhost:5601/api/saved_objects/_import?overwrite=true -H 'kbn-xsrf: true' -F file=@/tmp/kibana-export.ndjson"
 ```
 
 Expected: JSON response with `success: true` and count of imported objects.
@@ -771,56 +771,56 @@ Expected: JSON response with `success: true` and count of imported objects.
 - [ ] **Step 2: Import detection rules**
 
 ```bash
-scp /tmp/detection-rules.ndjson bchaplow@10.10.30.25:/tmp/
-ssh bchaplow@10.10.30.25 "curl -s -k -u elastic:<PLATFORM_PASSWORD> -X POST https://localhost:5601/api/detection_engine/rules/_import -H 'kbn-xsrf: true' -F file=@/tmp/detection-rules.ndjson"
+scp /tmp/detection-rules.ndjson <user>@172.20.3.16:/tmp/
+ssh <user>@172.20.3.16 "curl -s -k -u elastic:<PLATFORM_PASSWORD> -X POST https://localhost:5601/api/detection_engine/rules/_import -H 'kbn-xsrf: true' -F file=@/tmp/detection-rules.ndjson"
 ```
 
 Expected: JSON response showing 214 rules imported.
 
 - [ ] **Step 3: Verify in Kibana**
 
-Open `https://10.10.30.25:5601` in browser. Login as elastic. Verify:
+Open `https://172.20.3.16:5601` in browser. Login as elastic. Verify:
 - Dashboards present under Kibana → Dashboards
 - Detection rules present under Security → Rules (should show 214)
 - Index patterns configured
 
 ### Task 15: Re-enroll Fleet Agents
 
-**Context:** 4 Fleet agents currently point to LXC 201 (10.10.30.23:8220). Repoint to haccp (10.10.30.25:8220).
+**Context:** 4 Fleet agents currently point to LXC 201 (172.20.3.14:8220). Repoint to elk-01 (172.20.3.16:8220).
 
-Fleet agents: smokehouse, DC01, WS01, GCP VM.
+Fleet agents: sensor-01, DC01, WS01, GCP VM.
 
-- [ ] **Step 1: Create Fleet Server connection in haccp Kibana**
+- [ ] **Step 1: Create Fleet Server connection in elk-01 Kibana**
 
-In Kibana → Fleet → Settings, verify Fleet Server URL is `https://10.10.30.25:8220`.
+In Kibana → Fleet → Settings, verify Fleet Server URL is `https://172.20.3.16:8220`.
 
 Create enrollment token for the agent policy.
 
-- [ ] **Step 2: Re-enroll smokehouse Elastic Agent**
+- [ ] **Step 2: Re-enroll sensor-01 Elastic Agent**
 
 ```bash
-ssh -p 2222 bchaplow@10.10.20.10
+ssh -p 2222 <user>@172.20.2.11
 # Find the elastic-agent container
 /share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker exec -it elastic-agent bash
 
 # Inside the container:
-elastic-agent enroll --url=https://10.10.30.25:8220 --enrollment-token=<NEW_TOKEN> --insecure
+elastic-agent enroll --url=https://172.20.3.16:8220 --enrollment-token=<NEW_TOKEN> --insecure
 ```
 
 Alternatively, update the Fleet Server URL in the agent's configuration and restart.
 
 - [ ] **Step 3: Re-enroll DC01 Fleet Agent**
 
-RDP or WinRM to DC01 (10.10.30.40, Administrator / `<AD_DOMAIN_PASSWORD>`):
+RDP or WinRM to DC01 (172.20.3.20, Administrator / `<AD_DOMAIN_PASSWORD>`):
 
 ```powershell
-& "C:\Program Files\Elastic\Agent\elastic-agent.exe" enroll --url=https://10.10.30.25:8220 --enrollment-token=<NEW_TOKEN> --insecure
+& "C:\Program Files\Elastic\Agent\elastic-agent.exe" enroll --url=https://172.20.3.16:8220 --enrollment-token=<NEW_TOKEN> --insecure
 Restart-Service "Elastic Agent"
 ```
 
 - [ ] **Step 4: Re-enroll WS01 Fleet Agent**
 
-Same process as DC01 on WS01 (10.10.30.41).
+Same process as DC01 on WS01 (172.20.3.21).
 
 - [ ] **Step 5: Re-enroll GCP VM Fleet Agent**
 
@@ -828,29 +828,29 @@ Same process as DC01 on WS01 (10.10.30.41).
 ssh to GCP VM via Tailscale or gcloud:
 gcloud compute ssh wordpress-1-vm --zone=us-east4-a
 
-sudo elastic-agent enroll --url=https://10.10.30.25:8220 --enrollment-token=<NEW_TOKEN> --insecure
+sudo elastic-agent enroll --url=https://172.20.3.16:8220 --enrollment-token=<NEW_TOKEN> --insecure
 sudo systemctl restart elastic-agent
 ```
 
-Note: GCP VM connects to haccp via Tailscale. Fleet Server URL should use haccp's Tailscale IP if the LAN IP isn't routable. Check `tailscale status` on haccp for its 100.x.x.x IP.
+Note: GCP VM connects to elk-01 via Tailscale. Fleet Server URL should use elk-01's Tailscale IP if the LAN IP isn't routable. Check `tailscale status` on elk-01 for its 100.x.x.x IP.
 
-- [ ] **Step 6: Verify all 4 agents in haccp Kibana**
+- [ ] **Step 6: Verify all 4 agents in elk-01 Kibana**
 
 In Kibana → Fleet → Agents, verify 4 agents show `Healthy` status:
-- smokehouse
+- sensor-01
 - DC01
 - WS01
 - GCP VM (wordpress-1-vm)
 
 ### Task 16: Repoint GCP Fluent Bit
 
-**Context:** Fluent Bit on GCP VM ships `apache-parsed-v2` access logs to ELK. Currently points to the former LXC 201 Tailscale endpoint. Repoint to haccp's Tailscale endpoint.
+**Context:** Fluent Bit on GCP VM ships `apache-parsed-v2` access logs to ELK. Currently points to the former LXC 201 Tailscale endpoint. Repoint to elk-01's Tailscale endpoint.
 
 - [ ] **Step 1: SSH to GCP VM**
 
 ```bash
 gcloud compute ssh wordpress-1-vm --zone=us-east4-a
-# or: ssh bchaplow@<gcp-tailscale-ip>
+# or: ssh <user>@<gcp-tailscale-ip>
 ```
 
 - [ ] **Step 2: Update Fluent Bit output config**
@@ -861,13 +861,13 @@ Find the active Fluent Bit config:
 sudo ls /etc/fluent-bit/ /fluent-bit/etc/ 2>/dev/null
 ```
 
-Edit the Elasticsearch output section — change the `Host` from the former LXC 201 Tailscale IP to haccp's Tailscale IP:
+Edit the Elasticsearch output section — change the `Host` from the former LXC 201 Tailscale IP to elk-01's Tailscale IP:
 
 ```ini
 [OUTPUT]
     Name  es
     Match *
-    Host  <HACCP_TAILSCALE_IP>
+    Host  <ELK01_TAILSCALE_IP>
     Port  9200
     tls   On
     tls.verify Off
@@ -876,7 +876,7 @@ Edit the Elasticsearch output section — change the `Host` from the former LXC 
     ...
 ```
 
-Note: Preserve any other existing output settings (Index, Type, etc.) from the current config. The key changes are `Host` (from LXC 201 Tailscale IP to haccp Tailscale IP) and ensuring TLS settings match since haccp uses HTTPS with self-signed CA.
+Note: Preserve any other existing output settings (Index, Type, etc.) from the current config. The key changes are `Host` (from LXC 201 Tailscale IP to elk-01 Tailscale IP) and ensuring TLS settings match since elk-01 uses HTTPS with self-signed CA.
 
 - [ ] **Step 3: Restart Fluent Bit**
 
@@ -884,22 +884,22 @@ Note: Preserve any other existing output settings (Index, Type, etc.) from the c
 sudo systemctl restart fluent-bit
 ```
 
-- [ ] **Step 4: Verify data flowing to haccp ES**
+- [ ] **Step 4: Verify data flowing to elk-01 ES**
 
 ```bash
-ssh bchaplow@10.10.30.25 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:9200/apache-parsed-v2/_count'"
+ssh <user>@172.20.3.16 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:9200/apache-parsed-v2/_count'"
 ```
 
 Expected: Document count increasing.
 
 ### Task 17: Update Shuffle Variables and Clean Up
 
-- [ ] **Step 1: Update Shuffle workflow variables on brisket**
+- [ ] **Step 1: Update Shuffle workflow variables on soc-01**
 
-Login to Shuffle UI (`https://10.10.20.30:3443`). Navigate to Workflow Variables (Admin → Workflow Variables or within each workflow's variable settings).
+Login to Shuffle UI (`https://172.20.2.14:3443`). Navigate to Workflow Variables (Admin → Workflow Variables or within each workflow's variable settings).
 
 Update:
-- `$elk_url` → `https://10.10.30.25:9200`
+- `$elk_url` → `https://172.20.3.16:9200`
 - `$elk_user` → `elastic` (same)
 - `$elk_pass` → `<PLATFORM_PASSWORD>` (same or new if changed)
 
@@ -907,17 +907,17 @@ Update:
 
 Manually trigger WF6 (Model Drift Detector) or WF8 (LLM Log Anomaly Finder) — they query ELK. Verify execution succeeds in Shuffle execution logs.
 
-- [ ] **Step 3: Remove honeypot-wazuh-sync cron on brisket**
+- [ ] **Step 3: Remove honeypot-wazuh-sync cron on soc-01**
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@172.20.2.14
 crontab -e
 ```
 
 Remove the commented-out honeypot sync line entirely:
 
 ```
-# DECOMMISSIONED 2026-03-12T23:55:00Z */15 * * * * /usr/bin/python3 /home/bchaplow/honeypot-wazuh-sync.py >> /home/bchaplow/honeypot-wazuh-sync.log 2>&1
+# DECOMMISSIONED 2026-03-12T23:55:00Z */15 * * * * /usr/bin/python3 ~/honeypot-wazuh-sync.py >> ~/honeypot-wazuh-sync.log 2>&1
 ```
 
 Optionally clean up the script and log:
@@ -931,22 +931,22 @@ rm ~/honeypot-wazuh-sync.py ~/honeypot-wazuh-sync.log
 Check all data paths are working:
 
 ```bash
-# Fleet agents reporting to haccp
-ssh bchaplow@10.10.30.25 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:9200/.fleet-agents/_search?size=10&pretty' | grep 'local_metadata.host.name'"
+# Fleet agents reporting to elk-01
+ssh <user>@172.20.3.16 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:9200/.fleet-agents/_search?size=10&pretty' | grep 'local_metadata.host.name'"
 
 # Arkime capturing
-ssh bchaplow@10.10.30.25 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:9200/arkime_sessions3-*/_count'"
+ssh <user>@172.20.3.16 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:9200/arkime_sessions3-*/_count'"
 
 # Detection rules running
-ssh bchaplow@10.10.30.25 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:5601/api/detection_engine/rules/_find?per_page=1' -H 'kbn-xsrf: true' | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"total\"])'"
+ssh <user>@172.20.3.16 "curl -k -u elastic:<PLATFORM_PASSWORD> 'https://localhost:5601/api/detection_engine/rules/_find?per_page=1' -H 'kbn-xsrf: true' | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"total\"])'"
 ```
 
-- [ ] **Step 5: Shut down LXC 201 on pitcrew**
+- [ ] **Step 5: Shut down LXC 201 on pve-01**
 
-After confirming everything works on haccp:
+After confirming everything works on elk-01:
 
 ```bash
-ssh root@10.10.30.20
+ssh root@172.20.3.11
 pct stop 201
 pct destroy 201
 ```
@@ -963,12 +963,12 @@ Expected: ~10GB more available than before.
 
 ## Chunk 4: Phase D — OpenCTI Deployment
 
-### Task 18: Create OpenCTI LXC on pitcrew
+### Task 18: Create OpenCTI LXC on pve-01
 
 - [ ] **Step 1: Download Ubuntu 24.04 container template**
 
 ```bash
-ssh root@10.10.30.20
+ssh root@172.20.3.11
 pveam update
 pveam download local ubuntu-24.04-standard_24.04-2_amd64.tar.zst
 ```
@@ -981,7 +981,7 @@ pct create 202 local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst \
   --memory 10240 \
   --swap 1024 \
   --cores 4 \
-  --net0 name=eth0,bridge=vmbr0,ip=10.10.30.26/24,gw=10.10.30.1 \
+  --net0 name=eth0,bridge=vmbr0,ip=172.20.3.17/24,gw=172.20.3.1 \
   --rootfs local-lvm:60 \
   --features nesting=1,keyctl=1 \
   --unprivileged 1 \
@@ -996,8 +996,8 @@ Note: `nesting=1,keyctl=1` is required for Docker inside LXC.
 pct list
 # VMID 202 should show "running"
 
-pct exec 202 -- ping -c 3 10.10.30.1
-# Should succeed — VLAN 30 connectivity
+pct exec 202 -- ping -c 3 172.20.3.1
+# Should succeed — VLAN 300 connectivity
 ```
 
 - [ ] **Step 4: Install Docker inside the LXC**
@@ -1072,7 +1072,7 @@ services:
     environment:
       - NODE_OPTIONS=--max-old-space-size=2048
       - APP__PORT=8080
-      - APP__BASE_URL=http://10.10.30.26:8080
+      - APP__BASE_URL=http://172.20.3.17:8080
       - APP__ADMIN__EMAIL=admin@opencti.local
       - APP__ADMIN__PASSWORD=${OPENCTI_ADMIN_PASSWORD}
       - APP__ADMIN__TOKEN=${OPENCTI_ADMIN_TOKEN}
@@ -1156,14 +1156,14 @@ pct exec 202 -- docker compose -f /opt/opencti/docker-compose.yml ps
 Expected: All services running.
 
 ```bash
-curl -s http://10.10.30.26:8080/graphql -H "Authorization: Bearer <OPENCTI_ADMIN_TOKEN>" -H "Content-Type: application/json" -d '{"query": "{ about { version } }"}'
+curl -s http://172.20.3.17:8080/graphql -H "Authorization: Bearer <OPENCTI_ADMIN_TOKEN>" -H "Content-Type: application/json" -d '{"query": "{ about { version } }"}'
 ```
 
 Expected: JSON with OpenCTI version.
 
 - [ ] **Step 5: Login to OpenCTI web UI**
 
-Navigate to `http://10.10.30.26:8080`. Login with `admin@opencti.local` and the admin password set in the compose file.
+Navigate to `http://172.20.3.17:8080`. Login with `admin@opencti.local` and the admin password set in the compose file.
 
 ### Task 20: Configure OpenCTI Connectors
 
@@ -1265,7 +1265,7 @@ Navigate to Data → Connectors in the OpenCTI web UI. All 5 connectors should s
 After ~30 minutes, verify data is populated:
 
 ```bash
-curl -s http://10.10.30.26:8080/graphql -H "Authorization: Bearer <OPENCTI_ADMIN_TOKEN>" -H "Content-Type: application/json" -d '{"query": "{ stixCoreObjects { edges { node { entity_type } } pageInfo { globalCount } } }"}'
+curl -s http://172.20.3.17:8080/graphql -H "Authorization: Bearer <OPENCTI_ADMIN_TOKEN>" -H "Content-Type: application/json" -d '{"query": "{ stixCoreObjects { edges { node { entity_type } } pageInfo { globalCount } } }"}'
 ```
 
 Expected: Non-zero globalCount showing imported STIX objects.
@@ -1274,12 +1274,12 @@ Expected: Non-zero globalCount showing imported STIX objects.
 
 - [ ] **Step 1: Set up IOC push to Wazuh CDB lists**
 
-This requires a script or connector that exports IOC indicators from OpenCTI and writes them to Wazuh CDB list format on brisket.
+This requires a script or connector that exports IOC indicators from OpenCTI and writes them to Wazuh CDB list format on soc-01.
 
-Create a cron script on brisket:
+Create a cron script on soc-01:
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@172.20.2.14
 cat > ~/opencti-ioc-sync.py << 'PYTHON'
 #!/usr/bin/env python3
 """Sync OpenCTI IOCs to Wazuh CDB lists for automatic alert matching."""
@@ -1287,7 +1287,7 @@ import requests
 import json
 import os
 
-OPENCTI_URL = "http://10.10.30.26:8080/graphql"
+OPENCTI_URL = "http://172.20.3.17:8080/graphql"
 OPENCTI_TOKEN = os.environ.get("OPENCTI_TOKEN", "<OPENCTI_ADMIN_TOKEN>")
 WAZUH_CDB_DIR = "/var/ossec/etc/lists"
 
@@ -1338,7 +1338,7 @@ PYTHON
 chmod +x ~/opencti-ioc-sync.py
 ```
 
-Add to crontab on brisket:
+Add to crontab on soc-01:
 
 ```bash
 crontab -e
@@ -1346,15 +1346,15 @@ crontab -e
 
 ```
 # OpenCTI IOC sync to Wazuh CDB lists - every 6 hours
-0 */6 * * * /usr/bin/python3 /home/bchaplow/opencti-ioc-sync.py >> /home/bchaplow/opencti-ioc-sync.log 2>&1
+0 */6 * * * /usr/bin/python3 ~/opencti-ioc-sync.py >> ~/opencti-ioc-sync.log 2>&1
 ```
 
 - [ ] **Step 2: Register CDB list in Wazuh manager config**
 
-SSH to brisket and edit the Wazuh manager ossec.conf (inside the Docker container):
+SSH to soc-01 and edit the Wazuh manager ossec.conf (inside the Docker container):
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@172.20.2.14
 docker exec -it single-node-wazuh.manager-1 bash
 
 # Add the CDB list declaration inside the <ruleset> block of ossec.conf
@@ -1370,7 +1370,7 @@ docker exec -it single-node-wazuh.manager-1 bash
 
 - [ ] **Step 3: Create Wazuh CDB list rule**
 
-Add a custom Wazuh rule in `/var/ossec/etc/rules/local_rules.xml` on brisket (inside the manager container):
+Add a custom Wazuh rule in `/var/ossec/etc/rules/local_rules.xml` on soc-01 (inside the manager container):
 
 ```bash
 docker exec -it single-node-wazuh.manager-1 bash
@@ -1401,11 +1401,11 @@ docker exec single-node-wazuh.manager-1 /var/ossec/bin/wazuh-logtest
 # Paste a test syslog line with a known IOC IP to confirm matching
 ```
 
-- [ ] **Step 4: Set up threat intel index push to haccp ES**
+- [ ] **Step 4: Set up threat intel index push to elk-01 ES**
 
-Use OpenCTI's built-in stream and Elastic connector to push indicators to haccp ES for Elastic Security threat indicator match rules.
+Use OpenCTI's built-in stream and Elastic connector to push indicators to elk-01 ES for Elastic Security threat indicator match rules.
 
-In OpenCTI web UI (`http://10.10.30.26:8080`):
+In OpenCTI web UI (`http://172.20.3.17:8080`):
 
 1. Navigate to Data → Sharing → Streams
 2. Create a new live stream: Name "Elastic Threat Intel", filter for entity type = "Indicator"
@@ -1422,7 +1422,7 @@ Add the Elastic connector to the compose file on the OpenCTI LXC:
       - CONNECTOR_ID=<generate-uuid>
       - CONNECTOR_NAME=Elastic Threat Intel
       - CONNECTOR_SCOPE=indicator
-      - ELASTICSEARCH_URL=https://10.10.30.25:9200
+      - ELASTICSEARCH_URL=https://172.20.3.16:9200
       - ELASTICSEARCH_USERNAME=elastic
       - ELASTICSEARCH_PASSWORD=<PLATFORM_PASSWORD>
       - ELASTICSEARCH_SSL_VERIFY=false
@@ -1435,14 +1435,14 @@ Add the Elastic connector to the compose file on the OpenCTI LXC:
 pct exec 202 -- bash -c 'cd /opt/opencti && docker compose up -d'
 ```
 
-Then in haccp Kibana, create an Elastic Security "Indicator Match" rule that correlates events against the `opencti-threat-intel` index.
+Then in elk-01 Kibana, create an Elastic Security "Indicator Match" rule that correlates events against the `opencti-threat-intel` index.
 
 ### Task 22: OpenCTI ↔ Shuffle Integration
 
 - [ ] **Step 1: Add Shuffle workflow variables**
 
-In Shuffle UI (`https://10.10.20.30:3443`), add workflow variables:
-- `$opencti_url` = `http://10.10.30.26:8080`
+In Shuffle UI (`https://172.20.2.14:3443`), add workflow variables:
+- `$opencti_url` = `http://172.20.3.17:8080`
 - `$opencti_api_key` = `<OPENCTI_ADMIN_TOKEN>`
 
 - [ ] **Step 2: Update Shuffle WF1 to query OpenCTI**
@@ -1487,7 +1487,7 @@ Add the TheHive connector to the Docker Compose:
       - CONNECTOR_ID=<generate-uuid>
       - CONNECTOR_NAME=TheHive
       - CONNECTOR_SCOPE=thehive
-      - THEHIVE_URL=http://10.10.30.22:9000
+      - THEHIVE_URL=http://172.20.3.13:9000
       - THEHIVE_API_KEY=<THEHIVE_API_KEY>
     restart: always
     mem_limit: 128m
@@ -1513,7 +1513,7 @@ Create a test indicator in OpenCTI. Verify it appears as an observable in TheHiv
 
 - [ ] **Step 1: Create auth anomaly detection job**
 
-In haccp Kibana (`https://10.10.30.25:5601`) → Machine Learning → Anomaly Detection → Create Job.
+In elk-01 Kibana (`https://172.20.3.16:5601`) → Machine Learning → Anomaly Detection → Create Job.
 
 **Job: auth-anomalies**
 - Data view: Fleet agent data from DC01/WS01 (Windows Security events)
@@ -1582,7 +1582,7 @@ tags:
 
 - [ ] **Step 4: Convert and deploy the example rule**
 
-Convert to both formats and document the output. Deploy the Wazuh version to brisket and the Elastic version to haccp to demonstrate the dual-SIEM workflow.
+Convert to both formats and document the output. Deploy the Wazuh version to soc-01 and the Elastic version to elk-01 to demonstrate the dual-SIEM workflow.
 
 ### Task 26: Set Up YARA Rules Workflow
 
@@ -1617,11 +1617,11 @@ rule Suspicious_PowerShell_Encoded_Command
 
 - [ ] **Step 3: Configure Velociraptor YARA hunt**
 
-In Velociraptor GUI (`https://10.10.20.30:8889`), create a new artifact or use the built-in `Windows.Detection.Yara.NTFS` artifact. Upload the YARA rule and configure a hunt targeting Windows endpoints (DC01, WS01).
+In Velociraptor GUI (`https://172.20.2.14:8889`), create a new artifact or use the built-in `Windows.Detection.Yara.NTFS` artifact. Upload the YARA rule and configure a hunt targeting Windows endpoints (DC01, WS01).
 
 - [ ] **Step 4: Document Cortex YARA analyzer setup**
 
-Note for the Cortex YARA analyzer on pitcrew (TheHive LXC 200): the analyzer is already one of the 5 installed analyzers. Document how to submit files/hashes from TheHive cases for YARA scanning.
+Note for the Cortex YARA analyzer on pve-01 (TheHive LXC 200): the analyzer is already one of the 5 installed analyzers. Document how to submit files/hashes from TheHive cases for YARA scanning.
 
 - [ ] **Step 5: Import YARA rules as STIX indicators in OpenCTI**
 
@@ -1638,10 +1638,10 @@ This connects YARA detections to the broader threat intel graph in OpenCTI.
 - [ ] **Step 1: Update network-topology.md**
 
 Update `docs/network-topology.md` to reflect:
-- haccp added to Host Inventory (VLAN 30 section)
-- OpenCTI LXC added to pitcrew section
-- InfluxDB/Grafana/Telegraf removed from smokehouse section
-- Telegraf removed from pitcrew and smoker
+- elk-01 added to Host Inventory (VLAN 300 section)
+- OpenCTI LXC added to pve-01 section
+- InfluxDB/Grafana/Telegraf removed from sensor-01 section
+- Telegraf removed from pve-01 and pve-02
 - MokerLink port map updated (TE8 VLAN change, TE11 added)
 - Physical topology Mermaid diagram updated
 - Logical topology Mermaid diagram updated (add OpenCTI, Arkime, remove v2 metrics)
@@ -1650,7 +1650,7 @@ Update `docs/network-topology.md` to reflect:
 - [ ] **Step 2: Update architecture.md**
 
 Update `docs/architecture.md` to reflect:
-- haccp as new Detection & PCAP host
+- elk-01 as new Detection & PCAP host
 - OpenCTI as threat intelligence platform
 - Threat intel pipeline (new section)
 - Arkime packet capture (new section)
@@ -1666,11 +1666,11 @@ Add Phase 12 (or equivalent) documenting the infrastructure redesign as a comple
 ```bash
 cd /c/Projects/homelab-soc-portfolio
 git add docs/ sigma-rules/ yara-rules/
-git commit -m "Phase 12: Infrastructure redesign — haccp + OpenCTI + consolidation
+git commit -m "Phase 12: Infrastructure redesign — elk-01 + OpenCTI + consolidation
 
-- Added haccp bare metal node (ELK 8.17 + Arkime PCAP)
-- Added OpenCTI threat intelligence platform on pitcrew
-- Migrated ELK from pitcrew LXC 201 to haccp
+- Added elk-01 bare metal node (ELK 8.17 + Arkime PCAP)
+- Added OpenCTI threat intelligence platform on pve-01
+- Migrated ELK from pve-01 LXC 201 to elk-01
 - Decommissioned v2 metrics stack (InfluxDB/Telegraf/Grafana)
 - Re-enabled Cloudflare auto-blocking
 - Added Sigma and YARA operational practices

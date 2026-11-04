@@ -24,29 +24,29 @@ MSF_DIR="${SCRIPT_DIR}/metasploit"
 # Source configs
 source "${SCRIPT_DIR}/configs/targets.conf" 2>/dev/null || true
 
-# Source IP (sear on VLAN 20)
-SOURCE_IP="10.10.20.20"
+# Source IP (attack-01 on VLAN 200)
+SOURCE_IP="172.20.2.12"
 
-# Targets (VLAN 40 only!)
-DVWA_IP="${DVWA_IP:-10.10.40.10}"
-JUICE_IP="${JUICE_IP:-10.10.40.10}"
+# Targets (VLAN 400 only!)
+DVWA_IP="${DVWA_IP:-172.20.4.11}"
+JUICE_IP="${JUICE_IP:-172.20.4.11}"
 JUICE_PORT="${JUICE_PORT:-3000}"
-METASPLOIT_IP="${METASPLOIT_IP:-10.10.40.20}"
-WINDOWS_IP="${WINDOWS_IP:-10.10.40.21}"
-WORDPRESS_IP="${WORDPRESS_IP:-10.10.40.30}"
-CRAPI_IP="${CRAPI_IP:-10.10.40.31}"
-SERVICES_FTP_IP="${SERVICES_FTP_IP:-10.10.40.32}"
-SERVICES_SMTP_IP="${SERVICES_SMTP_IP:-10.10.40.42}"
-SERVICES_SNMP_IP="${SERVICES_SNMP_IP:-10.10.40.43}"
-HONEYPOT_IP="${HONEYPOT_IP:-10.10.40.33}"
+METASPLOIT_IP="${METASPLOIT_IP:-172.20.4.12}"
+WINDOWS_IP="${WINDOWS_IP:-172.20.4.13}"
+WORDPRESS_IP="${WORDPRESS_IP:-172.20.4.14}"
+CRAPI_IP="${CRAPI_IP:-172.20.4.15}"
+SERVICES_FTP_IP="${SERVICES_FTP_IP:-172.20.4.16}"
+SERVICES_SMTP_IP="${SERVICES_SMTP_IP:-172.20.4.18}"
+SERVICES_SNMP_IP="${SERVICES_SNMP_IP:-172.20.4.19}"
+HONEYPOT_IP="${HONEYPOT_IP:-172.20.4.17}"
 HONEYPOT_HTTP_PORT="${HONEYPOT_HTTP_PORT:-8080}"
 
-# AD Lab targets (VLAN 30 — restricted scope)
-AD_DC_IP="${AD_DC_IP:-10.10.30.40}"
-AD_WS_IP="${AD_WS_IP:-10.10.30.41}"
+# AD Lab targets (VLAN 300 — restricted scope)
+AD_DC_IP="${AD_DC_IP:-172.20.3.20}"
+AD_WS_IP="${AD_WS_IP:-172.20.3.21}"
 AD_DOMAIN="${AD_DOMAIN:-lab.local}"
 
-TARGET_SUBNET="10.10.40.0/24"
+TARGET_SUBNET="172.20.4.0/24"
 
 # Automation flags
 AUTO_CONFIRM=false
@@ -232,7 +232,7 @@ list_attacks() {
     echo "  waf_fingerprint     - WAF technology detection"
     echo "  waf_full            - All WAF evasion attacks"
     echo ""
-    echo -e "${RED}Active Directory (VLAN 30 — RESTRICTED):${NC}"
+    echo -e "${RED}Active Directory (VLAN 300 — RESTRICTED):${NC}"
     echo "  ad_ldap_enum        - LDAP anonymous bind + enumeration"
     echo "  ad_kerb_enum        - Kerberos user enumeration"
     echo "  ad_kerberoast       - Kerberoasting (TGS ticket extraction)"
@@ -471,7 +471,7 @@ confirm_attack() {
         echo -e "${GREEN}Auto-confirmed (campaign mode)${NC}"
         return 0
     fi
-    echo -e "${YELLOW}Confirm target is in VLAN 40 (Targets network)${NC}"
+    echo -e "${YELLOW}Confirm target is in VLAN 400 (Targets network)${NC}"
     read -p "Proceed with attack? (y/N): " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo "Attack cancelled"
@@ -697,7 +697,7 @@ run_msf_attack() {
 }
 
 ###############################################################################
-# AD ATTACK RUNNER (VLAN 30 — RESTRICTED)
+# AD ATTACK RUNNER (VLAN 300 — RESTRICTED)
 ###############################################################################
 
 run_ad_attack() {
@@ -711,21 +711,21 @@ run_ad_attack() {
     local notes="$8"
     local attack_id=$(gen_attack_id)
 
-    # VLAN 30 IP validation
+    # VLAN 300 IP validation
     if [[ ! "$target_ip" =~ ^10\.10\.30\.[0-9]+$ ]]; then
         echo -e "${RED}╔═══════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${RED}║  SAFETY ABORT: Target IP '$target_ip' is NOT in VLAN 30      ║${NC}"
-        echo -e "${RED}║  AD attacks are restricted to 10.10.30.0/24 only.            ║${NC}"
+        echo -e "${RED}║  SAFETY ABORT: Target IP '$target_ip' is NOT in VLAN 300      ║${NC}"
+        echo -e "${RED}║  AD attacks are restricted to 172.20.3.0/24 only.            ║${NC}"
         echo -e "${RED}╚═══════════════════════════════════════════════════════════════╝${NC}"
         exit 1
     fi
 
     log_start "$attack_id" "$category" "$subtype" "$technique" "$tool" "$target_ip" "$target_port" "$service" "$notes"
 
-    # Stricter confirmation for VLAN 30
+    # Stricter confirmation for VLAN 300
     echo -e "${RED}"
     echo "╔═══════════════════════════════════════════════════════════════╗"
-    echo "║  ⚠  WARNING: VLAN 30 (Lab Network) TARGET                    ║"
+    echo "║  ⚠  WARNING: VLAN 300 (Lab Network) TARGET                    ║"
     echo "║  This attack targets Active Directory infrastructure.        ║"
     echo "║  Target: ${target_ip}:${target_port}"
     echo "║  Domain: ${AD_DOMAIN}"
@@ -1111,7 +1111,7 @@ case "$ATTACK_TYPE" in
         ;;
 
     # =========================================================================
-    # Active Directory Attacks (VLAN 30 — RESTRICTED)
+    # Active Directory Attacks (VLAN 300 — RESTRICTED)
     # =========================================================================
     ad_ldap_enum)
         run_ad_attack "ldap_enum" "recon" "T1087.002" "ldapsearch" "$AD_DC_IP" "389" "ldap" "$NOTES"

@@ -1,6 +1,6 @@
 # ML Threat Detection Pipeline
 
-Machine learning pipeline for behavioral threat detection in SOC alert data. The XGBoost binary classifier achieves **PR-AUC 0.9998** on temporal test splits and is deployed as a real-time scoring API on brisket.
+Machine learning pipeline for behavioral threat detection in SOC alert data. The XGBoost binary classifier achieves **PR-AUC 0.9998** on temporal test splits and is deployed as a real-time scoring API on soc-01.
 
 > Full source code, training notebooks, and attack framework are in the separate [soc-ml repository](https://github.com/brianchaplow/soc-ml).
 
@@ -15,7 +15,7 @@ OpenSearch (wazuh-alerts-4.x-* + zeek-conn)
   --> FeatureEngineer            # 31 behavioral features (no IP-based features)
   --> ModelTrainer               # XGBoost, LightGBM, RandomForest, LogReg
   --> HybridScorer               # IsolationForest anomaly + XGBoost supervised
-  --> ml-scorer container        # FastAPI on brisket:5002
+  --> ml-scorer container        # FastAPI on soc-01:5002
   --> Shuffle WF1                # Combined scoring --> TheHive / Discord
 ```
 
@@ -38,7 +38,7 @@ Feature categories include:
 
 ## Deployment
 
-The trained XGBoost model runs inside a Docker container on **brisket** (port 5002) as a FastAPI service. It accepts alert feature vectors and returns threat probability scores.
+The trained XGBoost model runs inside a Docker container on **soc-01** (port 5002) as a FastAPI service. It accepts alert feature vectors and returns threat probability scores.
 
 Integration points:
 
