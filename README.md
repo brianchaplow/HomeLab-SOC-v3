@@ -24,7 +24,7 @@ flowchart LR
 
     SOC[SOC Platform<br/>SIEM + SOAR + ML + LLM]
 
-    SOC --> DET[haccp<br/>ELK Detection + Arkime PCAP]
+    SOC --> DET[elk-01<br/>ELK Detection + Arkime PCAP]
     SOC --> DISC[Discord Alerts]
     SOC --> CFB[Cloudflare Blocks]
     SOC --> THC[TheHive Cases]
@@ -48,7 +48,7 @@ flowchart LR
 | Elastic detection rules | **1,419** in the exported rule set ([`elastic/detection-rules/`](elastic/detection-rules/)), 214 enabled in the export |
 | ML threat scorer | **PR-AUC 0.9998** (XGBoost binary classifier) |
 | Velociraptor DFIR clients | **7** endpoints |
-| Docker containers (brisket) | **12+** services |
+| Docker containers (soc-01) | **12+** services |
 | MITRE ATT&CK adversary profiles | **29** (Caldera) |
 | Cortex analyzers | **5** (AbuseIPDB, VirusTotal, Shodan, Abuse Finder, GoogleDNS) |
 | Threat intel connectors | **9** (OpenCTI: MITRE ATT&CK, CVE, AbuseIPDB, CISA KEV, Malpedia, AlienVault OTX, Abuse.ch URLhaus, Abuse.ch ThreatFox, Abuse.ch SSL Blacklist) |
@@ -60,24 +60,24 @@ flowchart LR
 
 ## Migration Phases
 
-Phases 1-11 completed February 10-13, 2026. Phase 12 (infrastructure redesign) completed March 2026. Phases 13-14 (Arkime PCAP + haccp data foundation) completed March-April 2026. Phase 15 (FedRAMP Low ConMon) completed April 10, 2026. Full engineering narrative with key decisions, challenges, and outcomes for phases 1-12 is in [docs/phases.md](docs/phases.md); phases 13-15 are summarized in the table below.
+Phases 1-11 completed February 10-13, 2026. Phase 12 (infrastructure redesign) completed March 2026. Phases 13-14 (Arkime PCAP + elk-01 data foundation) completed March-April 2026. Phase 15 (FedRAMP Low ConMon) completed April 10, 2026. Full engineering narrative with key decisions, challenges, and outcomes for phases 1-12 is in [docs/phases.md](docs/phases.md); phases 13-15 are summarized in the table below.
 
 | Phase | Name | Summary |
 |:-----:|------|---------|
-| :white_check_mark: 1 | **brisket Online** | Ubuntu 24.04, Docker, NVIDIA RTX A1000, Ollama, Prometheus + Grafana |
+| :white_check_mark: 1 | **soc-01 Online** | Ubuntu 24.04, Docker, NVIDIA RTX A1000, Ollama, Prometheus + Grafana |
 | :white_check_mark: 2 | **Wazuh SIEM** | 15 agents, Zeek pipeline (7 indices), MokerLink ACL micro-segmentation |
-| :white_check_mark: 3 | **Hard Cutover** | smokehouse converted to sensor-only, 38 GB backed up |
+| :white_check_mark: 3 | **Hard Cutover** | sensor-01 converted to sensor-only, 38 GB backed up |
 | :white_check_mark: 4 | **Case Management** | TheHive 4 + Cortex 3 on Proxmox LXC, 5 analyzers |
 | :white_check_mark: 5 | **Shuffle SOAR** | WF1 (enrichment + auto-block), WF2 (watch digest) |
 | :white_check_mark: 6 | **Velociraptor DFIR** | 7 clients enrolled across all platforms |
 | :white_check_mark: 7 | **Caldera Adversary Emulation** | 4 Sandcat agents, Wazuh detection validated |
 | :white_check_mark: 8 | **ML Pipeline v3** | 6 models + hybrid, XGBoost PR-AUC 0.9998, deployed to ml-scorer |
 | :white_check_mark: 9 | **Ollama LLM Integration** | 7 workflows using qwen3:8b for triage and analysis |
-| :white_check_mark: 10 | **ELK Stack (Dual-SIEM)** | Elasticsearch 8.17, 1,345 detection rules, migrated to haccp bare metal |
-| :white_check_mark: 11 | **Proxmox Backup Server** | NFS to smokehouse 17 TB, daily + weekly backup jobs |
-| :white_check_mark: 12 | **Infrastructure Redesign** | haccp bare metal (ELK + Arkime), OpenCTI threat intel, v2 metrics decommission |
-| :white_check_mark: 13 | **Arkime Packet Capture** | Full-packet capture on haccp bare metal (span0 SPAN port, 2 TB PCAP storage) |
-| :white_check_mark: 14 | **haccp Data Foundation** | Zeek on span0 (JA3/JA4/community-id), Logstash enrichment (OpenCTI + Ollama LLM), PCAP archival to smokehouse, nightly briefing |
+| :white_check_mark: 10 | **ELK Stack (Dual-SIEM)** | Elasticsearch 8.17, 1,345 detection rules, migrated to elk-01 bare metal |
+| :white_check_mark: 11 | **Proxmox Backup Server** | NFS to sensor-01 17 TB, daily + weekly backup jobs |
+| :white_check_mark: 12 | **Infrastructure Redesign** | elk-01 bare metal (ELK + Arkime), OpenCTI threat intel, v2 metrics decommission |
+| :white_check_mark: 13 | **Arkime Packet Capture** | Full-packet capture on elk-01 bare metal (span0 SPAN port, 2 TB PCAP storage) |
+| :white_check_mark: 14 | **elk-01 Data Foundation** | Zeek on span0 (JA3/JA4/community-id), Logstash enrichment (OpenCTI + Ollama LLM), PCAP archival to sensor-01, nightly briefing |
 | :white_check_mark: 15 | **FedRAMP Low ConMon** | 156-control SSP, OSCAL pipelines, 4 ConMon plans complete, DefectDojo + RegScale integration, public portfolio at github.com/brianchaplow/homelab-fedramp-low |
 
 ---
@@ -118,15 +118,15 @@ Phases 1-11 completed February 10-13, 2026. Phase 12 (infrastructure redesign) c
 
 ## Network Topology
 
-Five VLANs routed through OPNsense with strict inter-VLAN firewall rules and switch-level ACL micro-segmentation.
+Five VLANs routed through OPNsense with strict inter-VLAN firewall rules and switch-level ACL micro-segmentation. Hostnames (`soc-01`, `elk-01`, `sensor-01`, ...), VLAN IDs and addresses in this repository are role-based placeholders; the segmentation is the real design.
 
 | VLAN | Subnet | Purpose |
 |------|--------|---------|
-| 10 | 10.10.10.0/24 | Management -- firewall, switch, workstation |
-| 20 | 10.10.20.0/24 | SOC infrastructure -- SIEM, sensors, attack box |
-| 30 | 10.10.30.0/24 | Lab -- Proxmox, AD domain, incident response |
-| 40 | 10.10.40.0/24 | Targets -- **fully isolated**, attack surfaces only |
-| 50 | 10.10.50.0/24 | IoT -- internet-only, no lateral movement |
+| 100 | 172.20.1.0/24 | Management -- firewall, switch, workstation |
+| 200 | 172.20.2.0/24 | SOC infrastructure -- SIEM, sensors, attack box |
+| 300 | 172.20.3.0/24 | Lab -- Proxmox, AD domain, incident response |
+| 400 | 172.20.4.0/24 | Targets -- **fully isolated**, attack surfaces only |
+| 500 | 172.20.5.0/24 | IoT -- internet-only, no lateral movement |
 
 Full topology, firewall rules, and switch ACL details in [docs/network-topology.md](docs/network-topology.md).
 
@@ -135,13 +135,13 @@ Full topology, firewall rules, and switch ACL details in [docs/network-topology.
 
 | Host | Hardware | Role |
 |------|----------|------|
-| **brisket** | Lenovo ThinkStation P3 Tiny (Ultra 9 285, 64 GB, RTX A1000) | v3 SOC platform -- SIEM, SOAR, DFIR, ML, LLM |
-| **smokehouse** | QNAP TVS-871 (i7-4790S, 16 GB, 32 TB RAID) | Network sensor (Suricata + Zeek), backup target |
-| **sear** | ASUS ROG Strix G512LI (i5-10300H, 32 GB, GTX 1650 Ti) | Kali attack box, ML model training |
-| **haccp** | Lenovo ThinkStation P340 Tiny (i7-10700T, 32 GB) | Detection & PCAP -- ELK 8.17 + Arkime full packet capture |
-| **pitcrew** | Lenovo ThinkStation P340 Tiny (i7-10700T, 32 GB) | Proxmox VE -- AD lab, TheHive, OpenCTI |
-| **smoker** | Lenovo ThinkStation P340 Tiny (i7-10700T, 32 GB) | Proxmox VE -- Caldera, attack targets, PBS |
-| **PITBOSS** | ASUS TUF Dash F15 (i7-12650H, 64 GB) | Management workstation (Windows 11) |
+| **soc-01** | Lenovo ThinkStation P3 Tiny (Ultra 9 285, 64 GB, RTX A1000) | v3 SOC platform -- SIEM, SOAR, DFIR, ML, LLM |
+| **sensor-01** | QNAP TVS-871 (i7-4790S, 16 GB, 32 TB RAID) | Network sensor (Suricata + Zeek), backup target |
+| **attack-01** | ASUS ROG Strix G512LI (i5-10300H, 32 GB, GTX 1650 Ti) | Kali attack box, ML model training |
+| **elk-01** | Lenovo ThinkStation P340 Tiny (i7-10700T, 32 GB) | Detection & PCAP -- ELK 8.17 + Arkime full packet capture |
+| **pve-01** | Lenovo ThinkStation P340 Tiny (i7-10700T, 32 GB) | Proxmox VE -- AD lab, TheHive, OpenCTI |
+| **pve-02** | Lenovo ThinkStation P340 Tiny (i7-10700T, 32 GB) | Proxmox VE -- Caldera, attack targets, PBS |
+| **ADMIN-WS** | ASUS TUF Dash F15 (i7-12650H, 64 GB) | Management workstation (Windows 11) |
 | **OPNsense** | Protectli VP2420 (J6412, 8 GB) | Firewall / router -- inter-VLAN routing, NAT |
 | **MokerLink** | 10G08410GSM (8x 10GbE + 4x SFP+) | L3 managed switch -- SPAN port mirroring, ACL |
 | **GCP VM** | Google Cloud e2-medium (2 vCPU, 4 GB) | External honeypot, portfolio hosting, Wazuh agent |
@@ -166,12 +166,12 @@ Eighteen Shuffle SOAR workflow exports (17 active, WF7 decommissioned) automate 
 | WF7 | **Honeypot Intel Report** | Cron (Sun 12:00 EST) | ~~Weekly honeypot analysis~~ (decommissioned 2026-03-12) |
 | WF8 | **LLM Log Anomaly Finder** | Cron (15:00 EST) | Rare alert pattern classification: catches rule-blind anomalies |
 | WF9 | **Stalker Visit Alert** | Cron (every 5 min) | Visitor fingerprint monitoring and alerting |
-| WF10 | **Morning Briefing** | Cron (05:30 EST) | Nightly haccp pipeline summary delivered to #morning-briefing |
+| WF10 | **Morning Briefing** | Cron (05:30 EST) | Nightly elk-01 pipeline summary delivered to #morning-briefing |
 | WF11 | **Evening Briefing** | Cron (17:30 EST) | End-of-day SOC summary with LLM narrative |
-| WF-HACCP-1 | **Tier1/2 Alert Loop** | Cron (every 5 min) | Polls ELK for tier1 TI matches and tier2 LLM-classified events: Discord + TheHive |
-| WF-HACCP-1.1 | **Cortex Enrichment** | Cron (every 5 min, offset 2) | Enriches open TheHive cases via Cortex analyzers |
-| WF-HACCP-2 | **Tier2 Novel Entity Digest** | Cron (07:30 EST) | Daily digest of novel entities detected by Zeek pipeline: #tier2-digest |
-| WF-HACCP-3 | **Nightly Wazuh Cross-Correlator** | Cron (02:00 EST) | Correlates brisket Wazuh (OpenSearch) alerts with haccp Elastic data on IP |
+| WF-ELK-1 | **Tier1/2 Alert Loop** | Cron (every 5 min) | Polls ELK for tier1 TI matches and tier2 LLM-classified events: Discord + TheHive |
+| WF-ELK-1.1 | **Cortex Enrichment** | Cron (every 5 min, offset 2) | Enriches open TheHive cases via Cortex analyzers |
+| WF-ELK-2 | **Tier2 Novel Entity Digest** | Cron (07:30 EST) | Daily digest of novel entities detected by Zeek pipeline: #tier2-digest |
+| WF-ELK-3 | **Nightly Wazuh Cross-Correlator** | Cron (02:00 EST) | Correlates soc-01 Wazuh (OpenSearch) alerts with elk-01 Elastic data on IP |
 | WF-PROJECTS | **Deployment Status** | Cron (08:00 EST) | Homelab project deployment status summary: #project-status |
 | CS1 | **Capitol Signals Collector** | Cron (21:00 EST) | Congressional trade data collection and enrichment |
 | WF-NARRATIVE | **Escalation Narrative Drafter** | Manual (per TheHive case) | Drafts an incident-ticket narrative from a case's evidence with the local LLM; posted to Discord for human edit/approval |
@@ -209,7 +209,7 @@ Custom ML threat detection pipeline trained on labeled attack traffic from Calde
 - **Features:** 31 behavioral features (temporal, Zeek connection, alert context) -- no IP-based features to avoid network-specific bias
 - **Models trained:** XGBoost, LightGBM, RandomForest, LogisticRegression, IsolationForest, SelfTrainingClassifier
 - **Hybrid scoring:** `(1-w) * xgboost_prob + w * isolation_forest_score` for zero-day coverage
-- **Deployment:** FastAPI container on brisket (port 5002), GPU-accelerated inference on RTX A1000
+- **Deployment:** FastAPI container on soc-01 (port 5002), GPU-accelerated inference on RTX A1000
 - **Integration:** Shuffle WF1 (real-time scoring), WF6 (daily drift monitoring)
 
 Model card with evaluation metrics, intended use, and limitations: [`ml-pipeline/model-cards/xgboost-threat-scorer.md`](ml-pipeline/model-cards/xgboost-threat-scorer.md)
@@ -220,7 +220,7 @@ Full training source code and notebooks: [soc-ml repository](https://github.com/
 
 ## Honeypot Research (Historical)
 
-A WordPress login honeypot on a GCP VM captured real-world credential stuffing attempts for academic research (INST 570). The campaign ran from February through March 12, 2026. Historical data is preserved in ELK indices on haccp.
+A WordPress login honeypot on a GCP VM captured real-world credential stuffing attempts for academic research (INST 570). The campaign ran from February through March 12, 2026. Historical data is preserved in ELK indices on elk-01.
 
 Shuffle WF7 produced weekly LLM-authored intelligence summaries. Full documentation: [`honeypot/`](honeypot/)
 
@@ -230,7 +230,7 @@ Shuffle WF7 produced weekly LLM-authored intelligence summaries. Full documentat
 
 ### Hardware Requirements
 
-The SOC platform (brisket) needs at least 32 GB RAM and an NVIDIA GPU for ML/LLM inference. The Proxmox hosts need 32 GB each. See [docs/architecture.md](docs/architecture.md) for the full inventory.
+The SOC platform (soc-01) needs at least 32 GB RAM and an NVIDIA GPU for ML/LLM inference. The Proxmox hosts need 32 GB each. See [docs/architecture.md](docs/architecture.md) for the full inventory.
 
 ### Quick Start
 
@@ -252,12 +252,22 @@ Component deployment is documented in each folder's README. Start with [docs/arc
 
 This is a record of a specific lab, not a one-command installer. To rebuild it on your own hardware:
 
-1. **Network:** recreate the five VLANs and firewall policy from [docs/network-topology.md](docs/network-topology.md). The `10.10.x.0/24` addressing used throughout is the lab's internal plan; substitute your own.
+1. **Network:** recreate the five VLANs and firewall policy from [docs/network-topology.md](docs/network-topology.md). Hostnames, VLAN IDs and the `172.20.x.0/24` (lab) / `172.21.x.0/24` (home) addresses used throughout are placeholders; see the next step to substitute your own.
 2. **Core services:** bring up the Docker Compose stacks in [`infrastructure/docker/`](infrastructure/docker/) (Wazuh, Shuffle, Velociraptor, monitoring, ML scorer) and the ELK stack described in [`elastic/`](elastic/).
 3. **Detections:** load [`wazuh/rules/`](wazuh/rules/) and [`wazuh/decoders/`](wazuh/decoders/) into the Wazuh manager, [`infrastructure/configs/suricata/local.rules`](infrastructure/configs/suricata/local.rules) into Suricata, and import [`elastic/detection-rules/all-rules.ndjson`](elastic/detection-rules/all-rules.ndjson) via Kibana.
-4. **SOAR:** import the JSON files in [`shuffle/workflows/`](shuffle/workflows/), define the workflow variables they reference (`$opensearch_url`, `$elk_user`, `$haccp_ssh_user`, `$haccp_ssh_key`, Discord webhooks, API keys, ...), then install the cron entries that call [`shuffle/trigger-scripts/`](shuffle/trigger-scripts/).
+4. **SOAR:** import the JSON files in [`shuffle/workflows/`](shuffle/workflows/), define the workflow variables they reference (`$opensearch_url`, `$elk_user`, `$elk01_ssh_user`, `$elk01_ssh_key`, Discord webhooks, API keys, ...), then install the cron entries that call [`shuffle/trigger-scripts/`](shuffle/trigger-scripts/).
 
-**Placeholders to fill in.** Values that are specific to one installation are not committed:
+**Network placeholders.** Copy [`network.example.json`](network.example.json) to `network.local.json` (gitignored), fill in your hostnames, addresses and AD domain, then render a deployable copy outside the repo:
+
+```bash
+cp network.example.json network.local.json   # edit values
+python tools/render_local_values.py --out ../soc-deploy            # whole repo
+python tools/render_local_values.py --out ../soc-deploy shuffle/   # or just some paths
+```
+
+The renderer substitutes placeholders in file contents and file names (including identifier forms such as `$elk01_ssh_key` or `SOC01_HOST`). `tests/test_public_exposure.py` fails if a non-placeholder internal address is committed, and, when `network.local.json` exists, if any of its real values appear in the tree.
+
+**Other placeholders to fill in.** Values that are specific to one installation are not committed:
 
 | Placeholder | Where | Set it to |
 |-------------|-------|-----------|
@@ -265,11 +275,12 @@ This is a record of a specific lab, not a one-command installer. To rebuild it o
 | `YOUR_SHUFFLE_API_KEY` | `shuffle/trigger-scripts/*.sh` | Your Shuffle API key (or edit scripts to read it from the environment) |
 | `WF9_WEBHOOK_URL`, `WF_CS1_WEBHOOK_URL` | env for `wf9-trigger.sh`, `wf-cs1-trigger.sh` | The webhook URL Shuffle shows for that workflow's trigger |
 | `webhook_YOUR_WEBHOOK_ID` | URLs inside `shuffle/workflows/*.json` | The webhook ID of the target workflow after import |
-| `$haccp_ssh_user` | Shuffle workflow variable (WF10) | SSH account on the ELK host |
+| `$elk01_ssh_user` | Shuffle workflow variable (WF10) | SSH account on the ELK host |
 | `<user>` | SSH examples in the docs | Your admin account on each host |
 | `SOC_SSH_USER` | env for `scripts/collection/Collect-SOC.ps1` | SSH account on the sensor host |
-| `BRISKET_SSH`, `HONEYPOT_ARCHIVE_DIR` | env for `honeypot/scripts/honeypot-import.py` | SSH target and local archive folder |
+| `SOC01_SSH`, `HONEYPOT_ARCHIVE_DIR` | env for `honeypot/scripts/honeypot-import.py` | SSH target and local archive folder |
 | `SOC_INVENTORY_ES`, `SOC_ENV_FILE` | env for `inventory/sync-inventory.py` | OpenSearch URL and `.env` location |
+| `SOC_INTERNAL_PREFIX`, `SOC_VLAN_IDS` | env for `scripts/automation/scripts/ml_scorer.py` | Internal address prefix and the five VLAN IDs (mgmt, SOC, lab, targets, IoT) |
 
 ---
 
