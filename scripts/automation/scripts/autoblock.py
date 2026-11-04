@@ -276,7 +276,11 @@ def run_autoblock(dry_run: bool = False):
         return
     
     cf_client = CloudflareClient()
-    if not cf_client.is_configured:
+    cf_enabled = block_config.get('cloudflare', {}).get('enabled', True)
+    use_cloudflare = cf_enabled and cf_client.is_configured
+    if not cf_enabled:
+        logger.info("Cloudflare blocking disabled in config, will only mark in OpenSearch")
+    elif not cf_client.is_configured:
         logger.warning("Cloudflare not configured, will only mark in OpenSearch")
     
     notifier = get_notifier()
@@ -340,7 +344,7 @@ def run_autoblock(dry_run: bool = False):
             continue
         
         # Block at Cloudflare
-        if cf_client.is_configured:
+        if use_cloudflare:
             result = cf_client.block_ip(
                 ip=ip,
                 note=f"SOC Auto-Block: score {score}",
