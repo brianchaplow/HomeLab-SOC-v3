@@ -36,11 +36,13 @@ tags = ["network", "privacy"]
 [allowlist]
 description = "Inert detection-rule regex patterns + self-reference + documentation placeholders"
 # Docs show credentials as angle-bracket placeholders, e.g.
-#   curl -u elastic:'<PLATFORM_PASSWORD>' ...
+#   curl -u elastic:'<PLATFORM_PASSWORD>' ...   or   curl -u admin:'PASSWORD' ...
 # A matched secret containing such a placeholder is not a real credential.
 regexTarget = "secret"
 regexes = [
     '''<[A-Z][A-Z0-9_]*>''',
+    # ...or the literal word, e.g. curl -u admin:'PASSWORD'
+    '''(^|:)'?PASSWORD'?$''',
 ]
 paths = [
     '''\.gitleaks\.toml$''',
