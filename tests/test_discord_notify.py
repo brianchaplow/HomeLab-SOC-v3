@@ -61,3 +61,26 @@ def test_format_dict_sorts_and_limits():
     out = n._format_dict({"a": 1, "b": 3000, "c": 2}, limit=2)
     assert out.splitlines() == ["**b:** 3,000", "**c:** 2"]
     assert n._format_dict({}) == ""
+
+
+def test_watch_turnover_embeds(notifier):
+    n, post = notifier
+    stats = {"total_requests": 1234, "unique_ips": 5, "unique_visitors": 4,
+             "by_country": {"NL": 3}, "by_status": {"200": 9},
+             "threat_breakdown": {"clean": 7, "malicious": 1}}
+    assert n.send_watch_turnover("morning", stats, threats=[{"ip": "203.0.113.1", "score": 99, "country": "NL"}],
+                                 highlights=["h"] * 20, action_items=["a"] * 9)
+    embeds = post.call_args.kwargs["json"]["embeds"]
+    assert [e["title"][2:] for e in embeds] == ["MORNING WATCH TURNOVER", "Watch Highlights",
+                                                "Active Threats", "Action Items for Next Watch"]
+    assert "1,234" in embeds[0]["fields"][0]["value"]
+    assert embeds[1]["description"].count("•") == 10
+    assert embeds[3]["description"].count("☐") == 5
+    assert len(embeds) <= 10  # Discord's per-message embed limit
+
+
+def test_watch_turnover_minimal_and_weekly_period(notifier):
+    n, post = notifier
+    assert n.send_watch_turnover("weekly", {})
+    embeds = post.call_args.kwargs["json"]["embeds"]
+    assert len(embeds) == 1 and "168 hours" in embeds[0]["description"]

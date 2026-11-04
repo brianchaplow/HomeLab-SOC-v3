@@ -48,3 +48,31 @@ def test_recommendations(wt):
 def test_weekly_recommendations_handle_zero_traffic(wt):
     recs = wt._generate_weekly_recommendations({"total_requests": 0}, [])
     assert "Verify Discord alerting is functioning" in recs
+
+
+def test_run_digest_sends_report(monkeypatch):
+    os_client = mock.Mock()
+    os_client.test_connection.return_value = True
+    os_client.get_traffic_stats.return_value = {"total_requests": 10}
+    os_client.get_high_threat_ips.return_value = [
+        {"client_ip": "203.0.113.1", "threat_intel": {"abuseipdb": {"score": 95}}, "geo": {"country_name": "NL"}}]
+    notifier = mock.Mock()
+    monkeypatch.setattr(digest, "get_client", lambda: os_client)
+    monkeypatch.setattr(digest, "get_notifier", lambda: notifier)
+    for watch in ("morning", "evening", "weekly"):
+        digest.run_digest(watch)
+    calls = notifier.send_watch_turnover.call_args_list
+    assert [c.kwargs["watch_type"] for c in calls] == ["morning", "evening", "weekly"]
+    assert calls[0].kwargs["threats"] == [{"ip": "203.0.113.1", "score": 95, "country": "NL"}]
+
+
+def test_run_digest_unknown_type_and_connection_failure(monkeypatch):
+    os_client = mock.Mock()
+    notifier = mock.Mock()
+    monkeypatch.setattr(digest, "get_client", lambda: os_client)
+    monkeypatch.setattr(digest, "get_notifier", lambda: notifier)
+    os_client.test_connection.return_value = True
+    digest.run_digest("midwatch")
+    os_client.test_connection.return_value = False
+    digest.run_digest("morning")
+    notifier.send_watch_turnover.assert_not_called()
