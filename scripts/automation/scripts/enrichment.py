@@ -290,6 +290,17 @@ def run_enrichment(startup: bool = False):
         # Skip whitelisted
         if whitelist.is_whitelisted(ip, fingerprint, user_agent):
             logger.debug(f"Skipping whitelisted: {ip}")
+            # Mark it so it drops out of the unenriched queue; otherwise busy
+            # whitelisted crawlers stay in the top-N on every run and starve
+            # real IPs. No reputation data is written (no AbuseIPDB call).
+            os_client.enrich_ip(
+                index=enrichment_config.get('source_index', 'apache-parsed-v2'),
+                ip=ip,
+                enrichment_data={
+                    'whitelisted': True,
+                    'checked_at': datetime.utcnow().isoformat()
+                }
+            )
             skipped_whitelist += 1
             continue
         
