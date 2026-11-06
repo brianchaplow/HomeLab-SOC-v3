@@ -34,7 +34,7 @@ Minimum 3-hour gap between Ollama-heavy runs. No contention risk.
 - New shared variables: `$elk_url` (https://10.10.30.25:9200 on haccp), `$elk_user`, `$elk_pass` for writing to ELK indices
 - New ELK indices: `ml-drift`, `honeypot-intel`, `log-anomalies`
 - All post to `$discord_webhook`
-- All triggered via system cron on brisket with trigger scripts in `/home/bchaplow/`
+- All triggered via system cron on brisket with trigger scripts in `~/`
 
 ## Output Strategy
 

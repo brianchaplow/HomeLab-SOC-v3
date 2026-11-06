@@ -42,12 +42,12 @@ If you see HTML output, Git Bash and network access are working.
 Git Bash includes a built-in SSH client. SSH keys for all Linux hosts are pre-configured on PITBOSS. You should be able to SSH to any host without a password:
 
 ```bash
-ssh bchaplow@10.10.20.30    # brisket (SOC core)
-ssh bchaplow@10.10.30.25    # haccp (ELK + Arkime)
+ssh <user>@10.10.20.30    # brisket (SOC core)
+ssh <user>@10.10.30.25    # haccp (ELK + Arkime)
 ssh root@10.10.30.20        # pitcrew (Proxmox)
 ssh root@10.10.30.21        # smoker (Proxmox)
-ssh butcher@10.10.20.20     # sear (Kali attack box)
-ssh -p 2222 bchaplow@10.10.20.10  # smokehouse (QNAP, non-standard port)
+ssh <user>@10.10.20.20     # sear (Kali attack box)
+ssh -p 2222 <user>@10.10.20.10  # smokehouse (QNAP, non-standard port)
 ```
 
 If any SSH connection prompts for a password, the SSH key is not configured for that host. Contact the SOC admin.
@@ -149,21 +149,21 @@ Every command block in this playbook is preceded by a bold label telling you whe
 **From PITBOSS (LAN):**
 
 ```bash
-ssh bchaplow@10.10.20.30            # brisket
+ssh <user>@10.10.20.30            # brisket
 ssh root@10.10.30.21                # smoker (passwordless)
-ssh butcher@10.10.20.20             # sear
-ssh -p 2222 bchaplow@10.10.20.10   # smokehouse QNAP
+ssh <user>@10.10.20.20             # sear
+ssh -p 2222 <user>@10.10.20.10   # smokehouse QNAP
 ssh root@10.10.30.20                # pitcrew (passwordless)
-ssh bchaplow@10.10.30.25            # haccp
+ssh <user>@10.10.30.25            # haccp
 ```
 
 **From PITBOSS (Tailscale -- remote/travel):**
 
 ```bash
-ssh bchaplow@<brisket-tailscale-ip>     # brisket
-ssh butcher@<sear-tailscale-ip>         # sear
-ssh -p 2222 bchaplow@<qnap-tailscale-ip> # smokehouse QNAP
-ssh bchaplow@<haccp-tailscale-ip>       # haccp
+ssh <user>@<brisket-tailscale-ip>     # brisket
+ssh <user>@<sear-tailscale-ip>         # sear
+ssh -p 2222 <user>@<qnap-tailscale-ip> # smokehouse QNAP
+ssh <user>@<haccp-tailscale-ip>       # haccp
 ```
 
 ### 1.6 VLAN Map
@@ -250,7 +250,7 @@ If a cron workflow did not fire, check the brisket crontab:
 **SSH to brisket first, then run:**
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@10.10.20.30
 crontab -l
 ```
 
@@ -293,7 +293,7 @@ ELK containers on haccp do NOT auto-start on reboot. Verify they are running:
 **Run from PITBOSS (Git Bash) -- executes command on haccp via SSH:**
 
 ```bash
-ssh bchaplow@10.10.30.25 'cd /opt/elk && docker compose ps'
+ssh <user>@10.10.30.25 'cd /opt/elk && docker compose ps'
 ```
 
 Expected: elasticsearch, kibana, fleet-server, and logstash all show as `running`. If not:
@@ -301,7 +301,7 @@ Expected: elasticsearch, kibana, fleet-server, and logstash all show as `running
 **Same machine (PITBOSS, SSH to haccp):**
 
 ```bash
-ssh bchaplow@10.10.30.25 'cd /opt/elk && docker compose up -d'
+ssh <user>@10.10.30.25 'cd /opt/elk && docker compose up -d'
 ```
 
 ### Step 7: Check ML Scorer Health
@@ -317,7 +317,7 @@ Expected response: `{"status": "healthy"}` (or equivalent). If the scorer is dow
 **SSH to brisket first, then run:**
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@10.10.20.30
 docker restart ml-scorer
 ```
 
@@ -2407,7 +2407,7 @@ The `run_attack.sh` wrapper ensures ground-truth logging for every attack. It re
 
 **Syntax:**
 
-**SSH to sear first (`ssh butcher@10.10.20.20` from PITBOSS), then run from `~/attack-scripts/`:**
+**SSH to sear first (`ssh <user>@10.10.20.20` from PITBOSS), then run from `~/attack-scripts/`:**
 
 ```bash
 ./run_attack.sh <attack_type> ["optional notes"]
@@ -2610,7 +2610,7 @@ curl -k -u admin:'PASSWORD' -X GET \
 }'
 ```
 
-Check if the source IP is sear (10.10.20.20) running an authorized brute force test. Cross-reference `attack_log.csv` on sear (`ssh butcher@10.10.20.20` then `cat ~/attack-scripts/attack_log.csv`).
+Check if the source IP is sear (10.10.20.20) running an authorized brute force test. Cross-reference `attack_log.csv` on sear (`ssh <user>@10.10.20.20` then `cat ~/attack-scripts/attack_log.csv`).
 
 **Investigate:**
 
@@ -3369,7 +3369,7 @@ curl -s http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/executions \
 |-------|---------|-----|
 | Ollama timeout | HTTP node timeout after 30s | Increase timeout to 120s in Shuffle HTTP action settings |
 | Variable resolution | `$varname` appears literally in request | Check workflow variable exists and name matches exactly |
-| Orborus down | All workflows fail, no workers spawning | `ssh bchaplow@10.10.20.30` then `docker restart shuffle-orborus` |
+| Orborus down | All workflows fail, no workers spawning | `ssh <user>@10.10.20.30` then `docker restart shuffle-orborus` |
 | OpenSearch auth | 401 on query nodes | Verify `$opensearch_user` and `$opensearch_pass` workflow variables |
 | Discord webhook invalid | 400/404 on Discord POST | Update `$discord_webhook` workflow variable with new webhook URL |
 | Cron not firing | Workflow never executes | Check brisket crontab: `crontab -l`. Re-add cron entry if missing |
@@ -3379,7 +3379,7 @@ curl -s http://10.10.20.30:5001/api/v1/workflows/WORKFLOW_ID/executions \
 **SSH to brisket first, then run:**
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@10.10.20.30
 docker ps | grep orborus
 docker restart shuffle-orborus
 docker logs --tail 50 shuffle-orborus
@@ -3397,7 +3397,7 @@ docker logs --tail 50 shuffle-orborus
 
 ```bash
 # SSH to haccp and check ELK containers
-ssh bchaplow@10.10.30.25 'cd /opt/elk && docker compose ps'
+ssh <user>@10.10.30.25 'cd /opt/elk && docker compose ps'
 ```
 
 **Fix:**
@@ -3406,10 +3406,10 @@ ssh bchaplow@10.10.30.25 'cd /opt/elk && docker compose ps'
 
 ```bash
 # Start all ELK containers
-ssh bchaplow@10.10.30.25 'cd /opt/elk && docker compose up -d'
+ssh <user>@10.10.30.25 'cd /opt/elk && docker compose up -d'
 
 # Wait 30-60 seconds for Elasticsearch to initialize, then verify
-ssh bchaplow@10.10.30.25 'curl -sk https://localhost:9200/_cluster/health -u elastic:'"'"'<PLATFORM_PASSWORD>'"'"''
+ssh <user>@10.10.30.25 'curl -sk https://localhost:9200/_cluster/health -u elastic:'"'"'<PLATFORM_PASSWORD>'"'"''
 ```
 
 **Verify:**
@@ -3439,7 +3439,7 @@ Expected indices: `.alerts-security.alerts-default`, `honeypot-credentials`, `ho
 **SSH to brisket first, then run:**
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@10.10.20.30
 
 # Check if container is running
 docker ps | grep ml-scorer
@@ -3465,7 +3465,7 @@ nvidia-smi
 **SSH to brisket first, then run:**
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@10.10.20.30
 
 # Restart the ML scorer container
 docker restart ml-scorer
@@ -3485,7 +3485,7 @@ curl -s http://10.10.20.30:5002/health
 **SSH to brisket first, then run:**
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@10.10.20.30
 
 # Check dashboard container
 docker ps | grep wazuh-dashboard
@@ -3511,7 +3511,7 @@ curl -sk https://10.10.20.30:9200/_cluster/health -u admin:'PASSWORD'
 **SSH to brisket first, then run:**
 
 ```bash
-ssh bchaplow@10.10.20.30
+ssh <user>@10.10.20.30
 
 # Restart the dashboard
 docker restart wazuh-dashboard

@@ -39,7 +39,8 @@ $Config = @{
     AstroRepo  = "C:\Projects\brianchaplow-astro"
     
     # Remote hosts
-    QnapHost   = "bchaplow@10.10.20.10"
+    # SSH user comes from $env:SOC_SSH_USER (falls back to the local username)
+    QnapHost   = "$(if ($env:SOC_SSH_USER) { $env:SOC_SSH_USER } else { $env:USERNAME })@10.10.20.10"
     QnapPort   = 2222
     GcpVm      = "wordpress-1-vm"
     GcpZone    = "us-east4-a"
@@ -294,7 +295,7 @@ This directory contains trained ML models for threat detection.
 ## Training Location
 
 Models are trained on the Kali system (sear) at:
-- `/home/butcher/soc-ml/`
+- `~/soc-ml/`
 
 ## Why Models Aren't in Repo
 

@@ -7,7 +7,7 @@ WordPress login honeypot deployed on a **GCP VM** for INST 570 cybersecurity res
 ## Architecture
 
 ```
-Attacker --> GCP VM (34.48.x.x)
+Attacker --> GCP VM (public IP)
                |
                +--> PHP wp-login.php honeypot --> /var/log/honeypot/credentials.json
                +--> Apache access logs         --> /var/log/apache2/honeypot-access.log

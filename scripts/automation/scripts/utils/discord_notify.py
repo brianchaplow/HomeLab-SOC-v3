@@ -299,13 +299,15 @@ class DiscordNotifier:
             if details.get('path'):
                 fields.append({
                     "name": "Target Path",
-                    "value": f"`{details['path']}`",
+                    # Attacker-controlled; Discord rejects the whole embed if a
+                    # field value exceeds 1024 chars, which would drop the alert.
+                    "value": f"`{str(details['path'])[:200]}`",
                     "inline": False
                 })
             if details.get('user_agent'):
                 fields.append({
                     "name": "User Agent",
-                    "value": f"`{details['user_agent'][:100]}`",
+                    "value": f"`{str(details['user_agent'])[:100]}`",
                     "inline": False
                 })
         

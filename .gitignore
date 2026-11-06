@@ -54,3 +54,8 @@ CLAUDE.md
 docs/guides/soc-playbook.html
 docs/guides/soc-playbook.pdf
 docs/guides/build-playbook.py
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/

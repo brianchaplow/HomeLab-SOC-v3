@@ -3,8 +3,9 @@
 # Runs collectors, then summarizes results for Shuffle (under 32KB limit)
 # Cron: 0 2 * * * (UTC 02:00 / EST 21:00)
 
-LOGFILE="/home/bchaplow/wf-cs1-trigger.log"
-WEBHOOK_URL="http://localhost:3443/api/v1/hooks/webhook_ac71e84f-330f-4ff1-9c28-d09f69e8a1f1"
+LOGFILE="$HOME/wf-cs1-trigger.log"
+# Webhook URL is per-install; set WF_CS1_WEBHOOK_URL (Shuffle UI -> workflow -> webhook trigger)
+WEBHOOK_URL="${WF_CS1_WEBHOOK_URL:-http://localhost:3443/api/v1/hooks/webhook_YOUR_WEBHOOK_ID}"
 TMPFILE="/tmp/cs1-result.json"
 SUMMARY="/tmp/cs1-summary.json"
 
@@ -23,7 +24,7 @@ FULLSIZE=$(wc -c < "$TMPFILE")
 echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) Collector finished ($FULLSIZE bytes), summarizing for Shuffle" >> "$LOGFILE"
 
 # Summarize to under 32KB: extract counts + high-value items only
-python3 /home/bchaplow/cs1-summarize.py 2>> "$LOGFILE"
+python3 "$HOME/cs1-summarize.py" 2>> "$LOGFILE"
 
 SUMSIZE=$(wc -c < "$SUMMARY")
 echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) Summary: $SUMSIZE bytes (from $FULLSIZE)" >> "$LOGFILE"

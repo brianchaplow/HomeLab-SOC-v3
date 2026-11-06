@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from utils.opensearch_client import get_client
 from utils.discord_notify import get_notifier
+from utils.ip_whitelist import ip_in_networks, parse_networks
 
 # =============================================================================
 # LOGGING SETUP
@@ -224,21 +225,14 @@ class WhitelistChecker:
         self.ips = set(whitelist.get('ips', []))
         self.fingerprints = set(whitelist.get('fingerprints', []))
         
-        self.ip_prefixes = []
-        for ip in self.ips:
-            if '/' in ip:
-                base = ip.split('/')[0]
-                parts = base.split('.')
-                bits = int(ip.split('/')[1])
-                prefix_parts = bits // 8
-                self.ip_prefixes.append('.'.join(parts[:prefix_parts]) + '.')
+        # Single IPs and CIDR ranges (IPv4 + IPv6)
+        self.networks = parse_networks(self.ips)
     
     def is_whitelisted(self, ip: str, fingerprint: str = None) -> bool:
         if ip in self.ips:
             return True
-        for prefix in self.ip_prefixes:
-            if ip.startswith(prefix):
-                return True
+        if ip_in_networks(ip, self.networks):
+            return True
         if fingerprint and fingerprint in self.fingerprints:
             return True
         return False
@@ -282,7 +276,11 @@ def run_autoblock(dry_run: bool = False):
         return
     
     cf_client = CloudflareClient()
-    if not cf_client.is_configured:
+    cf_enabled = block_config.get('cloudflare', {}).get('enabled', True)
+    use_cloudflare = cf_enabled and cf_client.is_configured
+    if not cf_enabled:
+        logger.info("Cloudflare blocking disabled in config, will only mark in OpenSearch")
+    elif not cf_client.is_configured:
         logger.warning("Cloudflare not configured, will only mark in OpenSearch")
     
     notifier = get_notifier()
@@ -346,7 +344,8 @@ def run_autoblock(dry_run: bool = False):
             continue
         
         # Block at Cloudflare
-        if cf_client.is_configured:
+        was_already_blocked = False
+        if use_cloudflare:
             result = cf_client.block_ip(
                 ip=ip,
                 note=f"SOC Auto-Block: score {score}",
@@ -354,10 +353,11 @@ def run_autoblock(dry_run: bool = False):
             )
             
             if result.get('already_blocked'):
+                # Still record it below; skipping here meant it was never
+                # marked and was retried against Cloudflare every run.
                 already_blocked += 1
-                continue
-            
-            if not result.get('success'):
+                was_already_blocked = True
+            elif not result.get('success'):
                 logger.error(f"Failed to block {ip}: {result.get('error')}")
                 continue
         
@@ -378,6 +378,10 @@ def run_autoblock(dry_run: bool = False):
             'blocked_at': datetime.utcnow().isoformat(),
             'reason': reason
         })
+        
+        if was_already_blocked:
+            logger.info(f"Recorded existing Cloudflare block: {ip}")
+            continue
         
         # Send notification
         notifier.send_block_notification(

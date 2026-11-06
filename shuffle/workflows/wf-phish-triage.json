@@ -268,7 +268,7 @@
           "id": "",
           "name": "url",
           "example": "",
-          "value": "http://localhost:5001/api/v1/hooks/webhook_f85fb1d7-3674-4985-b406-42826d20bcb9",
+          "value": "http://localhost:5001/api/v1/hooks/webhook_YOUR_WEBHOOK_ID",
           "multiline": false,
           "multiselect": false,
           "options": null,
