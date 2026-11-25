@@ -1,40 +1,19 @@
-"""WF2 Watch Turnover: run the exported format_digest node against a mock Ollama.
+"""WF2 Watch Turnover: run the exported nodes against a mock lab.
 
-The node's Python lives inside the Shuffle export, so this test pulls it out of
-shuffle/workflows/wf2-watch-turnover.json, substitutes the $variables the way
-Shuffle does, and executes it with a fake `self.full_execution`. The two Discord
-nodes splice the node's output raw into {"content":"..."}; every scenario checks
-that both resulting bodies are still valid JSON, because an invalid body is a
-silent Discord 400 and a missing turnover message.
+format_digest builds the two text posts (no LLM since the 2026-10-15 rewrite);
+score_and_brief ranks alert clusters and asks qwen3 for one brief per cluster.
+Every scenario rebuilds the Discord request bodies the way Shuffle does and
+parses them, because an invalid body is a silent Discord 400.
 """
-import contextlib
-import io
 import json
-import re
-import threading
-import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 
 import pytest
 
-WF2 = Path(__file__).resolve().parents[1] / "shuffle" / "workflows" / "wf2-watch-turnover.json"
+from shuffle_harness import MockLab, http_body, run_node, upstream
 
-MITRE_AGGS = {
-    "aggregations": {
-        "techniques": {
-            "buckets": [
-                {
-                    "key": "T1078",
-                    "doc_count": 42,
-                    "tactic": {"buckets": [{"key": "Defense Evasion"}]},
-                    "technique_name": {"buckets": [{"key": "Valid Accounts"}]},
-                    "agents": {"buckets": [{"key": "DC01"}, {"key": "WS01"}]},
-                }
-            ]
-        }
-    }
-}
+WF2 = "wf2-watch-turnover.json"
+
+# ---------------------------------------------------------------- fixtures
 
 WAZUH_DATA = {
     "total_alerts": 1234, "critical": 0, "high": 3, "medium": 200, "low": 1031,
@@ -45,102 +24,73 @@ WAZUH_DATA = {
     "top_mitre": [{"technique": "Valid Accounts", "count": 42}],
     "hours_back": 12,
 }
-THEHIVE_DATA = {"open_cases": [{"id": 7, "title": 'Case "quoted"\ttitle', "severity": 2}], "total_open": 1}
+THEHIVE_DATA = {"open_cases": [{"id": 7, "title": 'Case "quoted"\ttitle\nsecond line', "severity": 2}],
+                "total_open": 1}
 
 
-class MockLab:
-    """One HTTP server standing in for both OpenSearch and brisket's Ollama."""
-
-    def __init__(self, ollama_script):
-        self.script = list(ollama_script)  # one entry per /api/generate call
-        self.requests = []
-        lab = self
-
-        class Handler(BaseHTTPRequestHandler):
-            def log_message(self, *a):
-                pass
-
-            def do_POST(self):
-                body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
-                if self.path.endswith("/_search"):
-                    return self._send(200, MITRE_AGGS)
-                lab.requests.append(json.loads(body))
-                step = lab.script.pop(0) if lab.script else ("ok", "fallback")
-                kind, arg = step
-                if kind == "hang":
-                    time.sleep(arg)
-                    return self._send(200, {"response": "too late", "done_reason": "stop"})
-                if kind == "http":
-                    return self._send(arg[0], {"error": arg[1]})
-                return self._send(200, {"response": arg, "done_reason": "stop", "eval_count": 9,
-                                        "load_duration": 2_500_000_000, "total_duration": 4_000_000_000})
-
-            def _send(self, code, obj):
-                data = json.dumps(obj).encode()
-                try:
-                    self.send_response(code)
-                    self.send_header("Content-Type", "application/json")
-                    self.send_header("Content-Length", str(len(data)))
-                    self.end_headers()
-                    self.wfile.write(data)
-                except (BrokenPipeError, ConnectionResetError):
-                    pass  # client already timed out
-
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.server.daemon_threads = True
-        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
-        threading.Thread(target=self.server.serve_forever, daemon=True).start()
-
-    def close(self):
-        self.server.shutdown()
-        self.server.server_close()
+def wazuh_aggs(mitre_agents=("DC01", "WS01")):
+    """One reply for both Wazuh searches: format_digest's technique detail and
+    score_and_brief's rule x agent clusters."""
+    return {"aggregations": {
+        "techniques": {"buckets": [{
+            "key": "T1078", "doc_count": 42,
+            "tactic": {"buckets": [{"key": "Defense Evasion"}]},
+            "technique_name": {"buckets": [{"key": "Valid Accounts"}]},
+            "agents": {"buckets": [{"key": a} for a in mitre_agents]},
+        }]},
+        "clusters": {"buckets": [
+            {   # ranks first: level 10 on a critical asset, briefed by the LLM
+                "key": {"rule_id": "5710", "agent": "DC01"}, "doc_count": 40, "max_level": {"value": 10},
+                "sample": {"hits": {"hits": [{"_source": {
+                    "rule": {"description": 'sshd: "invalid" user from C:\\Temp', "level": 10,
+                             "groups": ["authentication_failed"], "mitre": {"id": ["T1110"]}},
+                    "data": {"srcip": "203.0.113.9"}}}]}},
+            },
+            {   # ranks last: a firewall block gets a fixed brief and no LLM call
+                "key": {"rule_id": "87701", "agent": "opnsense"}, "doc_count": 900, "max_level": {"value": 5},
+                "sample": {"hits": {"hits": [{"_source": {
+                    "rule": {"description": "pf: blocked inbound", "level": 5, "groups": ["firewall"]},
+                    "data": {"srcip": "198.51.100.7", "action": "block", "dstip": "10.10.40.5",
+                             "dstport": "445", "protocol": "tcp"}}}]}},
+            },
+        ]},
+        "by_agent": {"buckets": [{"key": "DC01", "distinct_rules": {"value": 3}},
+                                 {"key": "opnsense", "distinct_rules": {"value": 1}}]},
+    }}
 
 
-def node_code(label="format_digest"):
-    wf = json.loads(WF2.read_text(encoding="utf-8"))
-    action = next(a for a in wf["actions"] if a["label"] == label)
-    return next(p["value"] for p in action["parameters"] if p["name"] == "code")
+ELASTIC_AGGS = {"aggregations": {
+    "clusters": {"buckets": [{   # ranks second, briefed by the LLM
+        "key": {"rule": "11111111-2222-3333-4444-555555555555", "host": "WS01"}, "doc_count": 2,
+        "sample": {"hits": {"hits": [{"_source": {
+            "kibana.alert.rule.name": 'Suspicious "PowerShell" download', "kibana.alert.rule.type": "query",
+            "kibana.alert.severity": "high", "kibana.alert.rule.tags": [],
+            "kibana.alert.reason": "process event on WS01",
+            "process": {"command_line": 'powershell -enc "abc" C:\\x', "parent": {"name": "explorer.exe"}},
+            "user": {"name": "labuser"}}}]}},
+    }]},
+    "by_host": {"buckets": [{"key": "WS01", "distinct_rules": {"value": 1}}]},
+}}
+
+INVENTORY = {"hits": {"hits": [
+    {"_source": {"host": "DC01", "criticality": "critical", "role": "AD domain controller"}},
+    {"_source": {"host": "WS01", "criticality": "medium", "role": "AD workstation"}},
+    {"_source": {"host": "opnsense", "criticality": "high", "role": "edge firewall, syslog collector"}},
+]}}
 
 
-def run_format_digest(lab, timeout=1, budget=3.5, ollama_url=None):
-    code = node_code()
-    # Shrink the production timings so the suite stays fast; fail loudly if they move.
-    for old, new in ((r"^LLM_TIMEOUT = 150$", f"LLM_TIMEOUT = {timeout}"),
-                     (r"^LLM_BUDGET = 360$", f"LLM_BUDGET = {budget}"),
-                     (r"^LLM_MIN_ATTEMPT = 15\b", "LLM_MIN_ATTEMPT = 0.2")):
-        code, n = re.subn(old, new, code, flags=re.M)
-        assert n == 1, old
-    env = {"ollama_url": ollama_url or lab.url, "opensearch_url": lab.url,
-           "opensearch_user": "u", "opensearch_pass": "p"}
-    code = re.sub(r"\$(ollama_url|opensearch_url|opensearch_user|opensearch_pass)",
-                  lambda m: env[m.group(1)], code)
-
-    class FakeSelf:
-        full_execution = {"results": [
-            {"action": {"label": "query_wazuh"}, "result": json.dumps({"success": True, "message": WAZUH_DATA})},
-            {"action": {"label": "query_thehive"}, "result": json.dumps({"success": True, "message": THEHIVE_DATA})},
-        ]}
-
-    out = io.StringIO()
-    started = time.monotonic()
-    with contextlib.redirect_stdout(out):
-        exec(compile(code, "format_digest", "exec"), {"self": FakeSelf()})
-    elapsed = time.monotonic() - started
-    return json.loads(out.getvalue()), elapsed
-
-
-def discord_body(result, key):
-    """What the discord_post / discord_analysis nodes send: raw substitution, then JSON."""
-    body = '{"content":"$format_digest.message.%s"}' % key
-    return json.loads(body.replace("$format_digest.message." + key, result[key]))
+def search_replies(**kw):
+    # Order matters: the first fragment found in the request path wins.
+    return {"soc-asset-inventory": INVENTORY, "/_count": {"count": 3},
+            ".alerts-security": ELASTIC_AGGS, "wazuh-alerts": wazuh_aggs(**kw)}
 
 
 @pytest.fixture
 def lab_factory():
     labs = []
 
-    def make(script):
-        lab = MockLab(script)
+    def make(script=(), **kw):
+        lab = MockLab(script, search_replies(**kw))
         labs.append(lab)
         return lab
 
@@ -149,98 +99,176 @@ def lab_factory():
         lab.close()
 
 
-def test_hostile_llm_text_still_yields_valid_discord_json(lab_factory):
-    reply = '<think>\nplan\n</think>Valid Accounts (T1078) on "DC01" is\tnormal.\nPath C:\\x\\y\r\x07 done.'
-    lab = lab_factory([("ok", reply), ("ok", 'Posture "NORMAL". No action items. Steady state.')])
-    result, _ = run_format_digest(lab)
+def variables(lab, ollama_url=None):
+    return {"ollama_url": ollama_url or lab.url, "opensearch_url": lab.url, "elastic_url": lab.url,
+            "kibana_url": "https://kibana.test", "opensearch_user": "u", "opensearch_pass": "p",
+            "elastic_user": "u", "elastic_pass": "p"}
 
-    analysis = discord_body(result, "digest_analysis")["content"]
-    data = discord_body(result, "digest_data")["content"]
-    assert "__MITRE Assessment__\nValid Accounts (T1078) on 'DC01' is normal. Path C:xy done." in analysis
-    assert "Posture 'NORMAL'. No action items. Steady state." in analysis
-    assert "<think>" not in analysis and "plan" not in analysis
+
+def run_format_digest(lab, wazuh_data=WAZUH_DATA):
+    result, _ = run_node(WF2, "format_digest", variables(lab),
+                         [upstream("query_wazuh", wazuh_data), upstream("query_thehive", THEHIVE_DATA)])
+    return result
+
+
+def run_score_and_brief(lab, timeout=1, budget=3.5, ollama_url=None):
+    return run_node(WF2, "score_and_brief", variables(lab, ollama_url), retime=[
+        (r"^    LLM_TIMEOUT = 90$", f"    LLM_TIMEOUT = {timeout}"),
+        (r"^    LLM_BUDGET = 300$", f"    LLM_BUDGET = {budget}"),
+        (r"^    LLM_MIN_ATTEMPT = 15$", "    LLM_MIN_ATTEMPT = 0.2"),
+    ])
+
+
+def brief(text):
+    """What qwen3 returns under the node's JSON schema."""
+    return json.dumps({"brief": text})
+
+
+def briefs_body(result):
+    return http_body(WF2, "discord_briefs", {"score_and_brief": result})
+
+
+def descriptions(result):
+    return [e["description"] for e in briefs_body(result)["embeds"]]
+
+
+FALLBACK_TAIL = " - use score factors and verify link."
+
+# ---------------------------------------------------------------- format_digest
+
+
+def test_hostile_names_still_yield_valid_discord_json(lab_factory):
+    lab = lab_factory(mitre_agents=('DC"01', "WS\\01"))
+    result = run_format_digest(lab)
+
+    data = http_body(WF2, "discord_post", {"format_digest": result})["content"]
+    analysis = http_body(WF2, "discord_analysis", {"format_digest": result})["content"]
     assert "ET POLICY 'Suspicious' UA C:Temp (10)" in data
-    assert "Case 'quoted' title" in data
+    assert "#7 [Med] Case 'quoted' title second line" in data
+    assert "T1078: 42 alerts on DC'01,WS01" in analysis
 
-    # Both calls disable thinking through the API as well as the prompt prefix.
+
+def test_format_digest_reports_evidence_without_an_llm_call(lab_factory):
+    lab = lab_factory()
+    result = run_format_digest(lab)
+
+    analysis = http_body(WF2, "discord_analysis", {"format_digest": result})["content"]
+    assert analysis.startswith("**WATCH OFFICER EVIDENCE -- ")
+    assert "__Observed volume__: 1,234 alerts, 1 returned open cases." in analysis
+    assert lab.requests == []
+
+
+# The data post is "<header lines>\\n  <rule> (10)\\n...". Find where the rule name
+# starts, then size the name so the 1947-char cut lands on, or next to, the backslash
+# of the separator that follows the rule line.
+@pytest.mark.parametrize("offset", range(-3, 4))
+def test_truncation_never_leaves_a_dangling_escape(lab_factory, offset):
+    lab = lab_factory()
+    probe = run_format_digest(lab, dict(WAZUH_DATA, top_rules=[{"rule": "RULEMARK", "count": 10}]))
+    start = probe["digest_data"].index("RULEMARK")
+    length = 1946 - len(" (10)") - start + offset  # offset 0 puts the backslash at index 1946
+
+    result = run_format_digest(lab, dict(WAZUH_DATA, top_rules=[{"rule": "A" * length, "count": 10}]))
+    content = http_body(WF2, "discord_post", {"format_digest": result})["content"]  # raises on a bad escape
+    assert content.endswith("...")
+    assert len(result["digest_data"]) <= 1950
+    if offset == 0:
+        assert len(result["digest_data"]) == 1949  # the lone backslash was dropped
+
+
+def test_oversized_evidence_block_is_clipped_and_valid(lab_factory):
+    lab = lab_factory(mitre_agents=("A" * 3000,))
+    result = run_format_digest(lab)
+    assert len(result["digest_analysis"]) <= 1950
+    assert http_body(WF2, "discord_analysis", {"format_digest": result})["content"].endswith("...")
+
+
+# ---------------------------------------------------------------- score_and_brief
+
+
+def test_briefs_survive_hostile_text_and_disable_thinking(lab_factory):
+    lab = lab_factory([("ok", brief('<think>plan</think>Logons "failed" on DC01\nfrom C:\\Temp\\x.')),
+                       ("ok", brief("Elastic rule fired on WS01."))])
+    result, _ = run_score_and_brief(lab)
+
+    body = briefs_body(result)
+    assert [e["title"].split("] ", 1)[1] for e in body["embeds"]] == [
+        'sshd: "invalid" user from C:\\Temp', 'Suspicious "PowerShell" download', "pf: blocked inbound"]
+    assert descriptions(result)[:2] == ["Logons 'failed' on DC01 from C:Tempx.", "Elastic rule fired on WS01."]
+    assert descriptions(result)[2].startswith("Blocked firewall traffic observed by collector opnsense")
+
+    # Two LLM calls, not three: the firewall block never reaches the model.
+    assert len(lab.requests) == 2
     assert [r["think"] for r in lab.requests] == [False, False]
-    assert all(r["prompt"].startswith("/no_think ") for r in lab.requests)
-    assert [d["ok"] for d in result["llm_debug"]] == [True, True]
-    assert result["llm_debug"][0]["load_duration_s"] == 2.5
+    assert all(r["model"] == "qwen3:8b" and r["format"]["required"] == ["brief"] for r in lab.requests)
+    debug = result["llm_debug"]
+    assert [(d["brief"], d["attempt"], d["ok"]) for d in debug] == [(1, 1, True), (2, 1, True)]
+    assert debug[0]["load_duration_s"] == 2.5 and debug[0]["done_reason"] == "stop"
 
 
 def test_slow_first_attempt_is_retried(lab_factory):
-    lab = lab_factory([("hang", 2), ("ok", "MITRE fine."), ("ok", "Turnover fine.")])
-    result, _ = run_format_digest(lab, timeout=1, budget=10)
+    lab = lab_factory([("hang", 2), ("ok", brief("First.")), ("ok", brief("Second."))])
+    result, _ = run_score_and_brief(lab, timeout=1, budget=10)
 
-    analysis = discord_body(result, "digest_analysis")["content"]
-    assert "MITRE fine." in analysis and "Turnover fine." in analysis
-    assert "unavailable" not in analysis
+    assert descriptions(result)[:2] == ["First.", "Second."]
     first = result["llm_debug"][0]
-    assert (first["section"], first["attempt"], first["ok"]) == ("mitre", 1, False)
+    assert (first["brief"], first["attempt"], first["ok"]) == (1, 1, False)
     assert "timed out" in first["error"]
 
 
 def test_empty_reply_is_retried_then_reported(lab_factory):
-    lab = lab_factory([("ok", ""), ("ok", "<think>x</think>"), ("ok", "Turnover fine.")])
-    result, _ = run_format_digest(lab)
+    lab = lab_factory([("ok", ""), ("ok", "<think>x</think>"), ("ok", brief("Second."))])
+    result, _ = run_score_and_brief(lab)
 
-    analysis = discord_body(result, "digest_analysis")["content"]
-    assert "__MITRE Assessment__: LLM unavailable (empty response, done_reason stop)" in analysis
-    assert "Turnover fine." in analysis
+    assert descriptions(result)[:2] == [
+        "LLM brief unavailable (empty brief, done_reason stop)" + FALLBACK_TAIL, "Second."]
     assert len(lab.requests) == 3
+
+
+def test_reply_that_is_not_json_is_retried(lab_factory):
+    lab = lab_factory([("ok", "Sure, here is the brief"), ("ok", brief("First.")), ("ok", brief("Second."))])
+    result, _ = run_score_and_brief(lab)
+
+    assert descriptions(result)[:2] == ["First.", "Second."]
+    assert result["llm_debug"][0]["error"].startswith("JSONDecodeError:")
 
 
 def test_model_missing_is_not_retried_and_says_why(lab_factory):
     lab = lab_factory([("http", (404, "model 'qwen3:8b' not found")),
                        ("http", (404, "model 'qwen3:8b' not found"))])
-    result, _ = run_format_digest(lab)
+    result, _ = run_score_and_brief(lab)
 
-    analysis = discord_body(result, "digest_analysis")["content"]
-    assert "LLM unavailable (HTTP 404 model 'qwen3:8b' not found)" in analysis
-    assert len(lab.requests) == 2  # one per section, no retry on a 4xx
+    assert descriptions(result)[0] == (
+        "LLM brief unavailable (HTTP 404 model 'qwen3:8b' not found)" + FALLBACK_TAIL)
+    assert len(lab.requests) == 2  # one per brief, no retry on a 4xx
 
 
 def test_server_error_is_retried(lab_factory):
-    lab = lab_factory([("http", (500, "model requires more system memory")), ("ok", "MITRE fine."),
-                       ("ok", "Turnover fine.")])
-    result, _ = run_format_digest(lab)
-    assert "unavailable" not in discord_body(result, "digest_analysis")["content"]
+    lab = lab_factory([("http", (500, "model requires more system memory")), ("ok", brief("First.")),
+                       ("ok", brief("Second."))])
+    result, _ = run_score_and_brief(lab)
+
+    assert descriptions(result)[:2] == ["First.", "Second."]
     assert result["llm_debug"][0]["error"] == "HTTP 500 model requires more system memory"
 
 
 def test_hung_ollama_stays_inside_the_budget(lab_factory):
     lab = lab_factory([("hang", 5)] * 6)
-    result, elapsed = run_format_digest(lab, timeout=1, budget=2.5)
+    result, elapsed = run_score_and_brief(lab, timeout=1, budget=2.5)
 
-    analysis = discord_body(result, "digest_analysis")["content"]
-    assert "__MITRE Assessment__: LLM unavailable (" in analysis
-    assert "__Turnover__: LLM unavailable (" in analysis
-    assert "Data section above is complete." in analysis
-    assert elapsed < 2.5 + 2  # budget plus the OpenSearch query and slack
+    got = descriptions(result)
+    assert got[0].startswith("LLM brief unavailable (") and got[1].startswith("LLM brief unavailable (")
+    assert got[2].startswith("Blocked firewall traffic")  # the rest of the post still goes out
+    assert any("budget" in d.get("error", "") for d in result["llm_debug"])
+    assert elapsed < 2.5 + 3  # budget plus the search queries and slack
 
 
 def test_unreachable_ollama_reports_connection_error(lab_factory):
-    dead = MockLab([])
+    dead = MockLab()
     dead_url = dead.url
     dead.close()  # nothing listens on this port now
-    lab = lab_factory([])  # OpenSearch stays up so the MITRE section still runs
-    result, _ = run_format_digest(lab, ollama_url=dead_url)
+    lab = lab_factory()  # the search backends stay up
+    result, _ = run_score_and_brief(lab, ollama_url=dead_url, budget=10)
 
-    analysis = discord_body(result, "digest_analysis")["content"]
-    assert "__MITRE Assessment__: LLM unavailable (URLError:" in analysis
-    assert "__Turnover__: LLM unavailable (URLError:" in analysis
-    assert len(result["llm_debug"]) == 4  # connection errors are retried once per section
-
-
-# The analysis is "<header 40>\\n__MITRE Assessment__\\n<reply>\\n__Turnover__...", so the
-# separator after a reply of length L starts at 64 + L and the 1947-char cut splits it
-# at L = 1882. Sweep around that point.
-@pytest.mark.parametrize("length", range(1876, 1890))
-def test_truncation_never_leaves_a_dangling_escape(lab_factory, length):
-    lab = lab_factory([("ok", "A" * length), ("ok", "x" * 50)])
-    result, _ = run_format_digest(lab)
-    assert result["digest_analysis"].index("A" * 8) == 64
-    assert len(result["digest_analysis"]) <= 1950
-    content = discord_body(result, "digest_analysis")["content"]  # raises on a bad escape
-    assert content.endswith("...")
+    assert all(d.startswith("LLM brief unavailable (URLError:") for d in descriptions(result)[:2])
+    assert len(result["llm_debug"]) == 4  # connection errors are retried once per brief
